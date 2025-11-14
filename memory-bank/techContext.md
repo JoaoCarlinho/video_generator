@@ -299,11 +299,24 @@ Total: ~$1.01 per video
 
 ### Scalability
 ```
-1 RQ Worker:    10-20 concurrent generations
-5 RQ Workers:   50-100 concurrent generations
-10 RQ Workers:  100-200 concurrent generations
+1 RQ Worker:    
+  - Processes 1 video at a time (sequential users)
+  - Each video: 4 scenes generated in parallel (asyncio)
+  - Throughput: ~6 videos/hour
+  - Suitable for: 10-20 users with normal usage
+
+5 RQ Workers:   
+  - Process 5 videos simultaneously
+  - Throughput: ~30 videos/hour
+  - Suitable for: 50-100 users
+
+10 RQ Workers:  
+  - Process 10 videos simultaneously
+  - Throughput: ~60 videos/hour
+  - Suitable for: 100-200 users
 
 Bottleneck: AI API rate limits (not our infrastructure)
+Note: Replicate allows concurrent requests, so parallel scene generation works
 ```
 
 ---
@@ -397,10 +410,25 @@ git push origin main  # Auto-deploys
 - Easy CDN integration later
 
 ### Why Single Worker Initially?
-- Sufficient for 10-100 users
-- Simpler to manage
-- Easy to add more later (just deploy more instances)
-- Cost-effective
+- **One worker = one video generation at a time** (sequential user processing)
+- **BUT: Scenes generate in parallel within each job** (4 scenes in 3 min via asyncio)
+- Throughput: ~6 videos/hour (sufficient for 10-100 users with normal usage patterns)
+- Simpler to manage (no worker coordination needed)
+- Easy to add more later (just deploy more instances, they share Redis queue)
+- Cost-effective ($10/month per worker on Railway)
+
+**Clarification:**
+```
+Single Worker Processing:
+  User A's video → [Scene1, Scene2, Scene3, Scene4] all in parallel → 3 min
+  User B waits → [Scene1, Scene2, Scene3, Scene4] all in parallel → 3 min
+  Total: 6 min for 2 users
+
+Multiple Workers (when needed):
+  Worker 1: User A's video → 3 min
+  Worker 2: User B's video → 3 min  (simultaneous)
+  Total: 3 min for 2 users
+```
 
 ### Why FFmpeg over MoviePy?
 - More control over encoding

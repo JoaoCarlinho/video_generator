@@ -124,6 +124,33 @@ User Request → API enqueues job → Returns immediately
 - Single worker initially (sufficient for 10-100 users)
 - Async/await for parallel scene generation
 
+**Important: Worker vs Parallelism**
+
+Many people confuse these two concepts:
+
+**Single Worker = One Job at a Time (User-level Parallelism)**
+```python
+# Worker processes ONE user's video
+# If User B submits while User A generating → User B waits in queue
+```
+
+**But Within Each Job = Parallel Scene Generation (Scene-level Parallelism)**
+```python
+# Inside one job, generate all scenes concurrently
+tasks = [generate_scene(s) for s in scenes]  # 4 API calls
+videos = await asyncio.gather(*tasks)        # All at once
+
+# Sequential: 3min × 4 = 12 minutes total
+# Parallel:   max(3min, 3min, 3min, 3min) = 3 minutes total
+# 4x faster!
+```
+
+**When to Add More Workers:**
+- Single worker: 6 videos/hour (10-20 users)
+- Queue depth >5: Add worker 2
+- Queue depth >10: Add worker 3
+- Each worker costs ~$10/month
+
 ---
 
 ### 4. Progressive Enhancement
@@ -165,11 +192,15 @@ Brief → Scenes → Videos → Composite → Render
 2. Asset Preparation
    Product Image → rembg → Masked PNG → S3
 
-3. Parallel Generation (KEY OPTIMIZATION)
-   Scene 1 → Wān → Video 1 ┐
-   Scene 2 → Wān → Video 2 ├→ All at once (4x faster)
-   Scene 3 → Wān → Video 3 │
-   Scene 4 → Wān → Video 4 ┘
+3. Parallel Generation (KEY OPTIMIZATION - All within single worker job)
+   Scene 1 → Wān API → Video 1 ┐
+   Scene 2 → Wān API → Video 2 ├→ All API calls concurrent (4x faster)
+   Scene 3 → Wān API → Video 3 │  Using asyncio.gather()
+   Scene 4 → Wān API → Video 4 ┘
+
+   Note: This is I/O-bound (waiting for API responses)
+         Worker sends all requests → waits → receives all responses
+         NOT multi-processing or threading, just async HTTP calls
 
 4. Compositing
    Video 1 + Product PNG → Composited Video 1
@@ -183,6 +214,13 @@ Brief → Scenes → Videos → Composite → Render
    Final Scenes + Music → Master Video (9:16)
    Master Video → Multi-Aspect → [9:16, 1:1, 16:9]
 ```
+
+**Why This Parallelism Works:**
+- Replicate API calls are I/O-bound (network waiting)
+- Worker isn't CPU-processing while waiting for API
+- Can issue multiple HTTP requests concurrently
+- Each API processes independently on Replicate's servers
+- Worker collects all results when ready
 
 ---
 
