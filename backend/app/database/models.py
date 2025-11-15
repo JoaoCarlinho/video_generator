@@ -22,6 +22,11 @@ class Project(Base):
     progress = Column(Integer, default=0)
     cost = Column(Numeric(10, 2), default=0)
     error_message = Column(Text, nullable=True)
+    
+    # S3 RESTRUCTURING: Per-project folder organization
+    s3_project_folder = Column(String, nullable=True)        # projects/{id}/
+    s3_project_folder_url = Column(String, nullable=True)    # https://bucket.s3.../projects/{id}/
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

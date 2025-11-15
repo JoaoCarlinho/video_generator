@@ -1,14 +1,63 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
+import { AuthProvider } from './context/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import LoginPage from './pages/Login'
+import SignupPage from './pages/Signup'
+import { Dashboard } from './pages/Dashboard'
+import { Landing } from './pages/Landing'
+import { CreateProject } from './pages/CreateProject'
+import { GenerationProgress } from './pages/GenerationProgress'
+import { VideoResults } from './pages/VideoResults'
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={<div className="p-8 text-center"><h1 className="text-4xl font-bold text-white">AI Ad Video Generator</h1><p className="mt-4 text-gray-300">Phase 0: Infrastructure Setup Complete</p></div>} />
+          {/* Public Routes */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+
+          {/* Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create"
+            element={
+              <ProtectedRoute>
+                <CreateProject />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:projectId/progress"
+            element={
+              <ProtectedRoute>
+                <GenerationProgress />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:projectId/results"
+            element={
+              <ProtectedRoute>
+                <VideoResults />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Redirects */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </div>
+      </AuthProvider>
     </Router>
   )
 }

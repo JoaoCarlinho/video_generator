@@ -1,19 +1,29 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* 
+  Note: Tailwind v4 with @import "tailwindcss" automatically includes:
+  - @tailwind base (includes Preflight CSS reset)
+  - @tailwind components 
+  - @tailwind utilities
+  
+  We should avoid adding conflicting resets after the import.
+  Instead, use Tailwind's @layer directive to add custom styles.
+*/
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-900 text-slate-100;
+  }
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: #0f172a;
-  color: #e2e8f0;
-}
-
-html {
-  scroll-behavior: smooth;
+/* 
+  Vite HMR stylesheet fix for development
+  Ensures proper CSS reloading in dev mode
+*/
+:root {
+  color-scheme: dark;
 }
