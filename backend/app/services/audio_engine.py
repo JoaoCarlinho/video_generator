@@ -120,17 +120,25 @@ class AudioEngine:
             logger.info("Calling MusicGen model...")
 
             # MusicGen model parameters
-            # Note: Verify current model identifier with Replicate
-            model_version = "large"  # Can be "small" or "large"
             duration_sec = int(min(duration, 30))  # Cap at 30 seconds
 
             # Using replicate.run for synchronous call
+            # Using the correct version hash: eedcfb (not feedee9)
             output = replicate.run(
-                "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837feedee9",
+                "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
                 input={
-                    "model_name": model_version,
+                    "top_k": 250,
+                    "top_p": 0,
                     "prompt": prompt,
                     "duration": duration_sec,
+                    "temperature": 1,
+                    "continuation": False,
+                    "model_version": "stereo-large",
+                    "output_format": "mp3",
+                    "continuation_start": 0,
+                    "multi_band_diffusion": False,
+                    "normalization_strategy": "peak",
+                    "classifier_free_guidance": 3,
                 },
                 wait=True,
             )
@@ -166,7 +174,7 @@ class AudioEngine:
                 Key=s3_key,
                 Body=audio_data,
                 ContentType="audio/mpeg",
-                ACL="public-read",
+                # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
             )
 
             s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"

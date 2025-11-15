@@ -285,7 +285,7 @@ Be specific and visual in descriptions. Example:
 """
 
         try:
-            response = await self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=1000,
                 messages=[
@@ -296,7 +296,7 @@ Be specific and visual in descriptions. Example:
                 ],
             )
 
-            response_text = response.content[0].text
+            response_text = response.choices[0].message.content
 
             # Parse JSON
             try:

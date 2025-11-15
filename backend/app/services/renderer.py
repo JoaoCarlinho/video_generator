@@ -106,16 +106,34 @@ class Renderer:
                 raise
 
     async def _download_file(self, url: str, output_path: Path):
-        """Download file from URL."""
+        """Download file from URL (S3 or HTTP)."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
-                    if resp.status == 200:
-                        with open(output_path, "wb") as f:
-                            f.write(await resp.read())
-                        logger.debug(f"Downloaded: {output_path.name}")
-                    else:
-                        raise ValueError(f"HTTP {resp.status}")
+            # Check if it's an S3 URL
+            if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
+                # Extract S3 key from URL
+                # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
+                if f"s3.{self.aws_region}.amazonaws.com" in url:
+                    s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
+                else:
+                    s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+                
+                # Download using boto3
+                self.s3_client.download_file(
+                    self.s3_bucket_name,
+                    s3_key,
+                    str(output_path)
+                )
+                logger.debug(f"Downloaded from S3: {output_path.name}")
+            else:
+                # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                        if resp.status == 200:
+                            with open(output_path, "wb") as f:
+                                f.write(await resp.read())
+                            logger.debug(f"Downloaded via HTTP: {output_path.name}")
+                        else:
+                            raise ValueError(f"HTTP {resp.status}")
         except Exception as e:
             logger.error(f"Error downloading file: {e}")
             raise
@@ -260,7 +278,7 @@ class Renderer:
                     Key=s3_key,
                     Body=f.read(),
                     ContentType="video/mp4",
-                    ACL="public-read",
+                    # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
                 )
 
             s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"

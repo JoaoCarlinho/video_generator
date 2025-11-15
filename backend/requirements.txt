@@ -43,6 +43,8 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
 wheel==0.45.1
-rembg==2.0.61
+rembg==2.0.67
+onnxruntime>=1.16.0
+replicate>=0.25.0
 librosa==0.10.0
 scipy==1.13.1

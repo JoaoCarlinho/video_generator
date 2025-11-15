@@ -11,9 +11,19 @@ from PIL import Image
 import aiohttp
 import boto3
 from botocore.exceptions import ClientError
-from rembg import remove
 
 logger = logging.getLogger(__name__)
+
+# rembg / onnxruntime are heavy and may be unavailable on some Python versions.
+# We treat them as OPTIONAL and gracefully fall back to using the original image
+# if rembg cannot be imported or initialized.
+try:  # pragma: no cover - environment-dependent
+    from rembg import remove  # type: ignore
+except Exception as e:  # ModuleNotFoundError, ImportError, runtime import error
+    logger.warning(
+        "rembg could not be loaded (background removal will be skipped): %s", e
+    )
+    remove = None  # type: ignore
 
 
 # ============================================================================
@@ -92,7 +102,15 @@ class ProductExtractor:
             return None
 
     async def _remove_background(self, image_bytes: bytes) -> Image.Image:
-        """Remove background from image using rembg."""
+        """
+        Remove background from image using rembg if available.
+
+        If rembg (or its dependencies like onnxruntime) are not available,
+        this method will **gracefully fall back** to returning the original
+        image with no background removal. This keeps the pipeline usable on
+        environments where rembg wheels are not published yet (e.g. newer
+        Python versions) at the cost of visual quality.
+        """
         try:
             # Open image
             input_image = Image.open(io.BytesIO(image_bytes))
@@ -101,7 +119,16 @@ class ProductExtractor:
             if input_image.mode != "RGB" and input_image.mode != "RGBA":
                 input_image = input_image.convert("RGB")
 
-            # Remove background
+            # If rembg is not available, skip background removal
+            if remove is None:
+                logger.warning(
+                    "rembg not available; skipping background removal and "
+                    "using original image instead."
+                )
+                # Ensure we still return a format suitable for compositing
+                return input_image.convert("RGBA")
+
+            # Remove background via rembg
             output_image = remove(input_image)
 
             logger.info(f"Background removed: {input_image.size} → {output_image.size}")
@@ -127,7 +154,7 @@ class ProductExtractor:
                 Key=s3_key,
                 Body=png_buffer.getvalue(),
                 ContentType="image/png",
-                ACL="public-read",
+                # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
             )
 
             # Generate URL

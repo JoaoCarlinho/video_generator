@@ -51,6 +51,7 @@ class TextOverlayRenderer:
         color: str = "white",
         animation: str = "fade_in",
         project_id: str = "",
+        scene_index: int = 0,
     ) -> str:
         """
         Add text overlay to video.
@@ -92,7 +93,7 @@ class TextOverlayRenderer:
                 )
 
                 # Upload to S3
-                s3_url = await self._upload_video_to_s3(output_path, project_id)
+                s3_url = await self._upload_video_to_s3(output_path, project_id, scene_index)
 
                 logger.info(f"✅ Text overlay added: {s3_url}")
                 return s3_url
@@ -141,16 +142,34 @@ class TextOverlayRenderer:
         return current_url
 
     async def _download_file(self, url: str, output_path: Path):
-        """Download file from URL."""
+        """Download file from URL (S3 or HTTP)."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                    if resp.status == 200:
-                        with open(output_path, "wb") as f:
-                            f.write(await resp.read())
-                        logger.debug(f"Downloaded: {output_path.name}")
-                    else:
-                        raise ValueError(f"HTTP {resp.status}")
+            # Check if it's an S3 URL
+            if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
+                # Extract S3 key from URL
+                # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
+                if f"s3.{self.aws_region}.amazonaws.com" in url:
+                    s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
+                else:
+                    s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+                
+                # Download using boto3
+                self.s3_client.download_file(
+                    self.s3_bucket_name,
+                    s3_key,
+                    str(output_path)
+                )
+                logger.debug(f"Downloaded from S3: {output_path.name}")
+            else:
+                # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                        if resp.status == 200:
+                            with open(output_path, "wb") as f:
+                                f.write(await resp.read())
+                            logger.debug(f"Downloaded via HTTP: {output_path.name}")
+                        else:
+                            raise ValueError(f"HTTP {resp.status}")
         except Exception as e:
             logger.error(f"Error downloading file: {e}")
             raise
@@ -295,10 +314,10 @@ class TextOverlayRenderer:
 
         return filter_complex
 
-    async def _upload_video_to_s3(self, video_path: Path, project_id: str) -> str:
+    async def _upload_video_to_s3(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
         """Upload video to S3."""
         try:
-            s3_key = f"projects/{project_id}/with_text_{Path(video_path).stem}.mp4"
+            s3_key = f"projects/{project_id}/scene_{scene_index:02d}_overlaid.mp4"
 
             with open(video_path, "rb") as f:
                 self.s3_client.put_object(
@@ -306,7 +325,7 @@ class TextOverlayRenderer:
                     Key=s3_key,
                     Body=f.read(),
                     ContentType="video/mp4",
-                    ACL="public-read",
+                    # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
                 )
 
             s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"

@@ -35,13 +35,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info("🚀 Starting up AI Ad Video Generator...")
-    
-    # Test database connection
-    if test_connection():
-        logger.info("✅ All systems ready!")
-    else:
-        logger.warning("⚠️ Database connection failed - some features may not work")
+    try:
+        logger.info("🚀 Starting up AI Ad Video Generator...")
+        
+        # Test database connection
+        if test_connection():
+            logger.info("✅ All systems ready!")
+        else:
+            logger.warning("⚠️ Database connection failed - some features may not work")
+    except Exception as e:
+        logger.error(f"❌ Startup error: {e}", exc_info=True)
+        # Don't crash - allow server to start anyway
 
 
 @app.get("/health")

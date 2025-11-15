@@ -10,14 +10,23 @@ import subprocess
 import tempfile
 from typing import Tuple, Optional
 from pathlib import Path
-import cv2
-import numpy as np
 from PIL import Image
 import aiohttp
 import boto3
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
+
+# Safe imports for OpenCV and NumPy
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except (ImportError, OSError) as e:
+    logger.warning(f"OpenCV/NumPy not available: {e}. Compositing will be disabled.")
+    cv2 = None
+    np = None
+    CV2_AVAILABLE = False
 
 
 # ============================================================================
@@ -52,6 +61,7 @@ class Compositor:
         position: str = "center",
         scale: float = 0.3,
         opacity: float = 1.0,
+        scene_index: int = 0,
     ) -> str:
         """
         Composite product image onto background video.
@@ -67,6 +77,10 @@ class Compositor:
         Returns:
             S3 URL of composited video
         """
+        if not CV2_AVAILABLE:
+            logger.warning("OpenCV not available - skipping compositing, returning background video as-is")
+            return background_video_url
+        
         logger.info(f"Compositing product onto video: {position} at {scale*100}% scale")
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -106,7 +120,7 @@ class Compositor:
                 )
 
                 # Upload composited video to S3
-                s3_url = await self._upload_video_to_s3(output_path, project_id)
+                s3_url = await self._upload_video_to_s3(output_path, project_id, scene_index)
 
                 logger.info(f"✅ Composited video uploaded: {s3_url}")
                 return s3_url
@@ -116,16 +130,34 @@ class Compositor:
                 raise
 
     async def _download_file(self, url: str, output_path: Path):
-        """Download file from URL to disk."""
+        """Download file from URL (S3 or HTTP)."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                    if resp.status == 200:
-                        with open(output_path, "wb") as f:
-                            f.write(await resp.read())
-                        logger.info(f"Downloaded: {output_path}")
-                    else:
-                        raise ValueError(f"HTTP {resp.status}")
+            # Check if it's an S3 URL
+            if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
+                # Extract S3 key from URL
+                # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
+                if f"s3.{self.aws_region}.amazonaws.com" in url:
+                    s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
+                else:
+                    s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+                
+                # Download using boto3
+                self.s3_client.download_file(
+                    self.s3_bucket_name,
+                    s3_key,
+                    str(output_path)
+                )
+                logger.info(f"Downloaded from S3: {output_path}")
+            else:
+                # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                        if resp.status == 200:
+                            with open(output_path, "wb") as f:
+                                f.write(await resp.read())
+                            logger.info(f"Downloaded via HTTP: {output_path}")
+                        else:
+                            raise ValueError(f"HTTP {resp.status}")
         except Exception as e:
             logger.error(f"Error downloading file: {e}")
             raise
@@ -323,10 +355,10 @@ class Compositor:
             logger.error(f"Error blending: {e}")
             return frame
 
-    async def _upload_video_to_s3(self, video_path: Path, project_id: str) -> str:
+    async def _upload_video_to_s3(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
         """Upload composited video to S3."""
         try:
-            s3_key = f"projects/{project_id}/composited_video.mp4"
+            s3_key = f"projects/{project_id}/scene_{scene_index:02d}_composited.mp4"
 
             with open(video_path, "rb") as f:
                 self.s3_client.put_object(
@@ -334,7 +366,7 @@ class Compositor:
                     Key=s3_key,
                     Body=f.read(),
                     ContentType="video/mp4",
-                    ACL="public-read",
+                    # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
                 )
 
             s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"

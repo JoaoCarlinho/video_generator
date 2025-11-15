@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from app.config import settings
@@ -16,7 +16,17 @@ SessionLocal = None
 def init_db():
     """Initialize database connection lazily."""
     global engine, SessionLocal
-    if engine is None and settings.database_url:
+    
+    if engine is not None:
+        logger.debug("Database engine already initialized")
+        return
+    
+    if not settings.database_url:
+        logger.warning("⚠️  DATABASE_URL not set, cannot initialize database")
+        return
+    
+    try:
+        logger.info(f"Initializing database connection...")
         engine = create_engine(
             settings.database_url,
             poolclass=NullPool,  # Disable connection pooling for Railway
@@ -27,6 +37,12 @@ def init_db():
             autoflush=False,
             bind=engine
         )
+        logger.info("✅ Database connection initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}", exc_info=True)
+        engine = None
+        SessionLocal = None
+        raise
 
 
 def get_db() -> Session:
@@ -53,7 +69,7 @@ def test_connection():
             return False
         
         with engine.begin() as conn:
-            result = conn.execute("SELECT 1")
+            result = conn.execute(text("SELECT 1"))
             logger.info("✅ Database connection successful")
             return True
     except Exception as e:

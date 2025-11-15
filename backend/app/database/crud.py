@@ -306,6 +306,52 @@ def update_project_cost(
         raise
 
 
+def update_project_output(
+    db: Session,
+    project_id: UUID,
+    final_videos: Dict[str, str],
+    total_cost: float,
+    cost_breakdown: Dict[str, float]
+) -> Optional[Project]:
+    """
+    Update project with final output and cost breakdown.
+    
+    Args:
+        db: Database session
+        project_id: ID of the project
+        final_videos: Dict with aspect ratios as keys (9:16, 1:1, 16:9) and S3 URLs as values
+        total_cost: Total cost in USD
+        cost_breakdown: Dict with cost per service
+    
+    Returns:
+        Project: Updated project object
+    """
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        
+        if not project:
+            return None
+        
+        # Update output videos in ad_project_json
+        if isinstance(project.ad_project_json, dict):
+            project.ad_project_json["aspectExports"] = final_videos
+            project.ad_project_json["costBreakdown"] = cost_breakdown
+        
+        project.cost = round(float(total_cost), 2)
+        project.status = "COMPLETED"
+        project.progress = 100
+        
+        db.commit()
+        db.refresh(project)
+        
+        logger.info(f"✅ Updated project {project_id} with final output, cost: ${total_cost:.2f}")
+        return project
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update project output {project_id}: {e}")
+        raise
+
+
 def update_project_json(
     db: Session,
     project_id: UUID,
