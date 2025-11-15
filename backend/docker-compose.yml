@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Local development database
+  postgres:
+    image: postgres:15-alpine
+    container_name: genads-postgres
+    environment:
+      - POSTGRES_DB=genads
+      - POSTGRES_USER=genads
+      - POSTGRES_PASSWORD=genads_local_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genads -d genads"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - genads-network
+    restart: unless-stopped
+
+  # Redis - Message queue and job broker
+  redis:
+    image: redis:7-alpine
+    container_name: genads-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - genads-network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: genads-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./app:/app/app:ro
+    networks:
+      - genads-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # RQ Worker - Background job processor
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: genads-worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+      - OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./app:/app/app:ro
+    networks:
+      - genads-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.from_url('redis://redis:6379/0').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # RQ Dashboard - Monitor jobs and queue
+  rq-dashboard:
+    image: eoranged/rq-dashboard:latest
+    container_name: genads-rq-dashboard
+    ports:
+      - "9181:9181"
+    depends_on:
+      - redis
+    environment:
+      - RQ_REDIS_URL=redis://redis:6379/0
+    networks:
+      - genads-network
+    restart: unless-stopped
+
+networks:
+  genads-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
