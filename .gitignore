@@ -414,3 +414,4 @@ user_uploads/
 backend/test_extraction.py
 docs/
 bmad/
+.claude/
