@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
@@ -14,34 +14,70 @@ export const GenerationProgress = () => {
   const { cancelGeneration, generateVideo } = useGeneration()
   const [isCancelling, setIsCancelling] = useState(false)
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
+  // Use ref to track if generation has been started (for this mount cycle)
+  const hasStartedGenerationRef = useRef(false)
+  // Use sessionStorage key to persist across StrictMode remounts
+  const storageKey = `generation_started_${projectId}`
 
   // Start generation job when component mounts
   useEffect(() => {
+    // Skip if already started (check both ref and sessionStorage)
+    const alreadyStarted = hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true'
+    
+    if (!projectId || alreadyStarted) {
+      return
+    }
+
+    let isMounted = true
+
     const startGenerationIfNeeded = async () => {
-      if (!projectId || isStartingGeneration) return
+      // Double-check before starting (prevents race conditions)
+      if (!isMounted || hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true') {
+        return
+      }
       
       try {
+        // Mark as started in both ref and sessionStorage
+        hasStartedGenerationRef.current = true
+        sessionStorage.setItem(storageKey, 'true')
         setIsStartingGeneration(true)
         console.log('🚀 Starting generation for project:', projectId)
         
         // Queue the job in Redis
         const result = await generateVideo(projectId)
-        console.log('✅ Generation queued:', result)
+        
+        if (isMounted) {
+          console.log('✅ Generation queued:', result)
+        }
       } catch (err) {
-        console.error('❌ Failed to queue generation:', err)
+        if (isMounted) {
+          console.error('❌ Failed to queue generation:', err)
+          // Reset both on error so user can retry
+          hasStartedGenerationRef.current = false
+          sessionStorage.removeItem(storageKey)
+        }
       } finally {
-        setIsStartingGeneration(false)
+        if (isMounted) {
+          setIsStartingGeneration(false)
+        }
       }
     }
     
     startGenerationIfNeeded()
-  }, [projectId, generateVideo])
+    
+    // Cleanup: prevent state updates if component unmounts
+    return () => {
+      isMounted = false
+    }
+  }, [projectId, generateVideo, storageKey])
 
   const { progress, isPolling, stopPolling, startPolling } = useProgressPolling({
     projectId,
     enabled: true,
     interval: 2000,
     onComplete: () => {
+      // Clear sessionStorage when generation completes
+      sessionStorage.removeItem(storageKey)
       // Redirect to results page after a short delay
       setTimeout(() => {
         navigate(`/projects/${projectId}/results`)
@@ -49,8 +85,17 @@ export const GenerationProgress = () => {
     },
     onError: (error) => {
       console.error('Generation error:', error)
+      // Clear sessionStorage on error so user can retry
+      sessionStorage.removeItem(storageKey)
     },
   })
+
+  // Clear sessionStorage when status becomes FAILED
+  useEffect(() => {
+    if (progress?.status === 'FAILED' || progress?.status === 'failed') {
+      sessionStorage.removeItem(storageKey)
+    }
+  }, [progress?.status, storageKey])
 
   const handleCancel = async () => {
     if (
@@ -64,6 +109,9 @@ export const GenerationProgress = () => {
     try {
       setIsCancelling(true)
       stopPolling()
+      // Clear sessionStorage when cancelling
+      sessionStorage.removeItem(storageKey)
+      hasStartedGenerationRef.current = false
       await cancelGeneration(projectId)
       // Redirect back to dashboard after cancellation
       setTimeout(() => {
