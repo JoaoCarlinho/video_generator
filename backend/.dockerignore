@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+venv_py313/
+venv_py314/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+PHASE_*.md
+memory-bank/
+
+# Logs
+*.log
+
+# Output
+output/
+*.mp4
+*.mp3
+*.png
+*.jpg
+*.jpeg
+
+# Environment (we'll use env_file instead)
+.env.local
+.env.*.local
+

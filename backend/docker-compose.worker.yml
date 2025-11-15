@@ -1,0 +1,30 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: genads-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+    volumes:
+      # Mount .env file if needed (or use env_file)
+      - ./.env:/app/.env:ro
+      # Optional: mount output directory if storing files locally
+      # - ./output:/app/output
+    networks:
+      - genads-network
+    # Health check (checks Redis connection)
+    healthcheck:
+      test: ["CMD", "python", "-c", "from app.config import settings; import redis; r=redis.from_url(settings.redis_url); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  genads-network:
+    driver: bridge
+

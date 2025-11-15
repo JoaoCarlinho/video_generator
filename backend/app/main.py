@@ -23,6 +23,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite frontend dev
+        "http://localhost:5176",  # Vite frontend dev (alternate)
         "http://localhost:3000",  # Alternative dev port
         "https://localhost:5173",
     ],
@@ -35,13 +36,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info("🚀 Starting up AI Ad Video Generator...")
-    
-    # Test database connection
-    if test_connection():
-        logger.info("✅ All systems ready!")
-    else:
-        logger.warning("⚠️ Database connection failed - some features may not work")
+    try:
+        logger.info("🚀 Starting up AI Ad Video Generator...")
+        
+        # Test database connection
+        if test_connection():
+            logger.info("✅ All systems ready!")
+        else:
+            logger.warning("⚠️ Database connection failed - some features may not work")
+    except Exception as e:
+        logger.error(f"❌ Startup error: {e}", exc_info=True)
+        # Don't crash - allow server to start anyway
 
 
 @app.get("/health")
@@ -64,10 +69,10 @@ async def root():
     }
 
 
-# Import and include routers (to be created)
-# from app.api import projects, generation
-# app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-# app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
+# Import and include routers
+from app.api import projects, generation
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
 
 
 if __name__ == "__main__":
