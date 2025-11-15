@@ -416,4 +416,5 @@ backend/test_extraction.py
 # Project documentation (local)
 docs/
 bmad/
+.bmad/
 .claude/
