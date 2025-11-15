@@ -411,3 +411,4 @@ user_uploads/
 
 .ignore/
 backend/test_extraction.py
+docs/
