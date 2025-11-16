@@ -18,8 +18,9 @@ import time
 import os
 import requests
 import asyncio
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class VideoGenerator:
         aspect_ratio: str = "16:9",
         seed: Optional[int] = None,
         extracted_style: Optional[dict] = None,
+        style_override: Optional[str] = None,  # PHASE 7: Override style (cinematic, dark_premium, etc.)
     ) -> str:
         """
         Generate background video for a scene via HTTP API.
@@ -79,6 +81,7 @@ class VideoGenerator:
             aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
             seed: Random seed for reproducibility (optional, not used by SeedAnce)
             extracted_style: Optional extracted style from reference image
+            style_override: (PHASE 7) Override style selection (one of the 5 predefined styles)
 
         Returns:
             URL of generated video from Replicate
@@ -86,8 +89,15 @@ class VideoGenerator:
         logger.info(f"Generating background video: {prompt[:60]}...")
 
         try:
-            # Enhance prompt with style specification and reference style if available
-            enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
+            # PHASE 7: Apply chosen style to prompt if style_override provided
+            if style_override:
+                logger.info(f"✅ Applying PHASE 7 style override: {style_override}")
+                style_keywords = StyleManager.get_style_spec(style_override)
+                # Enhance prompt with selected style
+                enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style, style_override)
+            else:
+                # Standard enhancement with style spec
+                enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
 
             # Create prediction via HTTP API (with "Prefer: wait" - returns completed result)
             prediction_data = await self._create_prediction(enhanced_prompt, int(duration))
@@ -122,9 +132,21 @@ class VideoGenerator:
             logger.error(f"Error generating video: {e}")
             raise
 
-    def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict, extracted_style: Optional[dict] = None) -> str:
-        """Enhance prompt with global style specifications and optional reference style."""
+    def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict, extracted_style: Optional[dict] = None, style_override: Optional[str] = None) -> str:
+        """Enhance prompt with global style specifications, optional reference style, and PHASE 7 style override."""
         style_parts = []
+
+        # PHASE 7: If style_override provided, use PHASE 7 style keywords
+        if style_override:
+            logger.info(f"PHASE 7: Adding style override '{style_override}' to prompt")
+            try:
+                style_config = StyleManager.get_style_config(style_override)
+                if style_config and "keywords" in style_config:
+                    keywords = style_config["keywords"]
+                    style_parts.append(f"Visual Style Keywords: {', '.join(keywords)}")
+                    logger.debug(f"Added style keywords: {keywords}")
+            except Exception as e:
+                logger.warning(f"Failed to apply style override: {e}")
 
         # Add base style specifications
         if "lighting_direction" in style_spec_dict:
