@@ -32,7 +32,10 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 # Set CXX environment variable for soxr compilation
 ENV CXX=g++
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
+    pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt || \
+    (echo "Failed to install all dependencies, trying without soxr..." && \
+     pip install --no-cache-dir $(grep -v "librosa" ${LAMBDA_TASK_ROOT}/requirements.txt) && \
+     pip install --no-cache-dir --no-deps librosa)
 
 # Copy application code
 COPY app/ ${LAMBDA_TASK_ROOT}/app/
