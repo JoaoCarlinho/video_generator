@@ -408,9 +408,15 @@ def update_project_output(
             return None
         
         # Update output videos in ad_project_json
+        # Must create new dict to trigger SQLAlchemy change detection for JSON fields
         if isinstance(project.ad_project_json, dict):
-            project.ad_project_json["aspectExports"] = final_videos
-            project.ad_project_json["costBreakdown"] = cost_breakdown
+            updated_json = dict(project.ad_project_json)
+            updated_json["aspectExports"] = final_videos
+            updated_json["costBreakdown"] = cost_breakdown
+            project.ad_project_json = updated_json
+            # Mark as modified to ensure SQLAlchemy detects the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(project, "ad_project_json")
         
         project.cost = round(float(total_cost), 2)
         project.status = "COMPLETED"

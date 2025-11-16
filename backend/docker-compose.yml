@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL - Local development database
   postgres:
@@ -59,10 +57,12 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://genads:genads_local_dev_password@postgres:5432/genads
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./.env:/app/.env:ro
       - ./app:/app/app:ro
+      - genads-uploads:/tmp/genads  # Shared volume for uploads
     networks:
       - genads-network
     healthcheck:
@@ -81,17 +81,23 @@ services:
       dockerfile: Dockerfile.worker
     container_name: genads-worker
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      api:
         condition: service_healthy
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://genads:genads_local_dev_password@postgres:5432/genads
       - REDIS_URL=redis://redis:6379/0
       - OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
     volumes:
       - ./.env:/app/.env:ro
       - ./app:/app/app:ro
+      - genads-uploads:/tmp/genads  # Shared volume for uploads
     networks:
       - genads-network
     restart: unless-stopped
@@ -124,5 +130,7 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
+    driver: local
+  genads-uploads:
     driver: local
 

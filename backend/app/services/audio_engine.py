@@ -166,21 +166,18 @@ class AudioEngine:
 
                     audio_data = await resp.read()
 
-            # Upload to S3 (S3 RESTRUCTURING: Use new project folder structure)
-            s3_key = f"projects/{project_id}/draft/music/music_{mood}.mp3"
+            # Save to local filesystem
+            from pathlib import Path
+            
+            save_dir = Path(f"/tmp/genads/{project_id}/draft/music")
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            local_path = save_dir / f"music_{mood}.mp3"
+            with open(local_path, "wb") as f:
+                f.write(audio_data)
 
-            self.s3_client.put_object(
-                Bucket=self.s3_bucket_name,
-                Key=s3_key,
-                Body=audio_data,
-                ContentType="audio/mpeg",
-                # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
-            )
-
-            s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
-
-            logger.info(f"✅ Music uploaded to S3: {s3_url}")
-            return s3_url
+            logger.info(f"✅ Music saved locally: {local_path}")
+            return str(local_path)
 
         except Exception as e:
             logger.error(f"Error saving music: {e}")

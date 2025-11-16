@@ -1,6 +1,6 @@
 """Video Generator Service - Scene background video generation.
 
-This service uses ByteDance SeedAnce-1-lite model for cost-effective text-to-video
+This service uses ByteDance SeedAnce-1-Pro-Fast model for high-quality text-to-video
 generation via HTTP API (no SDK dependency).
 
 Uses HTTP API directly for:
@@ -9,8 +9,8 @@ Uses HTTP API directly for:
 - Simpler error handling
 - Direct control over parameters
 
-Model: bytedance/seedance-1-lite (lite/fast version, suitable for testing)
-Production upgrade path: Full SeedAnce-1 or other text-to-video models
+Model: bytedance/seedance-1-pro-fast (fast, high-quality production model)
+Optimized for: Professional ad video generation with excellent quality/speed balance
 """
 
 import logging
@@ -28,7 +28,7 @@ load_dotenv()
 
 # Replicate API configuration
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
+REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro-fast/predictions"
 
 
 # ============================================================================
@@ -36,15 +36,15 @@ REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
 # ============================================================================
 
 class VideoGenerator:
-    """Generates background videos using ByteDance SeedAnce-1-lite text-to-video model.
+    """Generates background videos using ByteDance SeedAnce-1-Pro-Fast text-to-video model.
     
     Uses HTTP API directly (no SDK) for:
     - Better Python 3.14+ compatibility
     - No Pydantic v1 conflicts
     - Simpler, more direct control
     
-    This is a cost-effective model perfect for MVP testing. For production, can upgrade
-    to full SeedAnce-1 or other premium text-to-video models.
+    This is a professional-grade model optimized for high-quality ad video generation
+    with excellent balance between quality and speed.
     """
 
     def __init__(self, api_token: Optional[str] = None):
@@ -87,16 +87,24 @@ class VideoGenerator:
             # Enhance prompt with style specification
             enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict)
 
-            # Create prediction via HTTP API
+            # Create prediction via HTTP API (with "Prefer: wait" - returns completed result)
             prediction_data = await self._create_prediction(enhanced_prompt, int(duration))
-            prediction_id = prediction_data.get("id")
-            logger.debug(f"Created prediction: {prediction_id}")
-
-            # Poll until complete
-            result = await self._poll_prediction(prediction_id)
             
-            if not result:
-                raise RuntimeError("Prediction failed or timed out")
+            # With "Prefer: wait", the prediction should already be complete
+            status = prediction_data.get("status")
+            logger.debug(f"Prediction status: {status}")
+            
+            # Check if prediction is already complete (from "Prefer: wait")
+            if status in ["succeeded", "completed"]:
+                result = prediction_data
+            else:
+                # Fallback: poll if not complete yet (shouldn't happen with "Prefer: wait")
+                prediction_id = prediction_data.get("id")
+                logger.warning(f"Prediction not complete, polling: {prediction_id}")
+                result = await self._poll_prediction(prediction_id)
+                
+                if not result:
+                    raise RuntimeError("Prediction failed or timed out")
             
             # Extract video URL
             output = result.get("output")
@@ -137,19 +145,19 @@ class VideoGenerator:
 
 
     async def _create_prediction(self, prompt: str, duration: int) -> dict:
-        """Create a prediction via HTTP API."""
+        """Create a prediction via HTTP API using seedance-1-pro-fast model."""
         headers = {
-            "Authorization": f"Token {self.api_token}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+            "Prefer": "wait"  # Wait for the result instead of polling
         }
         
         payload = {
-            "version": "bytedance/seedance-1-lite",  # Model identifier
             "input": {
                 "fps": 24,
                 "prompt": prompt,
                 "duration": min(duration, 10),  # Cap at 10s
-                "resolution": "720p",
+                "resolution": "480p",  # 480p for faster generation, good quality
                 "aspect_ratio": "16:9",
                 "camera_fixed": False
             }
@@ -160,7 +168,7 @@ class VideoGenerator:
                 REPLICATE_API_URL,
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=120  # Increased timeout for "Prefer: wait"
             )
             response.raise_for_status()
             return response.json()
@@ -170,7 +178,7 @@ class VideoGenerator:
 
     async def _poll_prediction(self, prediction_id: str, max_wait: int = 300) -> Optional[dict]:
         """Poll prediction until it completes."""
-        headers = {"Authorization": f"Token {self.api_token}"}
+        headers = {"Authorization": f"Bearer {self.api_token}"}
         
         start_time = time.time()
         check_count = 0
@@ -182,8 +190,10 @@ class VideoGenerator:
                 return None
             
             try:
+                # Polling uses base predictions URL, not model-specific URL
+                poll_url = f"https://api.replicate.com/v1/predictions/{prediction_id}"
                 response = requests.get(
-                    f"{REPLICATE_API_URL}/{prediction_id}",
+                    poll_url,
                     headers=headers,
                     timeout=10
                 )

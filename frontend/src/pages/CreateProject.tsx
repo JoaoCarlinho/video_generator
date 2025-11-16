@@ -6,35 +6,33 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal 
 import { useProjects } from '@/hooks/useProjects'
 import { Upload, X, Zap } from 'lucide-react'
 
-const moods = [
-  { value: 'uplifting', label: '✨ Uplifting - Positive, energetic vibe' },
-  { value: 'dramatic', label: '⚡ Dramatic - Bold, impactful' },
-  { value: 'energetic', label: '🔥 Energetic - Fast-paced, dynamic' },
-  { value: 'calm', label: '🌊 Calm - Serene, relaxing' },
-  { value: 'luxurious', label: '👑 Luxurious - Premium, elegant' },
-  { value: 'playful', label: '🎉 Playful - Fun, lighthearted' },
-]
-
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
 
   const [formData, setFormData] = useState({
     title: '',
-    brief: '',
+    creative_prompt: '',
     brand_name: '',
-    mood: 'uplifting',
-    duration: 30,
+    brand_description: '',
+    target_audience: '',
+    target_duration: 30,
     primary_color: '#4dbac7',
     secondary_color: '#ffffff',
+    logo_url: '',
     product_image_url: '',
+    guidelines_url: '',
   })
 
   const [productImage, setProductImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
+  const [logoImage, setLogoImage] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [autoGenerate, setAutoGenerate] = useState(true)
+  const [uploading, setUploading] = useState(false)
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -68,14 +66,75 @@ export const CreateProject = () => {
     setImagePreview('')
   }
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file size (max 5MB for logo)
+      if (file.size > 5 * 1024 * 1024) {
+        setSubmitError('Logo must be less than 5MB')
+        return
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setSubmitError('Please select an image file for logo')
+        return
+      }
+
+      setLogoImage(file)
+      setSubmitError(null)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setLogoPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveLogo = () => {
+    setLogoImage(null)
+    setLogoPreview('')
+  }
+
+  const handleGuidelinesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setSubmitError('Guidelines file must be less than 10MB')
+        return
+      }
+
+      // Validate file type (PDF or TXT)
+      if (!file.type.includes('pdf') && !file.type.includes('text')) {
+        setSubmitError('Please select a PDF or TXT file for guidelines')
+        return
+      }
+
+      setGuidelinesFile(file)
+      setSubmitError(null)
+    }
+  }
+
+  const handleRemoveGuidelines = () => {
+    setGuidelinesFile(null)
+  }
+
   const validateForm = (): boolean => {
     if (!formData.title.trim()) {
       setSubmitError('Project title is required')
       return false
     }
 
-    if (!formData.brief.trim()) {
-      setSubmitError('Product brief is required')
+    if (!formData.creative_prompt.trim()) {
+      setSubmitError('Creative prompt is required')
+      return false
+    }
+
+    if (formData.creative_prompt.trim().length < 20) {
+      setSubmitError('Creative prompt must be at least 20 characters')
       return false
     }
 
@@ -84,7 +143,7 @@ export const CreateProject = () => {
       return false
     }
 
-    if (formData.duration < 15 || formData.duration > 120) {
+    if (formData.target_duration < 15 || formData.target_duration > 120) {
       setSubmitError('Duration must be between 15 and 120 seconds')
       return false
     }
@@ -104,29 +163,108 @@ export const CreateProject = () => {
     setShowConfirmation(true)
   }
 
+  const uploadFileToBackend = async (
+    file: File,
+    assetType: 'logo' | 'product' | 'guidelines'
+  ): Promise<string | null> => {
+    try {
+      console.log(`📤 Uploading ${assetType}: ${file.name}`)
+      
+      // Create FormData for multipart upload
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', file)
+      uploadFormData.append('asset_type', assetType)
+      
+      // Upload file to backend (local filesystem)
+      const uploadResponse = await fetch('http://localhost:8000/api/upload-asset', {
+        method: 'POST',
+        body: uploadFormData,
+        // Don't set Content-Type header - browser will set it with boundary for multipart
+      })
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
+      }
+      
+      const { file_path } = await uploadResponse.json()
+      
+      console.log(`✅ Uploaded ${assetType} to local filesystem: ${file_path}`)
+      return file_path
+      
+    } catch (error) {
+      console.error(`❌ Failed to upload ${assetType}:`, error)
+      return null
+    }
+  }
+
   const handleConfirmCreate = async () => {
     setShowConfirmation(false)
+    setUploading(true)
+    setSubmitError(null)
     
     try {
       console.log('🚀 Creating project with data:', {
         title: formData.title,
         brand_name: formData.brand_name,
-        mood: formData.mood,
-        duration: formData.duration,
+        target_duration: formData.target_duration,
       })
+
+      // Upload files to S3 if selected
+      let uploadedProductUrl = formData.product_image_url
+      let uploadedLogoUrl = formData.logo_url
+      let uploadedGuidelinesUrl = formData.guidelines_url
+      
+      if (productImage || logoImage || guidelinesFile) {
+        console.log('📦 Uploading files to S3...')
+        
+        // Upload files in parallel
+        const uploadPromises = []
+        
+        if (productImage) {
+          uploadPromises.push(
+            uploadFileToBackend(productImage, 'product').then(url => {
+              if (url) uploadedProductUrl = url
+            })
+          )
+        }
+        
+        if (logoImage) {
+          uploadPromises.push(
+            uploadFileToBackend(logoImage, 'logo').then(url => {
+              if (url) uploadedLogoUrl = url
+            })
+          )
+        }
+        
+        if (guidelinesFile) {
+          uploadPromises.push(
+            uploadFileToBackend(guidelinesFile, 'guidelines').then(url => {
+              if (url) uploadedGuidelinesUrl = url
+            })
+          )
+        }
+        
+        // Wait for all uploads to complete
+        await Promise.all(uploadPromises)
+        console.log('✅ All files uploaded successfully')
+      }
 
       const newProject = await createProject({
         title: formData.title,
-        brief: formData.brief,
+        creative_prompt: formData.creative_prompt,
         brand_name: formData.brand_name,
-        mood: formData.mood,
-        duration: formData.duration,
+        brand_description: formData.brand_description || undefined,
+        target_audience: formData.target_audience || undefined,
+        target_duration: formData.target_duration,
         primary_color: formData.primary_color,
         secondary_color: formData.secondary_color || undefined,
-        product_image_url: formData.product_image_url || undefined,
+        logo_url: uploadedLogoUrl || undefined,
+        product_image_url: uploadedProductUrl || undefined,
+        guidelines_url: uploadedGuidelinesUrl || undefined,
       })
 
       console.log('✅ Project created:', newProject)
+      setUploading(false)
 
       // Navigate immediately or to dashboard based on autoGenerate
       if (autoGenerate) {
@@ -140,7 +278,8 @@ export const CreateProject = () => {
       console.error('❌ Error creating project:', err)
       const message = err instanceof Error ? err.message : 'Failed to create project'
       setSubmitError(message)
-      setShowConfirmation(true) // Show modal again so user can edit
+      setUploading(false)
+      setShowConfirmation(true) // Show modal again so user can retry
     }
   }
 
@@ -220,40 +359,56 @@ export const CreateProject = () => {
                       required
                     />
 
-                    {/* Product Brief */}
+                    {/* Brand Description (Optional) */}
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Product Brief
+                        Brand Description <span className="text-slate-500">(Optional)</span>
                       </label>
                       <textarea
-                        placeholder="Describe your product, key features, and target audience. Example: A premium hydrating serum for mature skin with hyaluronic acid. Perfect for skincare influencers and beauty-conscious women 30-55."
-                        value={formData.brief}
+                        placeholder="Tell us about your brand's story, values, and personality. Example: Premium skincare for conscious consumers who value sustainability and natural ingredients."
+                        value={formData.brand_description}
                         onChange={(e) =>
-                          setFormData({ ...formData, brief: e.target.value })
+                          setFormData({ ...formData, brand_description: e.target.value })
                         }
-                        rows={4}
+                        rows={2}
+                        className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      />
+                    </div>
+
+                    {/* Creative Prompt */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Creative Vision <span className="text-red-400">*</span>
+                      </label>
+                      <textarea
+                        placeholder="Describe your vision for the video. How should it look and feel? What story should it tell? Example: Create an energetic video that starts with a problem (tired skin), showcases our serum transforming skin in 7 days, and ends with confident customers. Use bright, clean aesthetics with dynamic camera movements."
+                        value={formData.creative_prompt}
+                        onChange={(e) =>
+                          setFormData({ ...formData, creative_prompt: e.target.value })
+                        }
+                        rows={5}
                         className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
                         required
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        The more details, the better the generated video
+                        💡 Be specific about mood, pacing, and key moments. The AI will bring your vision to life.
                       </p>
                     </div>
 
-                    {/* Mood */}
-                    <Select
-                      label="Video Mood"
-                      options={moods}
-                      value={String(formData.mood)}
-                      onChange={(value) =>
-                        setFormData({ ...formData, mood: value as string })
+                    {/* Target Audience (Optional) */}
+                    <Input
+                      label="Target Audience (Optional)"
+                      placeholder="e.g., Women 30-55 interested in natural beauty"
+                      value={formData.target_audience}
+                      onChange={(e) =>
+                        setFormData({ ...formData, target_audience: e.target.value })
                       }
                     />
 
                     {/* Duration */}
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Video Duration (seconds)
+                        Target Video Duration (seconds)
                       </label>
                       <div className="flex items-center gap-4">
                       <input
@@ -261,23 +416,23 @@ export const CreateProject = () => {
                         min="15"
                         max="120"
                         step="5"
-                        value={String(formData.duration)}
+                        value={String(formData.target_duration)}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            duration: parseInt(e.target.value),
+                            target_duration: parseInt(e.target.value),
                           })
                         }
                           className="flex-1 h-2 bg-slate-800 rounded-lg accent-indigo-600 cursor-pointer"
                         />
                         <div className="w-20 text-center">
                           <span className="text-2xl font-bold text-indigo-400">
-                            {formData.duration}s
+                            {formData.target_duration}s
                           </span>
                         </div>
                       </div>
                       <p className="text-xs text-slate-500 mt-2">
-                        Recommended: 15-60 seconds for social media
+                        ⏱️ The AI will pace scenes naturally around this target (±20% is OK)
                       </p>
                     </div>
 
@@ -333,45 +488,153 @@ export const CreateProject = () => {
                       </div>
                     </div>
 
-                    {/* Product Image Upload */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Product Image (Optional)
-                      </label>
-                      {imagePreview ? (
-                        <div className="relative w-full">
-                          <img
-                            src={imagePreview}
-                            alt="Product preview"
-                            className="w-full h-48 object-cover rounded-lg border border-slate-700"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleRemoveImage}
-                            className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                          >
-                            <X className="w-4 h-4 text-white" />
-                          </button>
+                    {/* Asset Uploads Section */}
+                    <div className="space-y-6 p-6 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-200">
+                        Assets <span className="text-slate-500 text-sm font-normal">(All Optional)</span>
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Product Image Upload */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-2">
+                            Product Image
+                          </label>
+                          {imagePreview ? (
+                            <div className="relative w-full">
+                              <img
+                                src={imagePreview}
+                                alt="Product preview"
+                                className="w-full h-40 object-cover rounded-lg border border-slate-700"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleRemoveImage}
+                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                              >
+                                <X className="w-4 h-4 text-white" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
+                              <div className="flex flex-col items-center justify-center">
+                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
+                                <span className="text-sm text-slate-400">
+                                  Upload product
+                                </span>
+                                <span className="text-xs text-slate-500 mt-1">
+                                  PNG, JPG (Max 10MB)
+                                </span>
+                              </div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageChange}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                          <p className="text-xs text-slate-500 mt-2">
+                            AI will composite your product into scenes
+                          </p>
                         </div>
-                      ) : (
-                        <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                          <div className="flex flex-col items-center justify-center">
-                            <Upload className="w-8 h-8 text-slate-500 mb-2" />
-                            <span className="text-sm text-slate-400">
-                              Click to upload product image
-                            </span>
-                            <span className="text-xs text-slate-500 mt-1">
-                              PNG, JPG, WebP (Max 10MB)
-                            </span>
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="hidden"
-                          />
+
+                        {/* Brand Logo Upload */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-2">
+                            Brand Logo
+                          </label>
+                          {logoPreview ? (
+                            <div className="relative w-full">
+                              <img
+                                src={logoPreview}
+                                alt="Logo preview"
+                                className="w-full h-40 object-contain bg-slate-900/50 rounded-lg border border-slate-700 p-4"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleRemoveLogo}
+                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                              >
+                                <X className="w-4 h-4 text-white" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
+                              <div className="flex flex-col items-center justify-center">
+                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
+                                <span className="text-sm text-slate-400">
+                                  Upload logo
+                                </span>
+                                <span className="text-xs text-slate-500 mt-1">
+                                  PNG, SVG (Max 5MB)
+                                </span>
+                              </div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleLogoChange}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                          <p className="text-xs text-slate-500 mt-2">
+                            AI will place logo strategically (usually final scene)
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Brand Guidelines Upload */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Brand Guidelines
                         </label>
-                      )}
+                        {guidelinesFile ? (
+                          <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-indigo-500/20 rounded-lg">
+                                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-200 font-medium">{guidelinesFile.name}</p>
+                                <p className="text-xs text-slate-500">
+                                  {(guidelinesFile.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleRemoveGuidelines}
+                              className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                            >
+                              <X className="w-4 h-4 text-white" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
+                            <div className="flex flex-col items-center justify-center">
+                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
+                              <span className="text-sm text-slate-400">
+                                Upload brand guidelines
+                              </span>
+                              <span className="text-xs text-slate-500 mt-1">
+                                PDF, TXT (Max 10MB)
+                              </span>
+                            </div>
+                            <input
+                              type="file"
+                              accept=".pdf,.txt,text/plain,application/pdf"
+                              onChange={handleGuidelinesChange}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                        <p className="text-xs text-slate-500 mt-2">
+                          💡 AI will follow your brand guidelines for tone and style
+                        </p>
+                      </div>
                     </div>
 
                     {/* Submit Buttons */}
@@ -398,15 +661,21 @@ export const CreateProject = () => {
               </Card>
             </motion.div>
 
-            {/* Info Box */}
-            <motion.div
-              variants={itemVariants}
-              className="p-4 bg-indigo-500/10 border border-indigo-500/50 rounded-lg"
-            >
-              <p className="text-indigo-400 text-sm">
-                💡 <strong>Pro Tip:</strong> Detailed product briefs result in better
-                videos. Include key features, benefits, and target audience.
-              </p>
+            {/* Info Boxes */}
+            <motion.div variants={itemVariants} className="space-y-4">
+              <div className="p-4 bg-indigo-500/10 border border-indigo-500/50 rounded-lg">
+                <p className="text-indigo-400 text-sm">
+                  💡 <strong>Pro Tip:</strong> Be specific in your creative vision! Describe the mood, pacing, key moments, and visual style you want. The AI director will bring your vision to life with professional camera work and scene pacing.
+                </p>
+              </div>
+              
+              {(productImage || logoImage || guidelinesFile) && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
+                  <p className="text-emerald-400 text-sm">
+                    ✅ <strong>Ready to upload:</strong> Your files will be uploaded to S3 before creating the project. The AI will use these assets when generating your video.
+                  </p>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         </Container>
@@ -440,23 +709,34 @@ export const CreateProject = () => {
 
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase">
-                Product Brief
+                Creative Vision
               </label>
-              <p className="text-slate-100 mt-1 text-sm">{formData.brief}</p>
+              <p className="text-slate-100 mt-1 text-sm">{formData.creative_prompt}</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            {formData.brand_description && (
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Video Mood
+                  Brand Description
                 </label>
-                <p className="text-slate-100 mt-1 capitalize">{formData.mood}</p>
+                <p className="text-slate-100 mt-1 text-sm">{formData.brand_description}</p>
               </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-4">
+              {formData.target_audience && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase">
+                    Target Audience
+                  </label>
+                  <p className="text-slate-100 mt-1 text-sm">{formData.target_audience}</p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Duration
+                  Target Duration
                 </label>
-                <p className="text-slate-100 mt-1">{formData.duration}s</p>
+                <p className="text-slate-100 mt-1">{formData.target_duration}s</p>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase">
@@ -471,6 +751,32 @@ export const CreateProject = () => {
                 </div>
               </div>
             </div>
+
+            {/* Assets Section */}
+            {(productImage || logoImage || guidelinesFile) && (
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
+                  Uploaded Assets
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {productImage && (
+                    <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
+                      ✓ Product Image
+                    </span>
+                  )}
+                  {logoImage && (
+                    <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
+                      ✓ Brand Logo
+                    </span>
+                  )}
+                  {guidelinesFile && (
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs">
+                      ✓ Brand Guidelines
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Cost Estimate */}

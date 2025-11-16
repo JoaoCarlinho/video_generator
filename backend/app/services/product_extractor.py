@@ -8,6 +8,7 @@ import logging
 import io
 from typing import Optional, Tuple
 from PIL import Image
+from urllib.parse import urlparse
 import aiohttp
 import boto3
 from botocore.exceptions import ClientError
@@ -56,49 +57,90 @@ class ProductExtractor:
         project_id: str,
     ) -> str:
         """
-        Extract product from image and upload masked PNG to S3.
+        Extract product from image and save to local filesystem.
 
         Args:
-            image_url: URL of product image
-            project_id: Project UUID for S3 path organization
+            image_url: URL or local path of product image
+            project_id: Project UUID for organizing local files
 
         Returns:
-            S3 URL of extracted product PNG with transparent background
+            Local file path of extracted product PNG with transparent background
         """
         logger.info(f"Extracting product from {image_url}")
 
         try:
-            # Download image
+            # Download/read image
             image_data = await self._download_image(image_url)
             if image_data is None:
-                logger.error(f"Failed to download image from {image_url}")
-                raise ValueError(f"Could not download image from {image_url}")
+                logger.error(f"Failed to read image from {image_url}")
+                raise ValueError(f"Could not read image from {image_url}")
 
             # Remove background
             extracted_image = await self._remove_background(image_data)
 
-            # Upload to S3
-            s3_url = await self._upload_to_s3(extracted_image, project_id)
+            # Save to local filesystem
+            local_path = await self._save_to_local(extracted_image, project_id)
 
-            logger.info(f"✅ Product extracted and uploaded to {s3_url}")
-            return s3_url
+            logger.info(f"✅ Product extracted and saved to {local_path}")
+            return local_path
 
         except Exception as e:
             logger.error(f"Error extracting product: {e}")
             raise
 
-    async def _download_image(self, url: str) -> Optional[bytes]:
-        """Download image from URL."""
+    async def _download_image(self, url_or_path: str) -> Optional[bytes]:
+        """Download image from URL or read from local filesystem."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status == 200:
-                        return await resp.read()
-                    else:
-                        logger.error(f"Failed to download image: HTTP {resp.status}")
-                        return None
+            # Check if it's a local file path (starts with / or contains /tmp/)
+            if url_or_path.startswith('/') or '/tmp/' in url_or_path:
+                logger.info(f"Reading local file: {url_or_path}")
+                
+                # Read from local filesystem
+                from pathlib import Path
+                file_path = Path(url_or_path)
+                
+                if not file_path.exists():
+                    logger.error(f"Local file not found: {url_or_path}")
+                    return None
+                
+                with open(file_path, 'rb') as f:
+                    image_data = f.read()
+                
+                logger.info(f"✅ Read {len(image_data)} bytes from local file")
+                return image_data
+            
+            # Parse URL to check if it's an S3 URL
+            parsed_url = urlparse(url_or_path)
+            
+            # Check if it's an S3 URL (format: https://bucket.s3.region.amazonaws.com/key)
+            if 's3.amazonaws.com' in parsed_url.netloc or 's3-' in parsed_url.netloc:
+                # Extract bucket and key from S3 URL
+                # Format: https://bucket.s3.region.amazonaws.com/path/to/file
+                bucket_name = parsed_url.netloc.split('.')[0]
+                s3_key = parsed_url.path.lstrip('/')
+                
+                logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
+                
+                # Download from S3 using credentials
+                try:
+                    response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+                    image_data = response['Body'].read()
+                    logger.info(f"✅ Downloaded {len(image_data)} bytes from S3")
+                    return image_data
+                except ClientError as e:
+                    logger.error(f"S3 download failed: {e}")
+                    return None
+            else:
+                # Regular HTTP(S) URL - use aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url_or_path, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                        if resp.status == 200:
+                            return await resp.read()
+                        else:
+                            logger.error(f"Failed to download image: HTTP {resp.status}")
+                            return None
         except Exception as e:
-            logger.error(f"Error downloading image: {e}")
+            logger.error(f"Error downloading/reading image: {e}")
             return None
 
     async def _remove_background(self, image_bytes: bytes) -> Image.Image:
@@ -138,39 +180,30 @@ class ProductExtractor:
             logger.error(f"Error removing background: {e}")
             raise
 
-    async def _upload_to_s3(self, image: Image.Image, project_id: str) -> str:
-        """Upload extracted product image to S3."""
+    async def _save_to_local(self, image: Image.Image, project_id: str) -> str:
+        """Save extracted product image to local filesystem."""
         try:
-            # Convert to PNG bytes
-            png_buffer = io.BytesIO()
-            image.save(png_buffer, format="PNG")
-            png_buffer.seek(0)
+            from pathlib import Path
+            
+            # Create directory structure: /tmp/genads/{project_id}/draft/product/
+            project_dir = Path(f"/tmp/genads/{project_id}/draft/product")
+            project_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save as PNG
+            local_path = project_dir / "extracted.png"
+            image.save(local_path, format="PNG")
 
-            # Upload to S3 (S3 RESTRUCTURING: Use new project folder structure)
-            s3_key = f"projects/{project_id}/draft/product/extracted.png"
+            logger.info(f"✅ Saved product to local filesystem: {local_path}")
+            return str(local_path)
 
-            self.s3_client.put_object(
-                Bucket=self.s3_bucket_name,
-                Key=s3_key,
-                Body=png_buffer.getvalue(),
-                ContentType="image/png",
-                # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
-            )
-
-            # Generate URL
-            s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
-
-            logger.info(f"✅ Uploaded product to S3: {s3_url}")
-            return s3_url
-
-        except ClientError as e:
-            logger.error(f"S3 upload error: {e}")
+        except Exception as e:
+            logger.error(f"Local save error: {e}")
             raise
 
-    async def get_product_dimensions(self, s3_url: str) -> Tuple[int, int]:
-        """Get dimensions of extracted product image."""
+    async def get_product_dimensions(self, file_path: str) -> Tuple[int, int]:
+        """Get dimensions of extracted product image from local file or URL."""
         try:
-            image_data = await self._download_image(s3_url)
+            image_data = await self._download_image(file_path)
             if image_data:
                 img = Image.open(io.BytesIO(image_data))
                 return img.size  # (width, height)
