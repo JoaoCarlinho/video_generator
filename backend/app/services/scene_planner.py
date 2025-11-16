@@ -93,6 +93,7 @@ class ScenePlanner:
         target_duration: int = 30,
         has_product: bool = False,
         has_logo: bool = False,
+        aspect_ratio: str = "16:9",
     ) -> AdProjectPlan:
         """
         Generate video scene plan with full creative freedom.
@@ -107,6 +108,7 @@ class ScenePlanner:
             target_duration: Target total duration in seconds (flexible ±20%)
             has_product: Whether product image is available
             has_logo: Whether logo is available
+            aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9) to optimize scene planning
 
         Returns:
             AdProjectPlan with scenes and style specification
@@ -125,6 +127,7 @@ class ScenePlanner:
             target_duration=target_duration,
             has_product=has_product,
             has_logo=has_logo,
+            aspect_ratio=aspect_ratio,
         )
 
         # Generate style specification
@@ -188,6 +191,7 @@ class ScenePlanner:
         target_duration: int,
         has_product: bool,
         has_logo: bool,
+        aspect_ratio: str = "16:9",
     ) -> List[Dict[str, Any]]:
         """Generate scene specifications using GPT-4o-mini with full creative freedom."""
 
@@ -225,6 +229,10 @@ Target Audience: {target_audience}
 Target Duration: {target_duration}s (flexible ±20%)
 Duration Range per Scene: 3-15 seconds
 Recommended Scene Count: 3-6 scenes
+Video Aspect Ratio: {aspect_ratio}
+  - 16:9 (Horizontal): YouTube, Web, Presentations, Widescreen
+  - 9:16 (Vertical): TikTok, Instagram Reels, Shorts (Portrait mode)
+  - 1:1 (Square): Instagram Feed, Facebook, Pinterest
 
 === AVAILABLE ASSETS ===
 {asset_instructions}

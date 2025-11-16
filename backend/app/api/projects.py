@@ -58,11 +58,12 @@ async def create_new_project(
     - brand_name: Brand name (max 100 chars)
     - brand_description: (optional) Brand story, values, personality
     - target_audience: (optional) Target audience description
-    - primary_color: Primary brand color (hex #RRGGBB or #RRGGBBAA)
-    - secondary_color: (optional) Secondary brand color (hex)
+    - aspect_ratio: (optional) Video aspect ratio - '9:16' (vertical), '1:1' (square), or '16:9' (horizontal). Defaults to '16:9'
     - logo_url: (optional) S3 URL of uploaded brand logo
     - product_image_url: (optional) S3 URL of uploaded product image
     - guidelines_url: (optional) S3 URL of uploaded brand guidelines
+    
+    **Note:** Colors are now determined by the LLM based on creative_prompt and brand_guidelines for optimal visual consistency.
     
     **Response:** ProjectResponse with newly created project
     
@@ -80,8 +81,7 @@ async def create_new_project(
       "brand_name": "HydraGlow",
       "brand_description": "Premium skincare for conscious consumers",
       "target_audience": "Women 30-55 interested in natural beauty",
-      "primary_color": "#4dbac7",
-      "secondary_color": "#ffffff"
+      "aspect_ratio": "16:9"
     }
     ```
     """
@@ -96,8 +96,6 @@ async def create_new_project(
         brand_config = {
             "name": request.brand_name,
             "description": request.brand_description,
-            "primary_color": request.primary_color,
-            "secondary_color": request.secondary_color or "",
             "font_family": "Inter",
             "logo_url": request.logo_url,
             "guidelines_url": request.guidelines_url
@@ -126,7 +124,7 @@ async def create_new_project(
             "style_spec": None,
             "scenes": [],
             "video_settings": {
-                "aspect_ratios": ["16:9"],
+                "aspect_ratio": request.aspect_ratio,
                 "resolution": "1080p",
                 "fps": 30,
                 "codec": "h264"
@@ -147,7 +145,8 @@ async def create_new_project(
             brief=request.creative_prompt,  # Store creative_prompt as brief in DB for backwards compat
             ad_project_json=ad_project_json,
             mood="",  # Deprecated, keeping for DB schema compatibility
-            duration=request.target_duration
+            duration=request.target_duration,
+            aspect_ratio=request.aspect_ratio
         )
         
         # S3 RESTRUCTURING: Initialize S3 folder structure for new project

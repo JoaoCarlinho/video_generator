@@ -26,7 +26,8 @@ def create_project(
     brief: str,
     ad_project_json: Dict[str, Any],
     mood: str = "uplifting",
-    duration: int = 30
+    duration: int = 30,
+    aspect_ratio: str = "16:9"
 ) -> Project:
     """
     Create a new project in the database.
@@ -39,6 +40,7 @@ def create_project(
         ad_project_json: Complete ad project configuration as JSON
         mood: Video mood/style
         duration: Video duration in seconds
+        aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9)
     
     Returns:
         Project: Created project object
@@ -53,7 +55,8 @@ def create_project(
             ad_project_json=ad_project_json,
             status="PENDING",
             progress=0,
-            cost=0.0
+            cost=0.0,
+            aspect_ratio=aspect_ratio
         )
         db.add(project)
         db.commit()
