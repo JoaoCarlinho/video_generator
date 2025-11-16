@@ -209,8 +209,15 @@ class GenerationPipeline:
             # Update project with new ad_project data
             ad_project = AdProject(**updated_project.ad_project_json)
 
-            # ===== STEP 3: Generate Videos (Parallel) =====
-            logger.info("🎥 Step 3: Generating videos for all scenes...")
+            # ===== STEP 3A: Spawn Music Generation (PARALLEL with video) =====
+            logger.info("🎵 Step 3A: Spawning background music generation (running in parallel)...")
+            music_task = asyncio.create_task(
+                self._generate_audio(project, ad_project, progress_start=30)
+            )
+            logger.info("🎵 Music generation task spawned - running in background")
+
+            # ===== STEP 3B: Generate Videos (Parallel with Music) =====
+            logger.info("🎥 Step 3B: Generating videos for all scenes...")
             video_start = 25 if has_product else 20
             replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
             video_cost = COST_VIDEO_GENERATION * len(ad_project.scenes)
@@ -223,8 +230,9 @@ class GenerationPipeline:
             logger.info(f"✅ Saved {len(scene_videos)} videos to local storage")
 
             # ===== STEP 4: Composite Product (Optional) =====
+            # Note: Music is still generating in background
             if product_url:
-                logger.info("🎨 Step 4: Compositing product onto scenes...")
+                logger.info("🎨 Step 4: Compositing product onto scenes (music still generating)...")
                 composited_videos = await self._composite_products(
                     scene_videos, product_url, ad_project, progress_start=40
                 )
@@ -235,7 +243,8 @@ class GenerationPipeline:
                 composited_videos = scene_videos  # Use background videos as-is
 
             # ===== STEP 5: Add Text Overlays =====
-            logger.info("📝 Step 5: Rendering text overlays...")
+            # Note: Music is still generating in background
+            logger.info("📝 Step 5: Rendering text overlays (music still generating)...")
             overlay_start = 60 if has_product else 50
             text_rendered_videos = await self._add_text_overlays(
                 composited_videos, ad_project, progress_start=overlay_start
@@ -243,12 +252,19 @@ class GenerationPipeline:
             self.step_costs["text_overlay"] = COST_TEXT_OVERLAY
             self.total_cost += COST_TEXT_OVERLAY
 
-            # ===== STEP 6: Generate Audio =====
-            logger.info("🎵 Step 6: Generating background music...")
-            audio_start = 75 if has_product else 70
-            audio_url = await self._generate_audio(project, ad_project, progress_start=audio_start)
-            self.step_costs["audio"] = COST_MUSIC_GENERATION
-            self.total_cost += COST_MUSIC_GENERATION
+            # ===== STEP 6: Synchronize - Wait for Music Generation =====
+            logger.info("⏳ Step 6: Waiting for background music generation to complete...")
+            try:
+                audio_url = await music_task
+                logger.info(f"✅ Background music generation complete: {audio_url}")
+                self.step_costs["audio"] = COST_MUSIC_GENERATION
+                self.total_cost += COST_MUSIC_GENERATION
+            except asyncio.CancelledError:
+                logger.error("❌ Music generation was cancelled")
+                raise
+            except Exception as e:
+                logger.error(f"❌ Music generation failed: {e}")
+                raise
 
             # ===== STEP 7: Render Multi-Aspect =====
             logger.info("📺 Step 7: Rendering final videos (multi-aspect)...")
@@ -301,6 +317,15 @@ class GenerationPipeline:
 
         except Exception as e:
             logger.error(f"❌ Pipeline failed: {e}", exc_info=True)
+
+            # Cancel music task if it's still running (from parallel execution)
+            if 'music_task' in locals() and not music_task.done():
+                logger.info("🚫 Cancelling background music generation task...")
+                music_task.cancel()
+                try:
+                    await music_task
+                except asyncio.CancelledError:
+                    logger.info("✅ Music task cancelled successfully")
 
             # Mark project as failed
             error_msg = str(e)[:500]  # Truncate long errors
