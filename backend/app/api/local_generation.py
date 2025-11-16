@@ -34,7 +34,7 @@ async def get_preview_video(
     
     **Path Parameters:**
     - project_id: UUID of the project
-    - aspect_ratio: '9:16', '1:1', or '16:9'
+    - aspect_ratio: '16:9'
     
     **Response:** 
     - Content-Type: video/mp4
@@ -47,10 +47,10 @@ async def get_preview_video(
     """
     try:
         # Validate aspect ratio
-        if aspect_ratio not in ['9:16', '1:1', '16:9']:
+        if aspect_ratio not in ['16:9']:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid aspect ratio: {aspect_ratio}"
+                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 16:9"
             )
         
         init_db()
@@ -108,8 +108,6 @@ async def get_storage_info(
         "local_storage_size_formatted": "500 MB",
         "status": "READY_FOR_REVIEW",
         "local_video_paths": {
-            "9:16": "/tmp/genads/.../video_9-16.mp4",
-            "1:1": "/tmp/genads/.../video_1-1.mp4",
             "16:9": "/tmp/genads/.../video_16-9.mp4"
         }
     }
@@ -135,7 +133,7 @@ async def get_storage_info(
             "local_video_paths": project.local_video_paths or {},
             "has_all_aspects": all(
                 v in (project.local_video_paths or {})
-                for v in ['9:16', '1:1', '16:9']
+                for v in ['16:9']
             )
         }
     
@@ -168,8 +166,6 @@ async def finalize_project(
         "status": "finalized",
         "project_id": "...",
         "local_video_paths": {
-            "9:16": "/tmp/genads/.../video_9-16.mp4",
-            "1:1": "/tmp/genads/.../video_1-1.mp4",
             "16:9": "/tmp/genads/.../video_16-9.mp4"
         },
         "message": "Project finalized. Videos remain in local storage."

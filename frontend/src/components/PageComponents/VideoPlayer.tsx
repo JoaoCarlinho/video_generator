@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 interface VideoPlayerProps {
   videoUrl?: string
   title?: string
-  aspect: '9:16' | '1:1' | '16:9'
+  aspect: '16:9'
   onDownload?: () => void
   isLoading?: boolean
 }
@@ -69,8 +69,6 @@ export const VideoPlayer = ({
   }
 
   const aspectRatios = {
-    '9:16': 'aspect-[9/16]',
-    '1:1': 'aspect-square',
     '16:9': 'aspect-video',
   }
 
@@ -110,7 +108,7 @@ export const VideoPlayer = ({
             {/* Top Controls */}
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="px-3 py-1 bg-black/50 backdrop-blur rounded text-sm text-white font-medium">
-                {aspect === '9:16' ? 'Vertical' : aspect === '1:1' ? 'Square' : 'Horizontal'}
+                Horizontal
               </div>
             </div>
 

@@ -7,7 +7,7 @@ This module contains the main generation pipeline that orchestrates all services
 4. Compositing (product overlay)
 5. Text Overlay Rendering
 6. Audio Generation (MusicGen)
-7. Multi-Aspect Rendering (9:16, 1:1, 16:9)
+7. Horizontal Rendering (16:9)
 
 Each step tracks costs and updates progress in database.
 
@@ -610,7 +610,7 @@ class GenerationPipeline:
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
                 project_id=str(self.project_id),
-                output_aspect_ratios=["9:16", "1:1", "16:9"],
+                output_aspect_ratios=["16:9"],
             )
 
             update_project_status(
@@ -634,7 +634,7 @@ class GenerationPipeline:
         Delete intermediate S3 files after user exports final video.
         
         Called during Phase 2 export when user is done editing.
-        Keeps only the final 3 output videos (9:16, 1:1, 16:9).
+        Keeps only the final output video (16:9).
         
         Deletes:
         - scene_*.mp4 (individual generated clips)
@@ -699,7 +699,7 @@ class GenerationPipeline:
         
         Args:
             s3_video_url: S3 URL of the rendered video
-            aspect_ratio: Video aspect ratio (9:16, 1:1, 16:9)
+            aspect_ratio: Video aspect ratio (16:9)
             
         Returns:
             Local file path

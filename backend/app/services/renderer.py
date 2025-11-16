@@ -58,10 +58,10 @@ class Renderer:
 
         Returns:
             Dict mapping aspect ratio to S3 URL
-            e.g., {"9:16": "https://...", "1:1": "https://...", "16:9": "https://..."}
+            e.g., {"16:9": "https://..."}
         """
         if output_aspect_ratios is None:
-            output_aspect_ratios = ["9:16", "1:1", "16:9"]
+            output_aspect_ratios = ["16:9"]
 
         logger.info(f"Rendering final video in {output_aspect_ratios} aspect ratios")
 

@@ -126,7 +126,7 @@ async def create_new_project(
             "style_spec": None,
             "scenes": [],
             "video_settings": {
-                "aspect_ratios": ["9:16", "1:1", "16:9"],
+                "aspect_ratios": ["16:9"],
                 "resolution": "1080p",
                 "fps": 30,
                 "codec": "h264"

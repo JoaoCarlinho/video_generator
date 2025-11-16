@@ -138,7 +138,7 @@ class LocalStorageManager:
         
         Args:
             project_id: Project UUID
-            aspect_ratio: '9:16', '1:1', or '16:9'
+            aspect_ratio: '16:9'
             file_path: Path to video file to save
             
         Returns:
@@ -149,8 +149,6 @@ class LocalStorageManager:
             
             # Map aspect ratio to filename
             aspect_map = {
-                '9:16': 'video_9-16.mp4',
-                '1:1': 'video_1-1.mp4',
                 '16:9': 'video_16-9.mp4'
             }
             

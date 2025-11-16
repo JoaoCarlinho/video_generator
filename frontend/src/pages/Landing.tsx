@@ -45,7 +45,7 @@ export const Landing = () => {
           {/* Hero Section */}
           <HeroSection
             title="Create Professional Ad Videos In Minutes"
-            subtitle="Generate AI-powered video ads with perfect product consistency. Get vertical (9:16), square (1:1), and horizontal (16:9) formats instantly."
+            subtitle="Generate AI-powered video ads with perfect product consistency. Get horizontal (16:9) format instantly."
             cta={{
               text: 'Start Creating',
               link: '/signup',

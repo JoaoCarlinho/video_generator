@@ -426,7 +426,7 @@ async def download_video(
     
     **Path Parameters:**
     - project_id: UUID of the project
-    - aspect_ratio: Video aspect ratio ('9:16', '1:1', or '16:9')
+    - aspect_ratio: Video aspect ratio ('16:9')
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -443,10 +443,10 @@ async def download_video(
     """
     try:
         # Validate aspect ratio
-        if aspect_ratio not in ['9:16', '1:1', '16:9']:
+        if aspect_ratio not in ['16:9']:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be one of: 9:16, 1:1, 16:9"
+                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 16:9"
             )
         
         init_db()
