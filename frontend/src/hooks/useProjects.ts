@@ -19,14 +19,18 @@ export interface Project {
 
 interface CreateProjectInput {
   title: string
-  brief: string
+  brief?: string
   brand_name: string
-  mood: string
-  duration: number
-  primary_color?: string
-  secondary_color?: string
+  mood?: string
+  duration?: number
+  aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
-  brand_colors?: string[]
+  logo_url?: string
+  guidelines_url?: string
+  creative_prompt?: string
+  brand_description?: string
+  target_audience?: string
+  target_duration?: number
 }
 
 export const useProjects = () => {

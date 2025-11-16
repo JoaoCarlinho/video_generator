@@ -91,7 +91,7 @@ class Renderer:
                 for aspect_ratio in output_aspect_ratios:
                     logger.info(f"Rendering {aspect_ratio} aspect ratio...")
 
-                    output_path = Path(tmpdir) / f"final_{aspect_ratio.replace(':', '_')}.mp4"
+                    output_path = Path(tmpdir) / "final.mp4"
                     await self._apply_aspect_ratio(mixed_path, output_path, aspect_ratio)
 
                     # Save to local storage (no S3 upload)
