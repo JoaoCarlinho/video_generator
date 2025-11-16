@@ -308,10 +308,9 @@ class GenerationPipeline:
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Prepare brand colors
-            brand_colors = [ad_project.brand.primary_color]
-            if ad_project.brand.secondary_color:
-                brand_colors.append(ad_project.brand.secondary_color)
+            # Brand colors are now determined by LLM during scene planning
+            # based on creative prompt and brand guidelines
+            brand_colors = []
             
             # Check if product/logo are available
             has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
@@ -334,6 +333,7 @@ class GenerationPipeline:
                 target_duration=ad_project.target_duration,
                 has_product=has_product,
                 has_logo=has_logo,
+                aspect_ratio=ad_project.video_settings.aspect_ratio,
             )
 
             # Update ad_project with scenes and style spec from plan
@@ -528,7 +528,7 @@ class GenerationPipeline:
                         duration=overlay.duration or scene.duration,
                         start_time=overlay.start_time if hasattr(overlay, 'start_time') else 0.0,
                         font_size=overlay.font_size or 48,
-                        color=ad_project.brand.primary_color,  # Use brand primary color
+                        color="#FFFFFF",  # Default white color (can be overridden by style_spec in future)
                         animation="fade_in",  # Default animation
                         project_id=str(self.project_id),
                         scene_index=i,  # Pass scene index for unique filenames
@@ -606,11 +606,17 @@ class GenerationPipeline:
                 s3_bucket_name=settings.s3_bucket_name,
                 aws_region=settings.aws_region,
             )
+            
+            # Get project from database to retrieve stored aspect_ratio
+            project = get_project(self.db, self.project_id)
+            # Use the aspect ratio specified when project was created
+            output_aspect_ratios = [project.aspect_ratio] if project.aspect_ratio else ["16:9"]
+            
             final_videos = await renderer.render_final_video(
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
                 project_id=str(self.project_id),
-                output_aspect_ratios=["16:9"],
+                output_aspect_ratios=output_aspect_ratios,
             )
 
             update_project_status(

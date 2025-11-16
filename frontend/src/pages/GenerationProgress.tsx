@@ -81,32 +81,35 @@ export const GenerationProgress = () => {
       // Clear sessionStorage when generation completes
       sessionStorage.removeItem(storageKey)
       
-      // Download videos to IndexedDB for preview
+      // Download video to IndexedDB for preview
       try {
-        console.log('📥 Downloading videos to local storage...')
-        const aspects: Array<'16:9'> = ['16:9']
+        console.log('📥 Downloading video to local storage...')
         
-        for (const aspect of aspects) {
-          try {
-            // Get videos from local disk (NOT S3!)
-            const response = await api.get(`/api/projects/${projectId}/preview/${aspect}`, {
-              responseType: 'blob'
-            })
-            
-            if (response.data) {
-              await storeVideo(projectId, aspect, response.data, false)
-              console.log(`✅ Downloaded ${aspect} video from local storage`)
-            }
-          } catch (err) {
-            console.error(`⚠️ Failed to download ${aspect} video:`, err)
-            // Continue with other aspects even if one fails
+        // Fetch project to get the aspect_ratio that was generated
+        const projectResponse = await api.get(`/api/projects/${projectId}`)
+        const project = projectResponse.data
+        const projectAspectRatio = project.aspect_ratio || '16:9'
+        
+        console.log(`📐 Project aspect ratio: ${projectAspectRatio}`)
+        
+        try {
+          // Get video from local disk (NOT S3!)
+          const response = await api.get(`/api/projects/${projectId}/preview`, {
+            responseType: 'blob'
+          })
+          
+          if (response.data) {
+            await storeVideo(projectId, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
+            console.log(`✅ Downloaded video from local storage`)
           }
+        } catch (err) {
+          console.error(`⚠️ Failed to download video:`, err)
         }
         
         const usage = await getStorageUsage(projectId)
         console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
       } catch (err) {
-        console.error('⚠️ Failed to download videos to local storage:', err)
+        console.error('⚠️ Failed to download video to local storage:', err)
       }
       
       // Redirect to results page after download completes

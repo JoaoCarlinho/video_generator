@@ -27,6 +27,9 @@ class Project(Base):
     s3_project_folder = Column(String, nullable=True)        # projects/{id}/
     s3_project_folder_url = Column(String, nullable=True)    # https://bucket.s3.../projects/{id}/
     
+    # VIDEO GENERATION SETTINGS
+    aspect_ratio = Column(String, default='16:9')  # '9:16', '1:1', or '16:9'
+    
     # LOCAL STORAGE: Local-first generation paths
     local_project_path = Column(String(500), nullable=True)    # /tmp/genads/{project_id}
     local_video_paths = Column(JSON, nullable=True)          # {"16:9": "/path/to/video.mp4"}
