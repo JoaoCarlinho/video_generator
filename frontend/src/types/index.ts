@@ -52,10 +52,11 @@ export interface Project {
 
 export interface CreateProjectInput {
   title: string
-  brief: string
+  creative_prompt: string
   brand_name: string
-  mood: string
-  duration: number
+  brand_description?: string
+  target_audience?: string
+  target_duration: number
   primary_color: string
   secondary_color?: string
   product_image_url?: string
