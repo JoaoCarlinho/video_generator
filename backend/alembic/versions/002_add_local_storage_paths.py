@@ -32,7 +32,7 @@ def upgrade() -> None:
     
     op.execute("""
     COMMENT ON COLUMN projects.local_video_paths IS 
-    'JSON dict mapping aspect_ratio to local video path: {"9:16": "/tmp/genads/{id}/final/video_9-16.mp4", ...}';
+    'JSON dict mapping aspect_ratio to local video path: {"16:9": "/tmp/genads/{id}/final/video_16-9.mp4"}';
     """)
     
     op.execute("""

@@ -29,7 +29,7 @@ class Project(Base):
     
     # LOCAL STORAGE: Local-first generation paths
     local_project_path = Column(String(500), nullable=True)    # /tmp/genads/{project_id}
-    local_video_paths = Column(JSON, nullable=True)          # {"9:16": "/path/to/video.mp4", ...}
+    local_video_paths = Column(JSON, nullable=True)          # {"16:9": "/path/to/video.mp4"}
     local_input_files = Column(JSON, nullable=True)          # {"product_image": "/path/to/image.png", ...}
     local_draft_files = Column(JSON, nullable=True)          # {"scene_1_bg": "/path/to/video.mp4", ...}
     

@@ -394,7 +394,7 @@ def update_project_output(
     Args:
         db: Database session
         project_id: ID of the project
-        final_videos: Dict with aspect ratios as keys (9:16, 1:1, 16:9) and S3 URLs as values
+        final_videos: Dict with aspect ratio as key (16:9) and S3 URL as value
         total_cost: Total cost in USD
         cost_breakdown: Dict with cost per service
     

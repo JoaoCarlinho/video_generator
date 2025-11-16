@@ -84,7 +84,7 @@ export const GenerationProgress = () => {
       // Download videos to IndexedDB for preview
       try {
         console.log('📥 Downloading videos to local storage...')
-        const aspects: Array<'9:16' | '1:1' | '16:9'> = ['9:16', '1:1', '16:9']
+        const aspects: Array<'16:9'> = ['16:9']
         
         for (const aspect of aspects) {
           try {

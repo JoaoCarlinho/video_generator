@@ -33,7 +33,7 @@ const defaultFeatures: Feature[] = [
   {
     icon: Video,
     title: 'Multi-Aspect Export',
-    description: 'Get vertical (9:16), square (1:1), and horizontal (16:9) formats',
+    description: 'Get horizontal (16:9) format instantly',
     highlight: 'All Platforms',
   },
   {

@@ -23,7 +23,7 @@ export const VideoResults = () => {
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
+  const [aspect, setAspect] = useState<'16:9'>('16:9')
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloadingAspect, setDownloadingAspect] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -71,7 +71,7 @@ export const VideoResults = () => {
     }
   }, [projectId, getProject, aspect])
 
-  const handleDownload = (aspectRatio: '9:16' | '1:1' | '16:9') => {
+  const handleDownload = (aspectRatio: '16:9') => {
     const videoUrl = project.output_videos?.[aspectRatio]
     if (!videoUrl) {
       setError('Video URL not available')
@@ -87,13 +87,9 @@ export const VideoResults = () => {
       
       // Generate filename based on aspect ratio
       const aspectNames: Record<string, string> = {
-        '9:16': 'vertical',
-        '1:1': 'square',
         '16:9': 'horizontal',
       }
       const resolutions: Record<string, string> = {
-        '9:16': '1080x1920',
-        '1:1': '1080x1080',
         '16:9': '1920x1080',
       }
       
@@ -187,16 +183,6 @@ export const VideoResults = () => {
   }
 
   const aspectInfo = {
-    '9:16': {
-      label: 'Vertical',
-      description: 'Perfect for TikTok, Reels, Shorts',
-      icon: '📱',
-    },
-    '1:1': {
-      label: 'Square',
-      description: 'Great for Instagram Feed',
-      icon: '⬜',
-    },
     '16:9': {
       label: 'Horizontal',
       description: 'YouTube, Web, Presentations',
@@ -283,7 +269,7 @@ export const VideoResults = () => {
               className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-center"
             >
               <p className="text-emerald-400 font-medium">
-                ✓ Your video is ready! All 3 aspect ratios are available.
+                ✓ Your video is ready!
               </p>
             </motion.div>
 
@@ -330,114 +316,9 @@ export const VideoResults = () => {
               </Card>
             </motion.div>
 
-            {/* Aspect Ratio Selector */}
-            <motion.div variants={itemVariants}>
-              <div className="space-y-4">
-                <h3 className="font-semibold text-slate-100">Choose Format</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {(['9:16', '1:1', '16:9'] as const).map((ar) => (
-                    <motion.button
-                      key={ar}
-                      onClick={() => setAspect(ar)}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        aspect === ar
-                          ? 'border-indigo-500 bg-indigo-500/10'
-                          : 'border-slate-700 hover:border-slate-600 bg-slate-800/30'
-                      }`}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="text-2xl mb-2">
-                        {aspectInfo[ar].icon}
-                      </div>
-                      <p className="font-semibold text-slate-100">
-                        {aspectInfo[ar].label}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        {aspectInfo[ar].description}
-                      </p>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Download Section */}
-            <motion.div variants={itemVariants}>
-              <Card variant="glass">
-                <CardHeader>
-                  <CardTitle>Download Videos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(['9:16', '1:1', '16:9'] as const).map((ar) => (
-                    <div
-                      key={ar}
-                      className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-slate-100">
-                          {aspectInfo[ar].label}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {ar === '9:16'
-                            ? '1080×1920'
-                            : ar === '1:1'
-                              ? '1080×1080'
-                              : '1920×1080'}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="gradient"
-                        onClick={() => handleDownload(ar)}
-                        disabled={downloadingAspect === ar}
-                        className="gap-2"
-                      >
-                        {downloadingAspect === ar ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-slate-300 border-t-white rounded-full animate-spin" />
-                            Downloading...
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            Download
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </motion.div>
-
             {/* Local Storage Information */}
             {storageUsage > 0 && (
-              <motion.div variants={itemVariants}>
-                <Card variant="glass">
-                  <CardHeader>
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <HardDrive className="w-4 h-4" />
-                      Local Storage
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <p className="text-slate-400">Storage Used</p>
-                        <p className="text-slate-100 font-semibold">{formatBytes(storageUsage)}</p>
-                      </div>
-                      <div className="w-full bg-slate-700/50 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all"
-                          style={{ width: '30%' }}
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Videos are stored locally for preview. Finalize to upload to S3.
-                      </p>
-                    </div>
-                    
+                <>
                     {!isFinalized && (
                       <Button
                         variant="gradient"
@@ -453,7 +334,7 @@ export const VideoResults = () => {
                         ) : (
                           <>
                             <Cloud className="w-4 h-4" />
-                            Finalize & Upload to S3
+                            Finalize
                           </>
                         )}
                       </Button>
@@ -466,107 +347,8 @@ export const VideoResults = () => {
                         </p>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
-              </motion.div>
+                </>
             )}
-
-            {/* S3 Folder Information */}
-            {project.s3_project_folder_url && (
-              <motion.div variants={itemVariants}>
-                <Card variant="glass">
-                  <CardHeader>
-                    <CardTitle className="text-sm">📁 Project Storage</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-slate-400 mb-2">S3 Project Folder:</p>
-                    <div className="flex items-center gap-2 p-2 bg-slate-900/50 border border-slate-700 rounded">
-                      <input
-                        type="text"
-                        value={project.s3_project_folder_url}
-                        readOnly
-                        className="flex-1 bg-transparent text-slate-300 text-xs font-mono outline-none truncate"
-                      />
-                      <button
-                        onClick={() => handleCopyUrl(project.s3_project_folder_url)}
-                        className="p-1.5 hover:bg-slate-700 rounded transition-colors flex-shrink-0"
-                      >
-                        {copiedUrl === project.s3_project_folder_url ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3 text-slate-400" />
-                        )}
-                      </button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {/* Project Details */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Details Card */}
-              <Card variant="outlined">
-                <CardHeader>
-                  <CardTitle className="text-lg">Project Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm">
-                  <div>
-                    <p className="text-slate-500">Title</p>
-                    <p className="text-slate-100 font-medium">{project.title}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Brand</p>
-                    <p className="text-slate-100 font-medium">
-                      {project.brand_name}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Duration</p>
-                    <p className="text-slate-100 font-medium">
-                      {project.duration} seconds
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Mood</p>
-                    <Badge variant="secondary" className="capitalize">
-                      {project.mood ? project.mood.replace(/_/g, ' ') : 'N/A'}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Cost & Stats Card */}
-              <Card variant="outlined">
-                <CardHeader>
-                  <CardTitle className="text-lg">Generation Stats</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm">
-                  <div>
-                    <p className="text-slate-500">Total Cost</p>
-                    <p className="text-2xl font-bold text-indigo-400">
-                      ${cost.toFixed(2)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Created</p>
-                    <p className="text-slate-100">
-                      {new Date(project.created_at).toLocaleDateString()} at{' '}
-                      {new Date(project.created_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Status</p>
-                    <Badge variant="success" className="capitalize">
-                      {project.status}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
 
             {/* Share Section */}
             <motion.div variants={itemVariants}>
@@ -575,14 +357,11 @@ export const VideoResults = () => {
                   <CardTitle>Share Videos</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {(['9:16', '1:1', '16:9'] as const).map((ar) => {
-                    const url = project.output_videos?.[ar] || ''
+                  {(() => {
+                    const url = project.output_videos?.['16:9'] || ''
                     if (!url) return null
                     return (
-                      <div
-                        key={ar}
-                        className="flex items-center gap-2 p-3 bg-slate-800/30 border border-slate-700 rounded-lg"
-                      >
+                      <div className="flex items-center gap-2 p-3 bg-slate-800/30 border border-slate-700 rounded-lg">
                         <input
                           type="text"
                           value={url}
@@ -601,7 +380,7 @@ export const VideoResults = () => {
                         </button>
                       </div>
                     )
-                  })}
+                  })()}
                 </CardContent>
               </Card>
             </motion.div>
