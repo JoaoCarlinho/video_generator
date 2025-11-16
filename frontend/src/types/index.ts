@@ -19,6 +19,23 @@ export interface AuthContextType {
   error: string | null
 }
 
+// Reference Image Types (NEW)
+export interface ExtractedStyle {
+  colors: string[]
+  mood: string
+  lighting: string
+  camera: string
+  atmosphere: string
+  texture: string
+}
+
+export interface ReferenceImage {
+  localPath?: string
+  uploadedAt?: string
+  extractedStyle?: ExtractedStyle
+  extractedAt?: string
+}
+
 // Project Types
 export interface BrandConfig {
   name: string

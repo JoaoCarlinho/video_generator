@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal } from '@/components/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal, Badge } from '@/components/ui'
 import { useProjects } from '@/hooks/useProjects'
-import { Upload, X, Zap } from 'lucide-react'
+import { useReferenceImage } from '@/hooks/useReferenceImage'
+import { Upload, X, Zap, Check } from 'lucide-react'
 
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
+  const { uploadReferenceImage, isLoading: isUploadingReference, error: referenceError } = useReferenceImage()
 
   const [formData, setFormData] = useState({
     title: '',
@@ -28,6 +30,8 @@ export const CreateProject = () => {
   const [logoImage, setLogoImage] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string>('')
   const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
+  const [referenceImage, setReferenceImage] = useState<File | null>(null)
+  const [referenceImageUploaded, setReferenceImageUploaded] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [autoGenerate, setAutoGenerate] = useState(true)
@@ -119,6 +123,43 @@ export const CreateProject = () => {
 
   const handleRemoveGuidelines = () => {
     setGuidelinesFile(null)
+  }
+
+  const handleReferenceImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setSubmitError('Reference image must be less than 5MB')
+        return
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setSubmitError('Please select an image file for reference')
+        return
+      }
+
+      setReferenceImage(file)
+      setReferenceImageUploaded(false)
+      setSubmitError(null)
+    }
+  }
+
+  const handleRemoveReferenceImage = () => {
+    setReferenceImage(null)
+    setReferenceImageUploaded(false)
+  }
+
+  const handleUploadReferenceImage = async () => {
+    if (!referenceImage) {
+      setSubmitError('No reference image selected')
+      return
+    }
+
+    // We need a project ID to upload, so we'll do this after creating the project
+    // For now, just mark it as ready to upload
+    console.log('Reference image ready to upload after project creation')
   }
 
   const validateForm = (): boolean => {
@@ -262,6 +303,20 @@ export const CreateProject = () => {
       })
 
       console.log('✅ Project created:', newProject)
+
+      // Upload reference image if selected
+      if (referenceImage) {
+        console.log('📤 Uploading reference image for visual style...')
+        const success = await uploadReferenceImage(referenceImage, newProject.id)
+        if (success) {
+          console.log('✅ Reference image uploaded successfully')
+          setReferenceImageUploaded(true)
+        } else {
+          console.warn('⚠️ Reference image upload failed, but project created')
+          // Continue anyway - reference image is optional
+        }
+      }
+
       setUploading(false)
 
       // Navigate immediately or to dashboard based on autoGenerate
@@ -610,6 +665,68 @@ export const CreateProject = () => {
                         )}
                         <p className="text-xs text-slate-500 mt-2">
                           💡 AI will follow your brand guidelines for tone and style
+                        </p>
+                      </div>
+
+                      {/* Reference Image Upload (NEW) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-slate-300">
+                            Reference Image (Optional - Visual Style)
+                          </label>
+                          {referenceImageUploaded && (
+                            <Badge variant="success" className="flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              Added
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mb-3">
+                          Upload a mood board or reference image to guide the visual style (colors, lighting, mood). 
+                          Style will be extracted and applied to all scenes.
+                        </p>
+                        {referenceImage ? (
+                          <div className="relative w-full">
+                            <img
+                              src={URL.createObjectURL(referenceImage)}
+                              alt="Reference preview"
+                              className="w-full h-40 object-cover bg-slate-900/50 rounded-lg border border-indigo-500/50 p-2"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleRemoveReferenceImage}
+                              className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                            >
+                              <X className="w-4 h-4 text-white" />
+                            </button>
+                            <div className="mt-2 p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                              <p className="text-xs text-indigo-400">
+                                ✓ {referenceImage.name} selected ({(referenceImage.size / 1024 / 1024).toFixed(2)} MB)
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
+                            <div className="flex flex-col items-center justify-center">
+                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
+                              <span className="text-sm text-slate-400">
+                                Upload reference image
+                              </span>
+                              <span className="text-xs text-slate-500 mt-1">
+                                JPG, PNG (Max 5MB)
+                              </span>
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/*"
+                              onChange={handleReferenceImageChange}
+                              className="hidden"
+                              disabled={isUploadingReference}
+                            />
+                          </label>
+                        )}
+                        <p className="text-xs text-slate-500 mt-2">
+                          🎨 AI will extract colors, lighting, mood, and camera style from your reference
                         </p>
                       </div>
                     </div>
