@@ -5,7 +5,7 @@
 
 export interface VideoStorageEntry {
   projectId: string
-  aspectRatio: '16:9'
+  aspectRatio: '9:16' | '1:1' | '16:9'
   videoBlob: Blob
   timestamp: number
   isFinal: boolean // true = ready to upload to S3, false = temporary preview
@@ -37,7 +37,7 @@ function getDB(): Promise<IDBDatabase> {
 // Store a video blob in IndexedDB
 export async function storeVideo(
   projectId: string,
-  aspectRatio: '16:9',
+  aspectRatio: '9:16' | '1:1' | '16:9',
   videoBlob: Blob,
   isFinal: boolean = false
 ): Promise<void> {
@@ -63,7 +63,7 @@ export async function storeVideo(
 // Retrieve a video blob from IndexedDB
 export async function getVideo(
   projectId: string,
-  aspectRatio: '16:9'
+  aspectRatio: '9:16' | '1:1' | '16:9'
 ): Promise<Blob | null> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readonly')
@@ -82,7 +82,7 @@ export async function getVideo(
 // Get all videos for a project
 export async function getProjectVideos(
   projectId: string
-): Promise<Record<'16:9', Blob | null>> {
+): Promise<Record<'9:16' | '1:1' | '16:9', Blob | null>> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readonly')
   const store = tx.objectStore(STORE_NAME)
@@ -94,7 +94,9 @@ export async function getProjectVideos(
       const entries = request.result as VideoStorageEntry[]
       const projectEntries = entries.filter((e) => e.projectId === projectId)
 
-      const result: Record<'16:9', Blob | null> = {
+      const result: Record<'9:16' | '1:1' | '16:9', Blob | null> = {
+        '9:16': null,
+        '1:1': null,
         '16:9': null,
       }
 
@@ -155,7 +157,7 @@ export async function deleteProjectVideos(projectId: string): Promise<void> {
 // Get video as blob URL (for preview)
 export async function getVideoURL(
   projectId: string,
-  aspectRatio: '16:9'
+  aspectRatio: '9:16' | '1:1' | '16:9'
 ): Promise<string | null> {
   const videoBlob = await getVideo(projectId, aspectRatio)
   if (!videoBlob) return null

@@ -17,8 +17,7 @@ export const CreateProject = () => {
     brand_description: '',
     target_audience: '',
     target_duration: 30,
-    primary_color: '#4dbac7',
-    secondary_color: '#ffffff',
+    aspect_ratio: '16:9' as '9:16' | '1:1' | '16:9',
     logo_url: '',
     product_image_url: '',
     guidelines_url: '',
@@ -256,8 +255,7 @@ export const CreateProject = () => {
         brand_description: formData.brand_description || undefined,
         target_audience: formData.target_audience || undefined,
         target_duration: formData.target_duration,
-        primary_color: formData.primary_color,
-        secondary_color: formData.secondary_color || undefined,
+        aspect_ratio: formData.aspect_ratio,
         logo_url: uploadedLogoUrl || undefined,
         product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
@@ -436,56 +434,35 @@ export const CreateProject = () => {
                       </p>
                     </div>
 
-                    {/* Brand Colors */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                          Primary Color
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="color"
-                            value={formData.primary_color}
-                            onChange={(e) =>
-                              setFormData({ ...formData, primary_color: e.target.value })
-                            }
-                            className="h-10 w-16 rounded-lg border border-slate-700 cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={formData.primary_color}
-                            onChange={(e) =>
-                              setFormData({ ...formData, primary_color: e.target.value })
-                            }
-                            placeholder="#4dbac7"
-                            className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                          />
-                        </div>
+                    {/* Aspect Ratio Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Video Aspect Ratio
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {(['9:16', '1:1', '16:9'] as const).map((ar) => (
+                          <button
+                            key={ar}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, aspect_ratio: ar })}
+                            className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                              formData.aspect_ratio === ar
+                                ? 'border-indigo-500 bg-indigo-500/20 text-indigo-200'
+                                : 'border-slate-700 bg-slate-800/30 text-slate-300 hover:border-slate-600'
+                            }`}
+                          >
+                            <div className="font-semibold">
+                              {ar === '9:16' ? '📱 Vertical' : ar === '1:1' ? '⬜ Square' : '🖥️ Horizontal'}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              {ar === '9:16' ? '1080×1920' : ar === '1:1' ? '1080×1080' : '1920×1080'}
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                          Secondary Color (Optional)
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="color"
-                            value={formData.secondary_color}
-                            onChange={(e) =>
-                              setFormData({ ...formData, secondary_color: e.target.value })
-                            }
-                            className="h-10 w-16 rounded-lg border border-slate-700 cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={formData.secondary_color}
-                            onChange={(e) =>
-                              setFormData({ ...formData, secondary_color: e.target.value })
-                            }
-                            placeholder="#ffffff"
-                            className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                          />
-                        </div>
-                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        💡 Choose your video format based on your platform
+                      </p>
                     </div>
 
                     {/* Asset Uploads Section */}
@@ -740,15 +717,11 @@ export const CreateProject = () => {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Primary Color
+                  Aspect Ratio
                 </label>
-                <div className="flex items-center gap-2 mt-1">
-                  <div
-                    className="w-6 h-6 rounded border border-slate-600"
-                    style={{ backgroundColor: formData.primary_color }}
-                  />
-                  <span className="text-slate-100 text-sm">{formData.primary_color}</span>
-                </div>
+                <p className="text-slate-100 mt-1">
+                  {formData.aspect_ratio === '9:16' ? '📱 Vertical (1080×1920)' : formData.aspect_ratio === '1:1' ? '⬜ Square (1080×1080)' : '🖥️ Horizontal (1920×1080)'}
+                </p>
               </div>
             </div>
 

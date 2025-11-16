@@ -20,10 +20,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/projects/{project_id}/preview/{aspect_ratio}")
+@router.get("/projects/{project_id}/preview")
 async def get_preview_video(
     project_id: UUID,
-    aspect_ratio: str,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -31,10 +30,10 @@ async def get_preview_video(
     
     Used during preview phase before finalization.
     Streams video from local disk instead of S3.
+    Returns the generated video regardless of aspect ratio.
     
     **Path Parameters:**
     - project_id: UUID of the project
-    - aspect_ratio: '16:9'
     
     **Response:** 
     - Content-Type: video/mp4
@@ -43,16 +42,8 @@ async def get_preview_video(
     **Errors:**
     - 404: Project not found or video not available
     - 403: Not authorized
-    - 400: Invalid aspect ratio
     """
     try:
-        # Validate aspect ratio
-        if aspect_ratio not in ['16:9']:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 16:9"
-            )
-        
         init_db()
         user_id = get_current_user_id(authorization)
         
@@ -63,16 +54,18 @@ async def get_preview_video(
         
         # Check if videos are in local storage
         local_video_paths = project.local_video_paths or {}
-        local_video_path = local_video_paths.get(aspect_ratio)
+        
+        # Get the first (and only) video since we only generate one
+        local_video_path = next(iter(local_video_paths.values()), None) if local_video_paths else None
         
         # If local file exists, stream from local disk
         if local_video_path and LocalStorageManager.file_exists(local_video_path):
-            logger.info(f"✅ Streaming preview {aspect_ratio} from local storage: {local_video_path}")
+            logger.info(f"✅ Streaming preview from local storage: {local_video_path}")
             return FileResponse(
                 local_video_path,
                 media_type="video/mp4",
                 headers={
-                    "Content-Disposition": f"inline; filename=preview-{aspect_ratio}.mp4",
+                    "Content-Disposition": f"inline; filename=preview.mp4",
                     "Cache-Control": "no-cache"
                 }
             )
@@ -80,7 +73,7 @@ async def get_preview_video(
         # No video found in local storage
         raise HTTPException(
             status_code=404,
-            detail=f"Preview video not available for aspect ratio {aspect_ratio}"
+            detail=f"Preview video not available"
         )
     
     except HTTPException:

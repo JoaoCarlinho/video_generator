@@ -22,8 +22,7 @@ export interface AuthContextType {
 // Project Types
 export interface BrandConfig {
   name: string
-  primaryColor: string
-  secondaryColor: string
+  description?: string
 }
 
 export interface Scene {
@@ -59,7 +58,13 @@ export interface CreateProjectInput {
   target_duration: number
   primary_color: string
   secondary_color?: string
+  aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
+  logo_url?: string
+  guidelines_url?: string
+  brief?: string
+  mood?: string
+  duration?: number
 }
 
 // Generation Types

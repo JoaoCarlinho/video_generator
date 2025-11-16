@@ -147,18 +147,14 @@ class LocalStorageManager:
         try:
             final_dir = LocalStorageManager.get_final_dir(project_id)
             
-            # Map aspect ratio to filename
-            aspect_map = {
-                '16:9': 'video_16-9.mp4'
-            }
-            
-            filename = aspect_map.get(aspect_ratio, f'video_{aspect_ratio}.mp4')
+            # Save with simple name (no aspect ratio since we only generate one video)
+            filename = 'video.mp4'
             dest_path = final_dir / filename
             
             # Copy video file
             shutil.copy2(file_path, dest_path)
             
-            logger.info(f"✅ Saved final video {aspect_ratio}: {dest_path}")
+            logger.info(f"✅ Saved final video: {dest_path}")
             return str(dest_path)
         except Exception as e:
             logger.error(f"❌ Failed to save final video: {e}")
