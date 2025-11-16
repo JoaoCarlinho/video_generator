@@ -67,6 +67,7 @@ class VideoGenerator:
         duration: float = 5.0,
         aspect_ratio: str = "16:9",
         seed: Optional[int] = None,
+        extracted_style: Optional[dict] = None,
     ) -> str:
         """
         Generate background video for a scene via HTTP API.
@@ -77,6 +78,7 @@ class VideoGenerator:
             duration: Video duration in seconds (typical: 2-5 seconds)
             aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
             seed: Random seed for reproducibility (optional, not used by SeedAnce)
+            extracted_style: Optional extracted style from reference image
 
         Returns:
             URL of generated video from Replicate
@@ -84,8 +86,8 @@ class VideoGenerator:
         logger.info(f"Generating background video: {prompt[:60]}...")
 
         try:
-            # Enhance prompt with style specification
-            enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict)
+            # Enhance prompt with style specification and reference style if available
+            enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
 
             # Create prediction via HTTP API (with "Prefer: wait" - returns completed result)
             prediction_data = await self._create_prediction(enhanced_prompt, int(duration))
@@ -120,10 +122,11 @@ class VideoGenerator:
             logger.error(f"Error generating video: {e}")
             raise
 
-    def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict) -> str:
-        """Enhance prompt with global style specifications."""
+    def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict, extracted_style: Optional[dict] = None) -> str:
+        """Enhance prompt with global style specifications and optional reference style."""
         style_parts = []
 
+        # Add base style specifications
         if "lighting_direction" in style_spec_dict:
             style_parts.append(f"Lighting: {style_spec_dict['lighting_direction']}")
 
@@ -135,6 +138,30 @@ class VideoGenerator:
 
         if "grade_postprocessing" in style_spec_dict:
             style_parts.append(f"Grade: {style_spec_dict['grade_postprocessing']}")
+
+        # Add reference style if available (overrides/enhances base style)
+        if extracted_style:
+            logger.debug(f"🎨 Applying extracted reference style to video prompt")
+            
+            colors = extracted_style.get("colors", [])
+            if colors:
+                colors_str = ", ".join(colors)
+                style_parts.append(f"Colors: {colors_str}")
+            
+            if extracted_style.get("lighting"):
+                style_parts.append(f"Reference Lighting: {extracted_style['lighting']}")
+            
+            if extracted_style.get("camera"):
+                style_parts.append(f"Reference Camera: {extracted_style['camera']}")
+            
+            if extracted_style.get("mood"):
+                style_parts.append(f"Reference Mood: {extracted_style['mood']}")
+            
+            if extracted_style.get("atmosphere"):
+                style_parts.append(f"Reference Atmosphere: {extracted_style['atmosphere']}")
+            
+            if extracted_style.get("texture"):
+                style_parts.append(f"Reference Texture: {extracted_style['texture']}")
 
         # Combine original prompt with style
         style_string = ". ".join(style_parts)

@@ -41,6 +41,7 @@ from app.services.compositor import Compositor
 from app.services.text_overlay import TextOverlayRenderer
 from app.services.audio_engine import AudioEngine
 from app.services.renderer import Renderer
+from app.services.reference_image_extractor import ReferenceImageStyleExtractor
 from app.utils.s3_utils import (
     create_project_folder_structure,
     delete_project_folder,
@@ -51,6 +52,7 @@ from app.utils.local_storage import LocalStorageManager, format_storage_size
 logger = logging.getLogger(__name__)
 
 # Cost constants (in USD, based on API documentation)
+COST_REFERENCE_EXTRACTION = Decimal("0.025")  # GPT-4 Vision extraction
 COST_SCENE_PLANNING = Decimal("0.01")  # GPT-4o-mini cheap
 COST_PRODUCT_EXTRACTION = Decimal("0.00")  # rembg local, free
 COST_VIDEO_GENERATION = Decimal("0.08")  # SeedAnce-1-lite per scene
@@ -129,6 +131,60 @@ class GenerationPipeline:
 
             # Parse AdProject JSON
             ad_project = AdProject(**project.ad_project_json)
+
+            # ===== STEP 0: Extract Reference Image Style (Optional, NEW) =====
+            logger.info("🎨 Step 0: Checking for reference image...")
+            has_reference = False
+            if project.ad_project_json:
+                reference_local_path = project.ad_project_json.get("referenceImage", {}).get("localPath")
+                
+                if reference_local_path:
+                    import os
+                    if os.path.exists(reference_local_path):
+                        has_reference = True
+                        logger.info(f"🎨 Extracting visual style from reference image...")
+                        self.update_progress(self.project_id, 5, "Extracting reference image style...")
+                        
+                        try:
+                            # Initialize OpenAI client for vision extraction
+                            from openai import AsyncOpenAI
+                            from app.config import settings
+                            
+                            openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+                            extractor = ReferenceImageStyleExtractor(openai_client)
+                            
+                            # Extract style
+                            extracted_style = await extractor.extract_style(
+                                image_path=reference_local_path,
+                                brand_name=project.brand.get("name", "Brand")
+                            )
+                            
+                            # Save to database
+                            project.ad_project_json["referenceImage"]["extractedStyle"] = extracted_style.to_dict()
+                            project.ad_project_json["referenceImage"]["extractedAt"] = datetime.now().isoformat()
+                            self.db.commit()
+                            
+                            # Reload project to get updated JSON
+                            project = get_project(self.db, self.project_id)
+                            ad_project = AdProject(**project.ad_project_json)
+                            
+                            # Delete temp file
+                            os.unlink(reference_local_path)
+                            logger.info(f"✅ Reference style extracted and temp file deleted")
+                            
+                            # Track cost
+                            self.step_costs["reference_extraction"] = COST_REFERENCE_EXTRACTION
+                            self.total_cost += COST_REFERENCE_EXTRACTION
+                            
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to extract reference style: {e}")
+                            has_reference = False
+                    else:
+                        logger.info(f"ℹ️ Reference image file not found: {reference_local_path}")
+                else:
+                    logger.info(f"ℹ️ No reference image provided")
+            else:
+                logger.info(f"ℹ️ No ad_project_json available")
 
             # ===== STEP 1: Extract Product (Optional) =====
             product_url = None
@@ -308,9 +364,16 @@ class GenerationPipeline:
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Brand colors are now determined by LLM during scene planning
-            # based on creative prompt and brand guidelines
+            # Brand colors from LLM or reference image if available
             brand_colors = []
+            
+            # Check if reference image style was extracted
+            extracted_style = None
+            if project.ad_project_json:
+                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+                if extracted_style:
+                    brand_colors = extracted_style.get("colors", [])
+                    logger.info(f"🎨 Using colors from reference image: {brand_colors}")
             
             # Check if product/logo are available
             has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
@@ -323,8 +386,23 @@ class GenerationPipeline:
                 # In production, you'd download and parse the file from S3
                 logger.info(f"Brand guidelines URL provided: {ad_project.brand.guidelines_url}")
             
+            # Build creative prompt with reference style if available
+            creative_prompt = ad_project.creative_prompt
+            if extracted_style:
+                creative_prompt += f"""
+
+REFERENCE VISUAL STYLE (from uploaded mood board):
+- Colors: {', '.join(extracted_style.get('colors', []))}
+- Mood: {extracted_style.get('mood', 'professional')}
+- Lighting: {extracted_style.get('lighting', 'professional')}
+- Camera: {extracted_style.get('camera', 'professional')}
+- Atmosphere: {extracted_style.get('atmosphere', 'professional')}
+- Texture: {extracted_style.get('texture', 'professional')}
+
+Incorporate this visual style consistently throughout all scenes."""
+            
             plan = await planner.plan_scenes(
-                creative_prompt=ad_project.creative_prompt,
+                creative_prompt=creative_prompt,
                 brand_name=ad_project.brand.name,
                 brand_description=ad_project.brand.description,
                 brand_colors=brand_colors,
@@ -394,12 +472,18 @@ class GenerationPipeline:
             from app.config import settings
             generator = VideoGenerator(api_token=settings.replicate_api_token)
 
+            # Check if reference style was extracted
+            extracted_style = None
+            if project.ad_project_json:
+                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+
             # Create tasks for all scenes
             tasks = [
                 generator.generate_scene_background(
                     prompt=scene.background_prompt,
                     style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
                     duration=scene.duration,
+                    extracted_style=extracted_style,  # Pass extracted style to generator
                 )
                 for scene in ad_project.scenes
             ]

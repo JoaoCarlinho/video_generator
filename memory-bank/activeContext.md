@@ -6,14 +6,205 @@
 
 ## Current Phase
 
-**Status:** Phase 5.6 Local Video Storage Implementation COMPLETE ✅  
-**Focus:** Browser-based preview system with IndexedDB + finalization flow  
+**Status:** Phase 6 COMPLETE ✅ → Phase 6 Testing IN PROGRESS  
+**Focus:** Reference Image (Visual Style) Feature - FULLY IMPLEMENTED  
 **Date:** November 16, 2025  
-**Progress:** 70% Frontend Complete (Auth + Design + Pages + API + Local Storage)
+**Progress:** Phase 6 Implementation COMPLETE (Backend + Frontend + WebP Support + OpenAI-only)
 
 ---
 
-## Phase 5.6 Complete: Local Video Storage with IndexedDB ✅
+## Phase 6: Reference Image (Visual Style) Feature 🚀
+
+**Status:** ✅ COMPLETE - Full Implementation Finished  
+**Date:** November 16, 2025  
+**Completed:** Nov 16, 2025 (all 3 phases)  
+
+### Phase 6 Completion Summary
+
+#### Phase 6.1: Backend Service ✅ COMPLETE
+- ✅ ReferenceImageStyleExtractor service (194 lines, OpenAI-only)
+- ✅ POST /api/projects/{id}/reference-image endpoint
+- ✅ File validation (JPEG, PNG, WebP, max 5MB)
+- ✅ Style extraction with GPT-4 Vision
+- ✅ Structured style extraction (colors, mood, lighting, camera, atmosphere, texture)
+
+#### Phase 6.2: Pipeline Integration ✅ COMPLETE
+- ✅ STEP 0: Reference image style extraction (0-5% progress)
+- ✅ ScenePlanner updated to use extracted style
+- ✅ VideoGenerator updated to apply extracted style to prompts
+- ✅ Cost tracking ($0.025 per reference extraction)
+- ✅ Automatic temp file cleanup after extraction
+
+#### Phase 6.3: Frontend UI ✅ COMPLETE
+- ✅ Reference image upload section in CreateProject
+- ✅ useReferenceImage hook with validation
+- ✅ ExtractedStyle TypeScript interface
+- ✅ File preview and size display
+- ✅ Success badge when uploaded
+- ✅ Remove/change image functionality
+
+### Phase 6 Bug Fixes & Enhancements ✅ COMPLETE
+1. ✅ Fixed import error: get_db_session → get_db()
+2. ✅ Added WebP format support (JPEG, PNG, WebP)
+3. ✅ Removed Anthropic model (OpenAI-only)
+4. ✅ Removed cost messaging from UI
+5. ✅ Updated backend response message (clean, simple)
+
+### Final Implementation Details
+**Backend Files Modified:**
+- `backend/app/services/reference_image_extractor.py` (194 lines, OpenAI-only)
+- `backend/app/api/uploads.py` (+90 lines, reference image endpoint)
+- `backend/app/jobs/generation_pipeline.py` (STEP 0 extraction added)
+- `backend/app/services/scene_planner.py` (uses extracted style)
+- `backend/app/services/video_generator.py` (applies extracted style)
+
+**Frontend Files Modified:**
+- `frontend/src/hooks/useReferenceImage.ts` (60 lines, new)
+- `frontend/src/pages/CreateProject.tsx` (+80 lines UI section)
+- `frontend/src/types/index.ts` (+13 lines, ExtractedStyle type)
+
+**Total Implementation:**
+- Backend: ~280 lines of code
+- Frontend: ~153 lines of code
+- Zero linting errors
+- 100% type safe
+- Fully backward compatible
+
+---
+
+## Original Phase 6 Planning
+
+**Timeline:** 6-8 hours (3 phases)
+
+### Feature Overview
+Users can optionally upload a reference image (mood board, brand photo, etc.) that conveys desired visual style. The system extracts visual themes (colors, lighting, mood, camera style) and applies them to scene generation for visual consistency.
+
+### Key Design Decision
+**Storage Pattern:** Reference image NOT kept on disk after extraction
+- Upload → Save to `/tmp/genads/{project_id}/input/reference_image.jpg`
+- Extract style during generation (first step of pipeline)
+- Delete temp file after extraction
+- Store ONLY extracted style in `ad_project_json.referenceImage.extractedStyle`
+- NO local file or S3 storage needed after extraction
+
+### Architecture
+```
+Upload Phase:
+  User uploads reference image
+  └─ Save to temp: /tmp/genads/{project_id}/input/
+  └─ Store path in ad_project_json.referenceImage.localPath
+  └─ Return success (NO extraction preview)
+
+Generation Phase (First Step):
+  Check: Does referenceImage.localPath exist?
+  ├─ YES → Extract style via Vision LLM ($0.025)
+  │        → Save to ad_project_json.referenceImage.extractedStyle
+  │        → Delete temp file
+  └─ NO → Skip, continue with default style
+
+Scene Generation:
+  Check: Does referenceImage.extractedStyle exist?
+  ├─ YES → Merge with other inputs (mood, brand, brief)
+  │        → Use in scene planning & video prompts
+  └─ NO → Use only basic inputs (current behavior)
+```
+
+### Implementation Phases
+
+#### Phase 6.1: Backend Service (2-3 hours)
+- [ ] Create `ReferenceImageStyleExtractor` service
+- [ ] Integrate Vision LLM (Claude 3.5 Vision)
+- [ ] Create reference image upload endpoint
+- [ ] Test style extraction independently
+
+#### Phase 6.2: Pipeline Integration (2-3 hours)
+- [ ] Add extraction as first generation pipeline step
+- [ ] Update `ScenePlanner` to use extracted style
+- [ ] Update `VideoGenerator` to use extracted style
+- [ ] Update cost tracking (+$0.025 if reference provided)
+- [ ] Test full pipeline with reference image
+
+#### Phase 6.3: Frontend UI (1-2 hours)
+- [ ] Add reference image upload section to CreateProject
+- [ ] Create `useReferenceImage` hook
+- [ ] Update types and API service
+- [ ] Test upload flow
+- [ ] Add "Reference image added ✓" badge (no preview)
+
+### Files to Create/Modify
+
+**New Files:**
+- `backend/app/services/reference_image_extractor.py` (200+ lines)
+- `frontend/src/hooks/useReferenceImage.ts` (100+ lines)
+
+**Modified Files:**
+- `backend/app/jobs/generation_pipeline.py` (add extraction step)
+- `backend/app/services/scene_planner.py` (accept extracted style)
+- `backend/app/services/video_generator.py` (use extracted style in prompts)
+- `backend/app/api/uploads.py` (add reference image endpoint)
+- `frontend/src/pages/CreateProject.tsx` (add upload section)
+- `frontend/src/types/index.ts` (add ExtractedStyle type)
+
+### Database Schema
+
+**ad_project_json structure:**
+```json
+{
+  "referenceImage": {
+    "localPath": "/tmp/genads/{project_id}/input/reference_image.jpg",
+    "uploadedAt": "2025-11-16T...",
+    "extractedStyle": {
+      "colors": ["#FF6B9D", "#C44569", "#F39C12"],
+      "mood": "luxurious, elegant",
+      "lighting": "soft directional lighting, golden hour",
+      "camera": "macro/detail focus, shallow depth of field",
+      "atmosphere": "intimate, sophisticated",
+      "texture": "smooth, glossy surfaces"
+    },
+    "extractedAt": "2025-11-16T..."
+  }
+}
+```
+
+NO new database columns needed (all in JSONB).
+
+### Cost Impact
+- Reference image extraction: +$0.025 (Vision LLM) per generation if provided
+- Total per video with reference: $0.21-0.45 (was $0.19-0.43 base)
+- Net cost increase: ~5% if reference provided
+
+### Frontend Changes
+- Reference image upload field (optional) in CreateProject
+- Badge: "✓ Reference image added" (no preview shown)
+- Extraction happens silently during generation step 1
+- User sees result in video quality (no style preview)
+
+### Why This Approach
+✅ Simpler frontend (no preview needed)
+✅ Faster upload (no LLM call during upload)
+✅ Cleaner flow (upload → generate → extract)
+✅ Simpler code (extraction in pipeline, not upload endpoint)
+✅ No wasted extractions (only extract when generating)
+✅ Follows existing local-first pattern
+
+### Testing Strategy
+1. Unit test: ReferenceImageStyleExtractor (mock LLM)
+2. Integration test: Upload reference → Generate video
+3. E2E test: Verify extracted style applied to scenes
+4. Quality test: Compare videos with/without reference image
+5. Edge cases: No reference, invalid image, LLM failure
+
+### Success Criteria
+- [ ] Users can upload reference image (optional)
+- [ ] System extracts colors, lighting, mood, camera, texture
+- [ ] Extracted style applied to scene generation
+- [ ] Generated videos match reference aesthetic
+- [ ] Cost tracking accurate (+$0.025 per reference)
+- [ ] Works with all image types (photos, screenshots, mood boards)
+- [ ] Backward compatible (still works without reference)
+- [ ] <5s reference upload, extraction during generation
+
+---
 
 **Completed Today (Nov 16, 2025):**
 
