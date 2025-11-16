@@ -1,0 +1,10 @@
+{
+  "Rules": [{
+    "ID": "DeleteAfter7Days",
+    "Status": "Enabled",
+    "Prefix": "projects/",
+    "Expiration": {
+      "Days": 7
+    }
+  }]
+}
