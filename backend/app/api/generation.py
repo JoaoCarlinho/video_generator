@@ -5,25 +5,23 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
-from rq.job import Job
 import boto3
-from io import BytesIO
 
 from app.database.connection import get_db, init_db
 from app.database.crud import get_project_by_user, update_project_status
 from app.models.schemas import GenerationProgressResponse
-from app.jobs.worker import create_worker
+from app.jobs.sqs_worker import create_sqs_worker
 from app.api.auth import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize worker config
+# Initialize SQS worker config
 try:
-    worker_config = create_worker()
+    worker_config = create_sqs_worker()
 except Exception as e:
-    logger.warning(f"⚠️ Failed to initialize worker config: {e}")
+    logger.warning(f"⚠️ Failed to initialize SQS worker config: {e}")
     worker_config = None
 
 
@@ -69,7 +67,7 @@ async def trigger_generation(
         if not worker_config:
             raise HTTPException(
                 status_code=503,
-                detail="Worker not available. Redis connection required."
+                detail="Worker not available. SQS connection required."
             )
         
         init_db()
@@ -119,10 +117,10 @@ async def trigger_generation(
 @router.get("/jobs/{job_id}/status")
 async def get_job_status(job_id: str):
     """
-    Get status of a specific RQ job.
+    Get status of a specific job.
     
     **Path Parameters:**
-    - job_id: RQ Job ID
+    - job_id: Job ID
     
     **Response:**
     ```json
@@ -138,7 +136,7 @@ async def get_job_status(job_id: str):
         if not worker_config:
             raise HTTPException(
                 status_code=503,
-                detail="Worker not available. Redis connection required."
+                detail="Worker not available. SQS connection required."
             )
         
         job_status = worker_config.get_job_status(job_id)
@@ -222,7 +220,7 @@ async def cancel_job(job_id: str):
     Cancel a running job.
     
     **Path Parameters:**
-    - job_id: RQ Job ID
+    - job_id: Job ID
     
     **Response:**
     ```json
@@ -237,7 +235,7 @@ async def cancel_job(job_id: str):
         if not worker_config:
             raise HTTPException(
                 status_code=503,
-                detail="Worker not available. Redis connection required."
+                detail="Worker not available. SQS connection required."
             )
         
         cancelled = worker_config.cancel_job(job_id)
@@ -387,8 +385,8 @@ async def cancel_generation(
         if project.status == "PENDING":
             raise HTTPException(status_code=409, detail="Generation not started")
         
-        # TODO: Cancel RQ job
-        # For now, just mark as failed
+        # Note: SQS doesn't support job cancellation
+        # Mark as failed so worker will skip it
         update_project_status(
             db,
             project_id,
