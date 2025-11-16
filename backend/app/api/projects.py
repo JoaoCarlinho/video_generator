@@ -53,12 +53,16 @@ async def create_new_project(
     
     **Request Body:**
     - title: Project title (max 200 chars)
-    - brief: Product brief/description (10-2000 chars)
-    - duration: Video duration (15-120 seconds)
-    - mood: Video mood (uplifting, dramatic, energetic, calm, luxurious, playful)
+    - creative_prompt: User's creative vision for the video (20-3000 chars)
+    - target_duration: Target video duration (15-120 seconds, flexible)
     - brand_name: Brand name (max 100 chars)
+    - brand_description: (optional) Brand story, values, personality
+    - target_audience: (optional) Target audience description
     - primary_color: Primary brand color (hex #RRGGBB or #RRGGBBAA)
     - secondary_color: (optional) Secondary brand color (hex)
+    - logo_url: (optional) S3 URL of uploaded brand logo
+    - product_image_url: (optional) S3 URL of uploaded product image
+    - guidelines_url: (optional) S3 URL of uploaded brand guidelines
     
     **Response:** ProjectResponse with newly created project
     
@@ -71,10 +75,11 @@ async def create_new_project(
     ```json
     {
       "title": "Summer Skincare Campaign",
-      "brief": "Premium hydrating serum with SPF for sensitive skin",
-      "duration": 30,
-      "mood": "uplifting",
+      "creative_prompt": "Create an uplifting video showing how our serum transforms skin. Start with a hook about sun damage, then showcase the product benefits, and end with happy customers.",
+      "target_duration": 30,
       "brand_name": "HydraGlow",
+      "brand_description": "Premium skincare for conscious consumers",
+      "target_audience": "Women 30-55 interested in natural beauty",
       "primary_color": "#4dbac7",
       "secondary_color": "#ffffff"
     }
@@ -90,19 +95,34 @@ async def create_new_project(
         # Create brand config
         brand_config = {
             "name": request.brand_name,
+            "description": request.brand_description,
             "primary_color": request.primary_color,
             "secondary_color": request.secondary_color or "",
-            "font_family": "Inter"
+            "font_family": "Inter",
+            "logo_url": request.logo_url,
+            "guidelines_url": request.guidelines_url
         }
+        
+        # Create product asset if product image URL provided
+        product_asset = None
+        if request.product_image_url:
+            product_asset = {
+                "original_url": request.product_image_url,
+                "masked_png_url": None,
+                "mask_url": None,
+                "width": None,
+                "height": None,
+                "extracted_at": None
+            }
         
         # Create initial ad_project_json
         ad_project_json = {
             "version": "1.0",
-            "brief": request.brief,
-            "duration": request.duration,
-            "mood": request.mood,
+            "creative_prompt": request.creative_prompt,
+            "target_duration": request.target_duration,
+            "target_audience": request.target_audience,
             "brand": brand_config,
-            "product_asset": None,
+            "product_asset": product_asset,
             "style_spec": None,
             "scenes": [],
             "video_settings": {
@@ -124,10 +144,10 @@ async def create_new_project(
             db=db,
             user_id=user_id,
             title=request.title,
-            brief=request.brief,
+            brief=request.creative_prompt,  # Store creative_prompt as brief in DB for backwards compat
             ad_project_json=ad_project_json,
-            mood=request.mood,
-            duration=request.duration
+            mood="",  # Deprecated, keeping for DB schema compatibility
+            duration=request.target_duration
         )
         
         # S3 RESTRUCTURING: Initialize S3 folder structure for new project

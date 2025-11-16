@@ -137,7 +137,7 @@ class GenerationPipeline:
             ad_project = AdProject(**updated_project.ad_project_json)
 
             # ===== STEP 3: Generate Videos (Parallel) =====
-            logger.info("🎥 Step 3: Generating background videos for all scenes...")
+            logger.info("🎥 Step 3: Generating videos for all scenes...")
             video_start = 25 if has_product else 20
             replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
             video_cost = COST_VIDEO_GENERATION * len(ad_project.scenes)
@@ -195,7 +195,7 @@ class GenerationPipeline:
                 self.project_id,
                 final_videos,
                 float(self.total_cost),
-                self.step_costs,
+                {k: float(v) for k, v in self.step_costs.items()},  # Convert Decimal to float for JSON serialization
             )
 
             return {
@@ -251,7 +251,7 @@ class GenerationPipeline:
             
             product_url = await extractor.extract_product(
                 image_url=ad_project.product_asset.original_url,
-                product_name=ad_project.brief[:50],  # Use brief as product name
+                project_id=str(self.project_id),
             )
 
             logger.info(f"✅ Product extracted: {product_url}")
@@ -270,31 +270,57 @@ class GenerationPipeline:
 
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
+            
+            # Prepare brand colors
+            brand_colors = [ad_project.brand.primary_color]
+            if ad_project.brand.secondary_color:
+                brand_colors.append(ad_project.brand.secondary_color)
+            
+            # Check if product/logo are available
+            has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
+            has_logo = ad_project.brand.logo_url is not None
+            
+            # TODO: Load brand guidelines from S3 if guidelines_url is present
+            brand_guidelines = None
+            if ad_project.brand.guidelines_url:
+                # For now, we'll skip loading the guidelines text
+                # In production, you'd download and parse the file from S3
+                logger.info(f"Brand guidelines URL provided: {ad_project.brand.guidelines_url}")
+            
             plan = await planner.plan_scenes(
-                brief=ad_project.brief,
+                creative_prompt=ad_project.creative_prompt,
                 brand_name=ad_project.brand.name,
-                brand_colors=[ad_project.brand.primary_color] + ([ad_project.brand.secondary_color] if ad_project.brand.secondary_color else []),
-                duration_total=ad_project.duration,
-                target_audience="general consumers",  # Default audience
+                brand_description=ad_project.brand.description,
+                brand_colors=brand_colors,
+                brand_guidelines=brand_guidelines,
+                target_audience=ad_project.target_audience or "general consumers",
+                target_duration=ad_project.target_duration,
+                has_product=has_product,
+                has_logo=has_logo,
             )
 
             # Update ad_project with scenes and style spec from plan
             # Convert plan scenes to AdProject scenes format
-            from app.models.schemas import Overlay
+            from app.models.schemas import Overlay, Scene as AdProjectScene
             ad_project.scenes = [
-                Scene(
+                AdProjectScene(
                     id=str(scene.scene_id),
                     role=scene.role,
-                    duration=int(round(scene.duration)),  # Convert float to int
+                    duration=scene.duration,
                     description=scene.background_prompt,
                     background_prompt=scene.background_prompt,
-                    product_usage="static_insert",
+                    background_type=scene.background_type,
+                    use_product=scene.use_product,
+                    use_logo=scene.use_logo,
+                    product_usage="static_insert" if scene.use_product else "none",
+                    camera_movement=scene.camera_movement,
+                    transition_to_next=scene.transition_to_next,
                     overlay=Overlay(
                         text=scene.overlay.text,
                         position=scene.overlay.position,
                         font_size=scene.overlay.font_size,
                         duration=scene.overlay.duration,
-                    ) if scene.overlay else None,  # Convert TextOverlay to Overlay
+                    ) if scene.overlay else None,
                 )
                 for scene in plan.scenes
             ]
@@ -512,9 +538,18 @@ class GenerationPipeline:
                 s3_bucket_name=settings.s3_bucket_name,
                 aws_region=settings.aws_region,
             )
+            
+            # Get mood from style_spec (set by LLM during planning)
+            music_mood = ad_project.style_spec.mood if ad_project.style_spec else "uplifting"
+            if hasattr(ad_project.style_spec, 'music_mood'):
+                music_mood = ad_project.style_spec.music_mood
+            
+            # Calculate total duration from scenes
+            total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else ad_project.target_duration
+            
             audio_url = await audio_engine.generate_background_music(
-                mood=ad_project.mood,  # Use mood from ad_project, not project
-                duration=ad_project.duration,
+                mood=music_mood,
+                duration=total_duration,
                 project_id=str(self.project_id),
             )
 

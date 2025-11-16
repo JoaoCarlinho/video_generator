@@ -31,7 +31,13 @@ export const useGeneration = () => {
         `/api/generation/projects/${projectId}/generate/`
       )
       return response.data
-    } catch (err) {
+    } catch (err: any) {
+      // 409 Conflict means generation already started - treat as success
+      if (err?.response?.status === 409) {
+        console.log('✅ Generation already in progress (409)')
+        return { message: 'Generation already in progress' }
+      }
+      
       const message = err instanceof Error ? err.message : 'Failed to generate video'
       setError(message)
       throw err
@@ -49,9 +55,10 @@ export const useGeneration = () => {
       )
       return response.data as GenerationProgress
     } catch (err: any) {
-      // Don't throw error if request was aborted
-      if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED') {
-        throw err
+      // Don't throw error if request was aborted (normal cleanup behavior)
+      if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || err?.message === 'canceled') {
+        // Silent abort - this is normal when component unmounts or re-renders
+        throw { silent: true, message: 'canceled' }
       }
       const message = err instanceof Error ? err.message : 'Failed to fetch progress'
       setError(message)

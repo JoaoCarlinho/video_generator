@@ -92,11 +92,11 @@ class TextOverlayRenderer:
                     animation=animation,
                 )
 
-                # Upload to S3
-                s3_url = await self._upload_video_to_s3(output_path, project_id, scene_index)
+                # Save locally
+                local_path = await self._save_video_locally(output_path, project_id, scene_index)
 
-                logger.info(f"✅ Text overlay added: {s3_url}")
-                return s3_url
+                logger.info(f"✅ Text overlay added: {local_path}")
+                return local_path
 
             except Exception as e:
                 logger.error(f"Error adding text overlay: {e}")
@@ -314,26 +314,23 @@ class TextOverlayRenderer:
 
         return filter_complex
 
-    async def _upload_video_to_s3(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
-        """Upload video to S3."""
+    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
+        """Save video to local filesystem."""
         try:
-            # S3 RESTRUCTURING: Use new project folder structure
-            s3_key = f"projects/{project_id}/draft/text_overlays/scene_{scene_index:02d}_text.mp4"
+            import shutil
+            
+            # Create directory structure: /tmp/genads/{project_id}/draft/text_overlays/
+            save_dir = Path(f"/tmp/genads/{project_id}/draft/text_overlays")
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy to permanent location with descriptive name
+            local_path = save_dir / f"scene_{scene_index:02d}_text.mp4"
+            shutil.copy2(video_path, local_path)
+            
+            logger.info(f"✅ Saved locally: {local_path}")
+            return str(local_path)
 
-            with open(video_path, "rb") as f:
-                self.s3_client.put_object(
-                    Bucket=self.s3_bucket_name,
-                    Key=s3_key,
-                    Body=f.read(),
-                    ContentType="video/mp4",
-                    # ACL removed - bucket doesn't allow ACLs, use bucket policy instead
-                )
-
-            s3_url = f"https://{self.s3_bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
-
-            return s3_url
-
-        except ClientError as e:
-            logger.error(f"S3 upload error: {e}")
+        except Exception as e:
+            logger.error(f"Local save error: {e}")
             raise
 

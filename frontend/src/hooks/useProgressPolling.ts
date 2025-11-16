@@ -99,9 +99,14 @@ export const useProgressPolling = ({
         return
       }
 
-      // Log error but continue polling (might be temporary network issue)
-      console.warn(`Polling error (${consecutiveErrorsRef.current}/${maxConsecutiveErrors}):`, message)
-      onErrorRef.current?.(message)
+      // Check if this is a silent error (like abort/canceled) - don't report these
+      const isSilentError = (err as any)?.silent === true || message === 'canceled'
+      
+      if (!isSilentError) {
+        // Log error but continue polling (might be temporary network issue)
+        console.warn(`Polling error (${consecutiveErrorsRef.current}/${maxConsecutiveErrors}):`, message)
+        onErrorRef.current?.(message)
+      }
     } finally {
       setLoading(false)
       abortControllerRef.current = null

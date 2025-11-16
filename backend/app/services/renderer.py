@@ -105,17 +105,30 @@ class Renderer:
                 logger.error(f"Error rendering final video: {e}")
                 raise
 
-    async def _download_file(self, url: str, output_path: Path):
-        """Download file from URL (S3 or HTTP)."""
+    async def _download_file(self, url_or_path: str, output_path: Path):
+        """Download file from URL or copy from local filesystem."""
         try:
+            # Check if it's a local file path
+            if url_or_path.startswith('/') or '/tmp/' in url_or_path:
+                logger.debug(f"Copying local file: {url_or_path}")
+                import shutil
+                source_path = Path(url_or_path)
+                
+                if not source_path.exists():
+                    raise FileNotFoundError(f"Local file not found: {url_or_path}")
+                
+                shutil.copy2(source_path, output_path)
+                logger.debug(f"Copied from local: {output_path.name}")
+                return
+            
             # Check if it's an S3 URL
-            if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
+            if f"s3.{self.aws_region}.amazonaws.com" in url_or_path or f"s3.amazonaws.com/{self.s3_bucket_name}" in url_or_path:
                 # Extract S3 key from URL
                 # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
-                if f"s3.{self.aws_region}.amazonaws.com" in url:
-                    s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
+                if f"s3.{self.aws_region}.amazonaws.com" in url_or_path:
+                    s3_key = url_or_path.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
                 else:
-                    s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+                    s3_key = url_or_path.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
                 
                 # Download using boto3
                 self.s3_client.download_file(
@@ -127,7 +140,7 @@ class Renderer:
             else:
                 # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                    async with session.get(url_or_path, timeout=aiohttp.ClientTimeout(total=120)) as resp:
                         if resp.status == 200:
                             with open(output_path, "wb") as f:
                                 f.write(await resp.read())
@@ -135,7 +148,7 @@ class Renderer:
                         else:
                             raise ValueError(f"HTTP {resp.status}")
         except Exception as e:
-            logger.error(f"Error downloading file: {e}")
+            logger.error(f"Error downloading/copying file: {e}")
             raise
 
     async def _concatenate_videos(self, video_paths: List[Path], output_path: Path):
