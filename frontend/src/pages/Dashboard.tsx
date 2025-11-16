@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
 import { Button, Skeleton } from '@/components/ui'
@@ -10,12 +10,13 @@ import { Plus, TrendingUp, Video, Zap } from 'lucide-react'
 
 export const Dashboard = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
   const { projects, loading, error, fetchProjects, deleteProject } = useProjects()
 
   useEffect(() => {
     fetchProjects()
-  }, [fetchProjects])
+  }, [location, fetchProjects])
 
   const handleCreateProject = () => {
     navigate('/create')
@@ -126,7 +127,7 @@ export const Dashboard = () => {
               variants={itemVariants}
               className="grid grid-cols-1 md:grid-cols-3 gap-6"
             >
-              {stats.map((stat, index) => {
+              {stats.map((stat) => {
                 const Icon = stat.icon
                 const colorClasses = {
                   indigo: 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400',

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from './useAuth'
 import { apiClient } from '@/services/api'
+import type { AspectRatio, SceneBackground } from '@/types'
 
 export interface Project {
   id: string
@@ -25,6 +26,9 @@ interface CreateProjectInput {
   duration?: number
   aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
+  productImages?: string[]
+  sceneBackgrounds?: SceneBackground[]
+  outputFormats?: AspectRatio[]
   logo_url?: string
   guidelines_url?: string
   creative_prompt?: string

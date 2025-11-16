@@ -33,6 +33,13 @@ export interface Scene {
   productUsage: 'none' | 'static_insert' | 'animated_insert' | 'dominant_center'
 }
 
+export type AspectRatio = '9:16' | '16:9' | '1:1'
+
+export interface SceneBackground {
+  sceneId: string
+  backgroundUrl: string
+}
+
 export interface Project {
   id: string
   userId: string
@@ -43,6 +50,9 @@ export interface Project {
   duration: number
   mood: string[]
   productImageUrl?: string
+  productImages?: string[]
+  sceneBackgrounds?: SceneBackground[]
+  outputFormats?: AspectRatio[]
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
   adProjectJson?: Record<string, any>
   createdAt: string
@@ -60,6 +70,9 @@ export interface CreateProjectInput {
   secondary_color?: string
   aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
+  productImages?: string[]
+  sceneBackgrounds?: SceneBackground[]
+  outputFormats?: AspectRatio[]
   logo_url?: string
   guidelines_url?: string
   brief?: string
