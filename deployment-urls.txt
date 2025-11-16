@@ -1,0 +1,10 @@
+Deployment completed: $(date)
+
+Frontend URL: http://adgen-frontend-1763279357.s3-website-us-east-1.amazonaws.com
+API URL: https://oel2h7som4znn76q5p2a5nq5l40evrkd.lambda-url.us-east-1.on.aws/
+
+Lambda Worker: adgen-video-generation-worker
+API Function: adgen-api
+SQS Queue: adgen-video-generation-queue
+S3 Videos: adgen-videos-1763157889
+S3 Frontend: adgen-frontend-1763279357
