@@ -30,14 +30,10 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 # Use --no-cache-dir to reduce image size
 # Upgrade pip first for better dependency resolution
 # Set CXX environment variable for soxr compilation
+# Note: soxr==0.3.7 is pinned in requirements.txt for nanobind compatibility
 ENV CXX=g++
 RUN pip install --upgrade pip && \
-    (pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt || \
-    (echo "Failed to install all dependencies, trying without librosa..." && \
-     grep -v "librosa" ${LAMBDA_TASK_ROOT}/requirements.txt > /tmp/requirements_no_librosa.txt && \
-     pip install --no-cache-dir -r /tmp/requirements_no_librosa.txt && \
-     pip install --no-cache-dir --no-deps librosa && \
-     echo "Successfully installed dependencies with librosa (without soxr)"))
+    pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
 # Copy application code
 COPY app/ ${LAMBDA_TASK_ROOT}/app/
