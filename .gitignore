@@ -340,6 +340,7 @@ pytestdebug.log
 # ============================================
 # Railway
 .railway/
+deploy_scripts/
 
 # Vercel
 .vercel
@@ -416,3 +417,4 @@ docs/
 bmad/
 .bmad/
 .claude/
+frontend/.env.production
