@@ -344,6 +344,7 @@ deploy_scripts/
 deploy_scripts/
 
 
+
 # Vercel
 .vercel
 
@@ -415,6 +416,8 @@ user_uploads/
 
 .ignore/
 backend/test_extraction.py
+
+# Project documentation (local)
 docs/
 bmad/
 .bmad/

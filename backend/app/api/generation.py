@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
 import boto3
-
 from app.database.connection import get_db, init_db
 from app.database.crud import get_project_by_user, update_project_status
 from app.models.schemas import GenerationProgressResponse
