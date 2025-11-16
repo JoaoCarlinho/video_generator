@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Check, Clock, AlertCircle } from 'lucide-react'
+import { Check, Clock, AlertCircle, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 
 interface ProgressStep {
@@ -45,6 +45,18 @@ export const ProgressTracker = ({
     }
     return 'pending'
   }
+
+  // Calculate current active step
+  const currentStep = steps.find((step, index) => {
+    const stepStatus = getStepStatus(step.percentage)
+    if (stepStatus === 'current') return true
+    if (stepStatus === 'pending' && index === 0) return true // First step if nothing started
+    if (progress === 100) return step.percentage === 100 // Last step if complete
+    return false
+  }) || steps[steps.length - 1]
+
+  const currentStepIndex = steps.findIndex(s => s.id === currentStep.id)
+  const currentStepStatus = getStepStatus(currentStep.percentage)
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -123,78 +135,115 @@ export const ProgressTracker = ({
         </motion.div>
       )}
 
-      {/* Steps */}
-      <motion.div variants={itemVariants} className="space-y-3">
-        {steps.map((step) => {
-          const stepStatus = getStepStatus(step.percentage)
-          const isActive = stepStatus === 'current' || stepStatus === 'completed'
-
-          return (
-            <motion.div
-              key={step.id}
-              className="relative"
-              whileHover={{ x: 4 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="flex items-start gap-4">
-                {/* Step Icon */}
-                <div className="flex-shrink-0 mt-1">
-                  {stepStatus === 'completed' ? (
-                    <motion.div
-                      className="w-8 h-8 bg-emerald-500/20 border border-emerald-500 rounded-full flex items-center justify-center"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Check className="w-4 h-4 text-emerald-400" />
-                    </motion.div>
-                  ) : stepStatus === 'current' ? (
-                    <motion.div
-                      className="w-8 h-8 bg-indigo-500 border border-indigo-600 rounded-full flex items-center justify-center"
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                    >
-                      <Clock className="w-4 h-4 text-white" />
-                    </motion.div>
-                  ) : (
-                    <div className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center">
-                      <div className="w-2 h-2 bg-slate-600 rounded-full" />
-                    </div>
-                  )}
+      {/* Current Step - Prominent Display */}
+      <motion.div variants={itemVariants} className="space-y-4">
+        <div className="p-6 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+          <div className="flex items-start gap-4">
+            {/* Step Icon */}
+            <div className="flex-shrink-0 mt-1">
+              {currentStepStatus === 'completed' ? (
+                <motion.div
+                  className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 rounded-full flex items-center justify-center"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Check className="w-6 h-6 text-emerald-400" />
+                </motion.div>
+              ) : currentStepStatus === 'current' ? (
+                <motion.div
+                  className="w-12 h-12 bg-indigo-500 border-2 border-indigo-600 rounded-full flex items-center justify-center"
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                >
+                  <Clock className="w-6 h-6 text-white" />
+                </motion.div>
+              ) : (
+                <div className="w-12 h-12 bg-slate-800 border-2 border-slate-700 rounded-full flex items-center justify-center">
+                  <div className="w-3 h-3 bg-slate-600 rounded-full" />
                 </div>
+              )}
+            </div>
 
-                {/* Step Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`font-medium text-sm ${
-                        isActive ? 'text-slate-100' : 'text-slate-400'
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    <span className="text-xs text-slate-500">{step.percentage}%</span>
+            {/* Step Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h4 className="text-lg font-semibold text-slate-100">
+                  {currentStep.label}
+                </h4>
+              </div>
+              <p className="text-sm text-slate-400 mb-3">
+                Step {currentStepIndex + 1} of {steps.length}
+              </p>
+
+              {currentStepStatus === 'current' && (
+                <motion.div
+                  className="h-2 bg-slate-800 rounded-full overflow-hidden"
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                >
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Expandable Full Step List */}
+        <details className="group">
+          <summary className="flex items-center justify-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-slate-300 transition-colors py-2 list-none">
+            <span>Show all steps</span>
+            <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+          </summary>
+
+          <motion.div
+            className="mt-4 space-y-2 px-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.3 }}
+          >
+            {steps.map((step) => {
+              const stepStatus = getStepStatus(step.percentage)
+              const isActive = stepStatus === 'current' || stepStatus === 'completed'
+
+              return (
+                <div key={step.id} className="flex items-center gap-3 py-2">
+                  {/* Mini Step Icon */}
+                  <div className="flex-shrink-0">
+                    {stepStatus === 'completed' ? (
+                      <div className="w-6 h-6 bg-emerald-500/20 border border-emerald-500 rounded-full flex items-center justify-center">
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      </div>
+                    ) : stepStatus === 'current' ? (
+                      <div className="w-6 h-6 bg-indigo-500 border border-indigo-600 rounded-full flex items-center justify-center">
+                        <Clock className="w-3 h-3 text-white" />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 bg-slate-600 rounded-full" />
+                      </div>
+                    )}
                   </div>
 
-                  {stepStatus === 'current' && (
-                    <motion.div
-                      className="mt-2 h-1 bg-slate-800 rounded-full overflow-hidden"
-                      initial={{ width: 0 }}
-                      animate={{ width: '100%' }}
-                    >
-                      <motion.div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                        initial={{ x: '-100%' }}
-                        animate={{ x: '100%' }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      />
-                    </motion.div>
-                  )}
+                  {/* Step Label */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${isActive ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                      {step.label}
+                    </p>
+                  </div>
+
+                  {/* Step Percentage */}
+                  <span className="text-xs text-slate-500">{step.percentage}%</span>
                 </div>
-              </div>
-            </motion.div>
-          )
-        })}
+              )
+            })}
+          </motion.div>
+        </details>
       </motion.div>
 
       {/* Time Estimate */}

@@ -73,7 +73,7 @@ export const GenerationProgress = () => {
     }
   }, [projectId, generateVideo, storageKey])
 
-  const { progress, isPolling, stopPolling, startPolling } = useProgressPolling({
+  const { progress, stopPolling, startPolling } = useProgressPolling({
     projectId,
     enabled: true,
     interval: 2000,

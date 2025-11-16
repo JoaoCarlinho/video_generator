@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal } from '@/components/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Modal } from '@/components/ui'
 import { useProjects } from '@/hooks/useProjects'
 import { Upload, X, Zap } from 'lucide-react'
+import { MultiImageUpload } from '@/components/forms/MultiImageUpload'
+import { AspectRatioSelector, type AspectRatio } from '@/components/ui/AspectRatioSelector'
+import { uploadProductImages } from '@/services/storage'
 
 export const CreateProject = () => {
   const navigate = useNavigate()
@@ -23,6 +26,8 @@ export const CreateProject = () => {
     guidelines_url: '',
   })
 
+  const [productImages, setProductImages] = useState<File[]>([])
+  const [selectedAspectRatios, setSelectedAspectRatios] = useState<AspectRatio[]>(['16:9'])
   const [productImage, setProductImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
   const [logoImage, setLogoImage] = useState<File | null>(null)
@@ -147,6 +152,11 @@ export const CreateProject = () => {
       return false
     }
 
+    if (selectedAspectRatios.length === 0) {
+      setSubmitError('Please select at least one aspect ratio')
+      return false
+    }
+
     return true
   }
 
@@ -200,25 +210,42 @@ export const CreateProject = () => {
     setShowConfirmation(false)
     setUploading(true)
     setSubmitError(null)
-    
+
     try {
       console.log('🚀 Creating project with data:', {
         title: formData.title,
         brand_name: formData.brand_name,
         target_duration: formData.target_duration,
+        productImagesCount: productImages.length,
+        aspectRatios: selectedAspectRatios,
       })
 
-      // Upload files to S3 if selected
+      // Upload files to S3/Supabase if selected
       let uploadedProductUrl = formData.product_image_url
       let uploadedLogoUrl = formData.logo_url
       let uploadedGuidelinesUrl = formData.guidelines_url
-      
-      if (productImage || logoImage || guidelinesFile) {
-        console.log('📦 Uploading files to S3...')
-        
+      let uploadedProductImagesUrls: string[] = []
+
+      // Create a temporary project ID for upload organization
+      const tempProjectId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      if (productImages.length > 0 || productImage || logoImage || guidelinesFile) {
+        console.log('📦 Uploading files...')
+
         // Upload files in parallel
         const uploadPromises = []
-        
+
+        // Upload multiple product images to Supabase Storage
+        if (productImages.length > 0) {
+          uploadPromises.push(
+            uploadProductImages(tempProjectId, productImages).then(urls => {
+              uploadedProductImagesUrls = urls
+              console.log(`✅ Uploaded ${urls.length} product images`)
+            })
+          )
+        }
+
+        // Fallback: single product image upload (backend)
         if (productImage) {
           uploadPromises.push(
             uploadFileToBackend(productImage, 'product').then(url => {
@@ -226,7 +253,7 @@ export const CreateProject = () => {
             })
           )
         }
-        
+
         if (logoImage) {
           uploadPromises.push(
             uploadFileToBackend(logoImage, 'logo').then(url => {
@@ -234,7 +261,7 @@ export const CreateProject = () => {
             })
           )
         }
-        
+
         if (guidelinesFile) {
           uploadPromises.push(
             uploadFileToBackend(guidelinesFile, 'guidelines').then(url => {
@@ -242,7 +269,7 @@ export const CreateProject = () => {
             })
           )
         }
-        
+
         // Wait for all uploads to complete
         await Promise.all(uploadPromises)
         console.log('✅ All files uploaded successfully')
@@ -258,6 +285,8 @@ export const CreateProject = () => {
         aspect_ratio: formData.aspect_ratio,
         logo_url: uploadedLogoUrl || undefined,
         product_image_url: uploadedProductUrl || undefined,
+        productImages: uploadedProductImagesUrls.length > 0 ? uploadedProductImagesUrls : undefined,
+        outputFormats: selectedAspectRatios,
         guidelines_url: uploadedGuidelinesUrl || undefined,
       })
 
@@ -434,87 +463,36 @@ export const CreateProject = () => {
                       </p>
                     </div>
 
-                    {/* Aspect Ratio Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Video Aspect Ratio
-                      </label>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['9:16', '1:1', '16:9'] as const).map((ar) => (
-                          <button
-                            key={ar}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, aspect_ratio: ar })}
-                            className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
-                              formData.aspect_ratio === ar
-                                ? 'border-indigo-500 bg-indigo-500/20 text-indigo-200'
-                                : 'border-slate-700 bg-slate-800/30 text-slate-300 hover:border-slate-600'
-                            }`}
-                          >
-                            <div className="font-semibold">
-                              {ar === '9:16' ? '📱 Vertical' : ar === '1:1' ? '⬜ Square' : '🖥️ Horizontal'}
-                            </div>
-                            <div className="text-xs text-slate-400 mt-1">
-                              {ar === '9:16' ? '1080×1920' : ar === '1:1' ? '1080×1080' : '1920×1080'}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        💡 Choose your video format based on your platform
-                      </p>
-                    </div>
+                    {/* Aspect Ratio Selection - New Component */}
+                    <AspectRatioSelector
+                      selectedRatios={selectedAspectRatios}
+                      onChange={setSelectedAspectRatios}
+                      required={true}
+                    />
 
                     {/* Asset Uploads Section */}
                     <div className="space-y-6 p-6 bg-slate-800/30 rounded-lg border border-slate-700">
                       <h3 className="text-lg font-semibold text-slate-200">
                         Assets <span className="text-slate-500 text-sm font-normal">(All Optional)</span>
                       </h3>
-                      
+
+                      {/* Multi Product Image Upload - New Component */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-3">
+                          Product Images
+                        </label>
+                        <MultiImageUpload
+                          onImagesChange={setProductImages}
+                          maxFiles={10}
+                          maxSize={10}
+                          currentImages={productImages}
+                        />
+                        <p className="text-xs text-slate-500 mt-2">
+                          💡 Upload multiple product images to give the AI better understanding
+                        </p>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Product Image Upload */}
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">
-                            Product Image
-                          </label>
-                          {imagePreview ? (
-                            <div className="relative w-full">
-                              <img
-                                src={imagePreview}
-                                alt="Product preview"
-                                className="w-full h-40 object-cover rounded-lg border border-slate-700"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleRemoveImage}
-                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <X className="w-4 h-4 text-white" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                              <div className="flex flex-col items-center justify-center">
-                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                                <span className="text-sm text-slate-400">
-                                  Upload product
-                                </span>
-                                <span className="text-xs text-slate-500 mt-1">
-                                  PNG, JPG (Max 10MB)
-                                </span>
-                              </div>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                className="hidden"
-                              />
-                            </label>
-                          )}
-                          <p className="text-xs text-slate-500 mt-2">
-                            AI will composite your product into scenes
-                          </p>
-                        </div>
 
                         {/* Brand Logo Upload */}
                         <div>
@@ -646,10 +624,12 @@ export const CreateProject = () => {
                 </p>
               </div>
               
-              {(productImage || logoImage || guidelinesFile) && (
+              {(productImages.length > 0 || productImage || logoImage || guidelinesFile) && (
                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
                   <p className="text-emerald-400 text-sm">
-                    ✅ <strong>Ready to upload:</strong> Your files will be uploaded to S3 before creating the project. The AI will use these assets when generating your video.
+                    ✅ <strong>Ready to upload:</strong> {productImages.length > 0 && `${productImages.length} product image(s)`}{(productImages.length > 0 && (logoImage || guidelinesFile)) && ', '}
+                    {logoImage && 'logo'}{(logoImage && guidelinesFile) && ', '}{guidelinesFile && 'brand guidelines'}
+                    {' will be uploaded before creating the project.'}
                   </p>
                 </div>
               )}
@@ -717,21 +697,28 @@ export const CreateProject = () => {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Aspect Ratio
+                  Output Formats
                 </label>
-                <p className="text-slate-100 mt-1">
-                  {formData.aspect_ratio === '9:16' ? '📱 Vertical (1080×1920)' : formData.aspect_ratio === '1:1' ? '⬜ Square (1080×1080)' : '🖥️ Horizontal (1920×1080)'}
+                <p className="text-slate-100 mt-1 text-sm">
+                  {selectedAspectRatios.map(ar =>
+                    ar === '9:16' ? '📱 9:16' : ar === '1:1' ? '⬜ 1:1' : '🖥️ 16:9'
+                  ).join(', ')}
                 </p>
               </div>
             </div>
 
             {/* Assets Section */}
-            {(productImage || logoImage || guidelinesFile) && (
+            {(productImages.length > 0 || productImage || logoImage || guidelinesFile) && (
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
                   Uploaded Assets
                 </label>
                 <div className="flex flex-wrap gap-2">
+                  {productImages.length > 0 && (
+                    <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
+                      ✓ {productImages.length} Product Image{productImages.length > 1 ? 's' : ''}
+                    </span>
+                  )}
                   {productImage && (
                     <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
                       ✓ Product Image

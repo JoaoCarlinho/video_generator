@@ -1,7 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '../../utils/cn'
-import { Button } from '../ui'
 
 export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   logo?: React.ReactNode
