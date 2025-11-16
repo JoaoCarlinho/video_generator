@@ -3,14 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal, Badge } from '@/components/ui'
+import { StyleSelector } from '@/components/ui/StyleSelector'
 import { useProjects } from '@/hooks/useProjects'
 import { useReferenceImage } from '@/hooks/useReferenceImage'
+import { useStyleSelector } from '@/hooks/useStyleSelector'
 import { Upload, X, Zap, Check } from 'lucide-react'
 
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
   const { uploadReferenceImage, isLoading: isUploadingReference, error: referenceError } = useReferenceImage()
+  const { styles, selectedStyle, setSelectedStyle, clearSelection, isLoading: isLoadingStyles } = useStyleSelector()
 
   const [formData, setFormData] = useState({
     title: '',
@@ -289,6 +292,7 @@ export const CreateProject = () => {
         console.log('✅ All files uploaded successfully')
       }
 
+      // PHASE 7: Include selected style if user chose one
       const newProject = await createProject({
         title: formData.title,
         creative_prompt: formData.creative_prompt,
@@ -300,7 +304,8 @@ export const CreateProject = () => {
         logo_url: uploadedLogoUrl || undefined,
         product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
-      })
+        selected_style: selectedStyle || undefined,  // PHASE 7: Pass selected style (optional)
+      } as any)
 
       console.log('✅ Project created:', newProject)
 
@@ -729,6 +734,17 @@ export const CreateProject = () => {
                           🎨 AI will extract colors, lighting, mood, and camera style from your reference
                         </p>
                       </div>
+                    </div>
+
+                    {/* PHASE 7: Video Style Selection */}
+                    <div className="p-6 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <StyleSelector
+                        styles={styles}
+                        selectedStyle={selectedStyle}
+                        onSelectStyle={setSelectedStyle}
+                        onClearStyle={clearSelection}
+                        isLoading={isLoadingStyles}
+                      />
                     </div>
 
                     {/* Submit Buttons */}

@@ -426,6 +426,7 @@ REFERENCE VISUAL STYLE (from uploaded mood board):
 
 Incorporate this visual style consistently throughout all scenes."""
             
+            # PHASE 7: Pass selected_style to ScenePlanner
             plan = await planner.plan_scenes(
                 creative_prompt=creative_prompt,
                 brand_name=ad_project.brand.name,
@@ -437,42 +438,60 @@ Incorporate this visual style consistently throughout all scenes."""
                 has_product=has_product,
                 has_logo=has_logo,
                 aspect_ratio=ad_project.video_settings.aspect_ratio,
+                selected_style=project.selected_style,  # PHASE 7: Pass user-selected style if any
             )
+
+            # PHASE 7: plan_scenes now returns dict with chosenStyle, styleSource
+            chosen_style = plan.get('chosenStyle')  # The ONE style for entire video
+            style_source = plan.get('styleSource')  # 'user_selected' or 'llm_inferred'
+            plan_scenes_list = plan.get('scenes', [])
+            plan_style_spec = plan.get('style_spec', {})
+            
+            logger.info(f"✅ ScenePlanner chose style: {chosen_style} ({style_source})")
 
             # Update ad_project with scenes and style spec from plan
             # Convert plan scenes to AdProject scenes format
             from app.models.schemas import Overlay, Scene as AdProjectScene
             ad_project.scenes = [
                 AdProjectScene(
-                    id=str(scene.scene_id),
-                    role=scene.role,
-                    duration=scene.duration,
-                    description=scene.background_prompt,
-                    background_prompt=scene.background_prompt,
-                    background_type=scene.background_type,
-                    use_product=scene.use_product,
-                    use_logo=scene.use_logo,
-                    product_usage="static_insert" if scene.use_product else "none",
-                    camera_movement=scene.camera_movement,
-                    transition_to_next=scene.transition_to_next,
+                    id=str(scene.get('scene_id', i)),
+                    role=scene.get('role', 'showcase'),
+                    duration=scene.get('duration', 5),
+                    description=scene.get('background_prompt', ''),
+                    background_prompt=scene.get('background_prompt', ''),
+                    background_type=scene.get('background_type', 'cinematic'),
+                    use_product=scene.get('use_product', False),
+                    use_logo=scene.get('use_logo', False),
+                    product_usage="static_insert" if scene.get('use_product') else "none",
+                    camera_movement=scene.get('camera_movement', 'static'),
+                    transition_to_next=scene.get('transition_to_next', 'cut'),
                     overlay=Overlay(
-                        text=scene.overlay.text,
-                        position=scene.overlay.position,
-                        font_size=scene.overlay.font_size,
-                        duration=scene.overlay.duration,
-                    ) if scene.overlay else None,
+                        text=scene.get('overlay', {}).get('text', ''),
+                        position=scene.get('overlay', {}).get('position', 'bottom'),
+                        font_size=scene.get('overlay', {}).get('font_size', 48),
+                        duration=scene.get('overlay', {}).get('duration', 2.0),
+                    ) if scene.get('overlay') else None,
                 )
-                for scene in plan.scenes
+                for i, scene in enumerate(plan_scenes_list)
             ]
             # Convert StyleSpec from plan to AdProject StyleSpec format
             ad_project.style_spec = StyleSpec(
-                lighting=plan.style_spec.lighting_direction,
-                camera_style=plan.style_spec.camera_style,
-                mood=plan.style_spec.mood_atmosphere,
-                color_palette=plan.style_spec.color_palette,
-                texture=plan.style_spec.texture_materials,
-                grade=plan.style_spec.grade_postprocessing,
+                lighting=plan_style_spec.get('lighting_direction', ''),
+                camera_style=plan_style_spec.get('camera_style', ''),
+                mood=plan_style_spec.get('mood_atmosphere', ''),
+                color_palette=plan_style_spec.get('color_palette', []),
+                texture=plan_style_spec.get('texture_materials', ''),
+                grade=plan_style_spec.get('grade_postprocessing', ''),
             )
+
+            # PHASE 7: Store chosen style in ad_project_json
+            if not ad_project.video_metadata:
+                ad_project.video_metadata = {}
+            ad_project.video_metadata['selectedStyle'] = {
+                'style': chosen_style,
+                'source': style_source,
+                'appliedAt': datetime.utcnow().isoformat()
+            }
 
             # Save back to database
             project.ad_project_json = ad_project.dict()
@@ -501,6 +520,14 @@ Incorporate this visual style consistently throughout all scenes."""
             extracted_style = None
             if project.ad_project_json:
                 extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+            
+            # PHASE 7: Get the chosen style for all scenes
+            chosen_style = None
+            if project.ad_project_json and "video_metadata" in project.ad_project_json:
+                video_metadata = project.ad_project_json.get("video_metadata", {})
+                style_info = video_metadata.get("selectedStyle", {})
+                chosen_style = style_info.get("style")
+                logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
 
             # Create tasks for all scenes
             tasks = [
@@ -509,6 +536,7 @@ Incorporate this visual style consistently throughout all scenes."""
                     style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
                     duration=scene.duration,
                     extracted_style=extracted_style,  # Pass extracted style to generator
+                    style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
                 )
                 for scene in ad_project.scenes
             ]

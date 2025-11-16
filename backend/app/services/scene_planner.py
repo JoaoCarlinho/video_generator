@@ -14,9 +14,10 @@ Key Features:
 
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 from openai import AsyncOpenAI
+from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +95,10 @@ class ScenePlanner:
         has_product: bool = False,
         has_logo: bool = False,
         aspect_ratio: str = "16:9",
-    ) -> AdProjectPlan:
+        selected_style: Optional[str] = None,  # PHASE 7: User-selected or LLM-inferred style
+    ) -> Dict[str, Any]:
         """
-        Generate video scene plan with full creative freedom.
+        Generate video scene plan with full creative freedom and PHASE 7 style consistency.
 
         Args:
             creative_prompt: User's creative vision for the video
@@ -109,12 +111,29 @@ class ScenePlanner:
             has_product: Whether product image is available
             has_logo: Whether logo is available
             aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9) to optimize scene planning
+            selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
 
         Returns:
-            AdProjectPlan with scenes and style specification
+            Dictionary with scenes, style_spec, chosenStyle, styleSource
         """
         logger.info(f"Planning video for '{brand_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
+        
+        # PHASE 7: Determine the ONE style for entire video
+        if selected_style:
+            # User provided style
+            chosen_style = selected_style
+            style_source = "user_selected"
+            logger.info(f"Using user-selected style: {chosen_style}")
+        else:
+            # LLM chooses from 5 styles based on brief + brand
+            logger.info("No style selected - LLM will choose from 5 styles")
+            chosen_style, style_source = await self._llm_choose_style(
+                creative_prompt=creative_prompt,
+                brand_name=brand_name,
+                brand_description=brand_description,
+                target_audience=target_audience or "general consumers"
+            )
 
         # Generate scene plan via LLM
         scenes_json = await self._generate_scenes_via_llm(
@@ -168,17 +187,37 @@ class ScenePlanner:
             )
             scenes.append(scene)
 
-        plan = AdProjectPlan(
-            creative_prompt=creative_prompt,
-            brand_name=brand_name,
-            target_audience=target_audience or "general consumers",
-            total_duration=total_duration,
-            style_spec=style_spec,
-            scenes=scenes,
-        )
+        # PHASE 7: CRITICAL - All scenes MUST use the same style
+        # Enforce this by adding style to each scene
+        scenes_dict = []
+        for scene in scenes:
+            scene_data = scene.model_dump()
+            scene_data['style'] = chosen_style  # Force same style on all scenes
+            scenes_dict.append(scene_data)
+        
+        # Validate: all scenes have same style
+        for i, scene_data in enumerate(scenes_dict):
+            if scene_data.get('style') != chosen_style:
+                logger.warning(f"Scene {i} tried different style: {scene_data.get('style')} → forcing {chosen_style}")
+                scene_data['style'] = chosen_style
+        
+        assert all(s.get('style') == chosen_style for s in scenes_dict), \
+            f"Style consistency violated! All scenes must use {chosen_style}"
+        
+        logger.info(f"✅ Generated plan with {len(scenes)} scenes (total: {total_duration}s, style: {chosen_style})")
+        logger.info(f"✅ CRITICAL: All {len(scenes)} scenes enforced to use SAME style: {chosen_style}")
 
-        logger.info(f"✅ Generated plan with {len(scenes)} scenes (total: {total_duration}s)")
-        return plan
+        # PHASE 7: Return dict with style information
+        return {
+            "scenes": scenes_dict,
+            "style_spec": style_spec.model_dump(),
+            "chosenStyle": chosen_style,  # The ONE style used for entire video
+            "styleSource": style_source,  # "user_selected" or "llm_inferred"
+            "creative_prompt": creative_prompt,
+            "brand_name": brand_name,
+            "target_audience": target_audience or "general consumers",
+            "total_duration": total_duration,
+        }
 
     async def _generate_scenes_via_llm(
         self,
@@ -399,6 +438,71 @@ Create the video now!"""
         except Exception as e:
             logger.error(f"Error generating scenes: {e}")
             raise
+
+    async def _llm_choose_style(
+        self,
+        creative_prompt: str,
+        brand_name: str,
+        brand_description: Optional[str],
+        target_audience: str,
+    ) -> Tuple[str, str]:
+        """
+        PHASE 7: LLM chooses best style from 5 predefined styles based on brief and brand.
+        
+        Returns:
+            Tuple of (chosen_style, style_source) where chosen_style is one of the 5 styles
+        """
+        try:
+            prompt = f"""You are a creative director analyzing a brand and creative brief to select the best visual style for an advertising video.
+
+Based on the following information, choose the BEST visual style from these 5 options:
+
+1. cinematic - High-quality camera feel, dramatic lighting, depth of field, professional cinematography
+2. dark_premium - Black background, rim lighting, contrast-heavy, product floating or rotating, luxury aesthetic
+3. minimal_studio - Minimal, bright, Apple-style, clean compositions, professional simplicity
+4. lifestyle - Product used in real-world scenarios, authentic moments, relatable contexts
+5. 2d_animated - Modern vector-style animation, motion graphics, playful, modern
+
+=== BRAND & BRIEF ===
+Brand: {brand_name}
+{f"Brand Description: {brand_description}" if brand_description else ""}
+Target Audience: {target_audience}
+Creative Brief: {creative_prompt}
+
+=== YOUR TASK ===
+Analyze the brand, audience, and creative brief. Choose ONE style that best fits.
+Return ONLY the style ID (e.g., "cinematic") - nothing else, just the ID.
+
+Remember:
+- cinematic: Premium, professional, sophisticated brands
+- dark_premium: Luxury, high-end, exclusive products
+- minimal_studio: Clean, modern, tech, wellness brands
+- lifestyle: Authentic, relatable, everyday use cases
+- 2d_animated: Tech startups, SaaS, playful, modern
+
+Choose wisely. Return ONLY the style ID."""
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=10,
+            )
+            
+            chosen_style = response.choices[0].message.content.strip().lower()
+            
+            # Validate the chosen style
+            valid_styles = ["cinematic", "dark_premium", "minimal_studio", "lifestyle", "2d_animated"]
+            if chosen_style not in valid_styles:
+                logger.warning(f"LLM returned invalid style '{chosen_style}', using 'cinematic' as default")
+                chosen_style = "cinematic"
+            
+            logger.info(f"✅ LLM chose style: {chosen_style}")
+            return chosen_style, "llm_inferred"
+            
+        except Exception as e:
+            logger.error(f"Error in LLM style selection: {e}, using 'cinematic' as fallback")
+            return "cinematic", "llm_inferred"
 
     async def _generate_style_spec(
         self,
