@@ -339,8 +339,10 @@ pytestdebug.log
 # DEPLOYMENT & CLOUD
 # ============================================
 # Railway
+deploy_scripts/
 .railway/
 deploy_scripts/
+
 
 # Vercel
 .vercel
