@@ -48,3 +48,4 @@ onnxruntime>=1.16.0
 replicate>=0.25.0
 librosa==0.10.0
 scipy==1.13.1
+soxr==0.3.7  # Pin to compatible version to avoid nanobind template deduction errors
