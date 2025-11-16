@@ -6,7 +6,14 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@/compo
 import { VideoPlayer } from '@/components/PageComponents'
 import { useProjects } from '@/hooks/useProjects'
 import { api } from '@/services/api'
-import { ArrowLeft, Download, Copy, Check, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, Copy, Check, Trash2, Cloud, HardDrive, Lock } from 'lucide-react'
+import {
+  getVideoURL,
+  deleteProjectVideos,
+  getStorageUsage,
+  formatBytes,
+  markAsFinalized,
+} from '@/services/videoStorage'
 
 export const VideoResults = () => {
   const { projectId = '' } = useParams()
@@ -20,13 +27,37 @@ export const VideoResults = () => {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloadingAspect, setDownloadingAspect] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // Local storage state
+  const [videoUrl, setVideoUrl] = useState<string>('')
+  const [storageUsage, setStorageUsage] = useState<number>(0)
+  const [isFinalized, setIsFinalized] = useState(false)
+  const [isFinalizing, setIsFinalizing] = useState(false)
+  const [useLocalStorage, setUseLocalStorage] = useState(true)
 
+  // Load project and videos from local storage
   useEffect(() => {
-    const fetchProject = async () => {
+    const loadProjectAndVideos = async () => {
       try {
         setLoading(true)
         const data = await getProject(projectId)
         setProject(data)
+        
+        // Try to load video from local storage
+        const localVideoUrl = await getVideoURL(projectId, aspect)
+        if (localVideoUrl) {
+          setVideoUrl(localVideoUrl)
+          setUseLocalStorage(true)
+          console.log(`✅ Loaded video from local storage for ${aspect}`)
+        } else {
+          // Fallback to S3 URL if local storage is empty
+          setVideoUrl(data.output_videos?.[aspect] || '')
+          setUseLocalStorage(false)
+        }
+        
+        // Get storage usage
+        const usage = await getStorageUsage(projectId)
+        setStorageUsage(usage)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load project'
         setError(message)
@@ -36,9 +67,9 @@ export const VideoResults = () => {
     }
 
     if (projectId) {
-      fetchProject()
+      loadProjectAndVideos()
     }
-  }, [projectId, getProject])
+  }, [projectId, getProject, aspect])
 
   const handleDownload = (aspectRatio: '9:16' | '1:1' | '16:9') => {
     const videoUrl = project.output_videos?.[aspectRatio]
@@ -90,6 +121,51 @@ export const VideoResults = () => {
     navigator.clipboard.writeText(url)
     setCopiedUrl(url)
     setTimeout(() => setCopiedUrl(null), 2000)
+  }
+
+  // Finalize video: upload to S3 and cleanup local storage
+  const handleFinalizeVideo = async () => {
+    if (!confirm('Finalize this video? This will upload the final videos to S3 and delete all local files. This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      setIsFinalizing(true)
+      setError(null)
+      
+      console.log('🚀 Finalizing video - uploading to S3...')
+      
+      // Call backend finalize endpoint
+      const response = await api.post(`/api/projects/${projectId}/finalize`)
+      
+      console.log('✅ Video finalized and uploaded to S3!')
+      console.log('📊 S3 URLs:', response.data.output_videos)
+      
+      // Update local state
+      setIsFinalized(true)
+      
+      // Reload project to get S3 URLs
+      const updatedProject = await getProject(projectId)
+      setProject(updatedProject)
+      
+      // Mark as finalized and cleanup IndexedDB
+      await markAsFinalized(projectId)
+      
+      // Delete local storage after 2 seconds
+      setTimeout(async () => {
+        await deleteProjectVideos(projectId)
+        setStorageUsage(0)
+        console.log('✅ Local storage cleaned up')
+      }, 2000)
+      
+      // Show success message
+      setError(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to finalize video'
+      setError(message)
+      console.error('❌ Finalization error:', err)
+      setIsFinalizing(false)
+    }
   }
 
   // S3 RESTRUCTURING: Delete project and S3 folder
@@ -173,8 +249,7 @@ export const VideoResults = () => {
     )
   }
 
-  const videoUrl = project.output_videos?.[aspect] || ''
-  const cost = project.cost_estimate || 0
+  const cost = project?.cost_estimate || 0
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
@@ -215,16 +290,42 @@ export const VideoResults = () => {
             {/* Video Player */}
             <motion.div variants={itemVariants}>
               <Card variant="glass">
-                <CardHeader>
-                  <CardTitle>Preview - {aspectInfo[aspect].label}</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Preview - {aspectInfo[aspect].label}</CardTitle>
+                    {useLocalStorage && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-300">
+                        <HardDrive className="w-3 h-3" />
+                        Local
+                      </div>
+                    )}
+                    {!useLocalStorage && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-400">
+                        <Cloud className="w-3 h-3" />
+                        S3
+                      </div>
+                    )}
+                  </div>
+                  {isFinalized && (
+                    <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded text-xs text-emerald-400">
+                      <Lock className="w-3 h-3" />
+                      Finalized
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <VideoPlayer
-                    videoUrl={videoUrl}
-                    title={project.title}
-                    aspect={aspect}
-                    onDownload={() => handleDownload(aspect)}
-                  />
+                  {videoUrl ? (
+                    <VideoPlayer
+                      videoUrl={videoUrl}
+                      title={project.title}
+                      aspect={aspect}
+                      onDownload={() => handleDownload(aspect)}
+                    />
+                  ) : (
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 text-center">
+                      <p className="text-slate-400">No video available</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -309,6 +410,66 @@ export const VideoResults = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Local Storage Information */}
+            {storageUsage > 0 && (
+              <motion.div variants={itemVariants}>
+                <Card variant="glass">
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <HardDrive className="w-4 h-4" />
+                      Local Storage
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <p className="text-slate-400">Storage Used</p>
+                        <p className="text-slate-100 font-semibold">{formatBytes(storageUsage)}</p>
+                      </div>
+                      <div className="w-full bg-slate-700/50 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all"
+                          style={{ width: '30%' }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Videos are stored locally for preview. Finalize to upload to S3.
+                      </p>
+                    </div>
+                    
+                    {!isFinalized && (
+                      <Button
+                        variant="gradient"
+                        onClick={handleFinalizeVideo}
+                        disabled={isFinalizing}
+                        className="w-full gap-2"
+                      >
+                        {isFinalizing ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-slate-300 border-t-white rounded-full animate-spin" />
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <Cloud className="w-4 h-4" />
+                            Finalize & Upload to S3
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {isFinalized && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
+                        <p className="text-emerald-400 text-sm font-medium">
+                          ✓ Video finalized and uploaded to S3
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* S3 Folder Information */}
             {project.s3_project_folder_url && (

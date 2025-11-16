@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models for the database."""
 
-from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text
+from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
@@ -26,6 +26,12 @@ class Project(Base):
     # S3 RESTRUCTURING: Per-project folder organization
     s3_project_folder = Column(String, nullable=True)        # projects/{id}/
     s3_project_folder_url = Column(String, nullable=True)    # https://bucket.s3.../projects/{id}/
+    
+    # LOCAL STORAGE: Local-first generation paths
+    local_project_path = Column(String(500), nullable=True)    # /tmp/genads/{project_id}
+    local_video_paths = Column(JSON, nullable=True)          # {"9:16": "/path/to/video.mp4", ...}
+    local_input_files = Column(JSON, nullable=True)          # {"product_image": "/path/to/image.png", ...}
+    local_draft_files = Column(JSON, nullable=True)          # {"scene_1_bg": "/path/to/video.mp4", ...}
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -62,6 +62,8 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./app:/app/app:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
       - genads-uploads:/tmp/genads  # Shared volume for uploads
     networks:
       - genads-network
@@ -97,6 +99,8 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./app:/app/app:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
       - genads-uploads:/tmp/genads  # Shared volume for uploads
     networks:
       - genads-network

@@ -10,6 +10,11 @@ This module contains the main generation pipeline that orchestrates all services
 7. Multi-Aspect Rendering (9:16, 1:1, 16:9)
 
 Each step tracks costs and updates progress in database.
+
+LOCAL-FIRST ARCHITECTURE:
+- All intermediate files stored locally in /tmp/genads/{project_id}/
+- Final videos saved locally only (no S3 upload)
+- User can finalize project to mark as complete (videos stay local)
 """
 
 import asyncio
@@ -41,6 +46,7 @@ from app.utils.s3_utils import (
     delete_project_folder,
     upload_to_project_folder,
 )
+from app.utils.local_storage import LocalStorageManager, format_storage_size
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +99,17 @@ class GenerationPipeline:
             if not project:
                 raise ValueError(f"Project {self.project_id} not found")
 
+            # ===== LOCAL-FIRST: Initialize local storage =====
+            logger.info("💾 Initializing local storage...")
+            try:
+                local_paths = LocalStorageManager.initialize_project_storage(self.project_id)
+                self.local_paths = local_paths
+                storage_info = LocalStorageManager.get_project_storage_size(self.project_id)
+                logger.info(f"✅ Local storage initialized: {self.local_paths}")
+            except Exception as e:
+                logger.error(f"⚠️ Failed to initialize local storage: {e}")
+                raise
+
             # ===== S3 RESTRUCTURING: Initialize project folder structure =====
             logger.info("📁 Initializing S3 project folder structure...")
             try:
@@ -144,10 +161,10 @@ class GenerationPipeline:
             self.step_costs["video_generation"] = video_cost
             self.total_cost += video_cost
             
-            # Upload to S3 before URLs expire (Replicate URLs are temporary)
-            logger.info("💾 Uploading videos to S3...")
-            scene_videos = await self._upload_videos_to_s3(replicate_videos, str(self.project_id))
-            logger.info(f"✅ Uploaded {len(scene_videos)} videos to S3")
+            # Save videos locally (Replicate URLs are temporary, so we download immediately)
+            logger.info("💾 Saving videos to local storage...")
+            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
+            logger.info(f"✅ Saved {len(scene_videos)} videos to local storage")
 
             # ===== STEP 4: Composite Product (Optional) =====
             if product_url:
@@ -189,19 +206,39 @@ class GenerationPipeline:
             logger.info(f"✅ Pipeline complete! Total cost: ${self.total_cost:.2f}")
             logger.info(f"💰 Cost breakdown: {self.step_costs}")
 
-            # Update project with final output
+            # ===== LOCAL-FIRST: Final videos already saved locally by renderer =====
+            logger.info("✅ Final videos already saved to local storage by renderer")
+            # Renderer now returns local paths directly, not S3 URLs
+            local_video_paths = final_videos
+
+            # Calculate local storage size
+            storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
+            logger.info(f"📊 Total local storage: {format_storage_size(storage_size)}")
+
+            # Update project with local paths (NOT S3 URLs!)
+            # output_videos stays empty until user finalizes
+            project.local_video_paths = local_video_paths
+            project.status = 'COMPLETED'  # Changed from auto-upload
+            self.db.commit()
+
+            logger.info(f"✅ Project ready for preview. Videos stored locally.")
+
+            # Update legacy output_videos field for backward compatibility
             update_project_output(
                 self.db,
                 self.project_id,
-                final_videos,
+                {},  # Empty output_videos - will be filled on finalization
                 float(self.total_cost),
-                {k: float(v) for k, v in self.step_costs.items()},  # Convert Decimal to float for JSON serialization
+                {k: float(v) for k, v in self.step_costs.items()},
             )
 
             return {
                 "status": "COMPLETED",
                 "project_id": str(self.project_id),
-                "final_videos": final_videos,
+                "local_video_paths": local_video_paths,
+                "storage_size": storage_size,
+                "storage_size_formatted": format_storage_size(storage_size),
+                "message": "Videos ready for preview. Videos stored in local storage.",
                 "total_cost": float(self.total_cost),
                 "cost_breakdown": {k: float(v) for k, v in self.step_costs.items()},
             }
@@ -377,20 +414,13 @@ class GenerationPipeline:
             logger.error(f"❌ Video generation failed: {e}")
             raise
 
-    async def _upload_videos_to_s3(self, video_urls: List[str], project_id: str) -> List[str]:
-        """Download videos from Replicate and upload to S3 before URLs expire."""
+    async def _save_videos_locally(self, video_urls: List[str], project_id: str) -> List[str]:
+        """Download videos from Replicate and save to local storage."""
         try:
             import aiohttp
-            from app.config import settings
+            from app.utils.local_storage import LocalStorageManager
             
-            s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                region_name=settings.aws_region,
-            )
-            
-            s3_urls = []
+            local_paths = []
             for i, replicate_url in enumerate(video_urls):
                 try:
                     # Download from Replicate
@@ -399,31 +429,26 @@ class GenerationPipeline:
                             if resp.status == 200:
                                 video_data = await resp.read()
                             else:
-                                logger.warning(f"Failed to download video {i}: HTTP {resp.status}, using Replicate URL")
-                                s3_urls.append(replicate_url)
-                                continue
+                                logger.warning(f"Failed to download video {i}: HTTP {resp.status}")
+                                raise Exception(f"Failed to download video {i}: HTTP {resp.status}")
                     
-                    # Upload to S3
-                    s3_key = f"projects/{project_id}/scene_{i:02d}.mp4"
-                    s3_client.put_object(
-                        Bucket=settings.s3_bucket_name,
-                        Key=s3_key,
-                        Body=video_data,
-                        ContentType="video/mp4",
+                    # Save to local storage in drafts folder
+                    local_path = LocalStorageManager.save_draft_file(
+                        UUID(project_id),
+                        f"scene_{i:02d}.mp4",
+                        video_data
                     )
-                    
-                    s3_url = f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
-                    s3_urls.append(s3_url)
-                    logger.debug(f"✅ Uploaded scene {i} to S3: {s3_url}")
+                    local_paths.append(local_path)
+                    logger.debug(f"✅ Saved scene {i} locally: {local_path}")
                     
                 except Exception as e:
-                    logger.warning(f"Failed to upload video {i} to S3: {e}, using Replicate URL")
-                    s3_urls.append(replicate_url)
+                    logger.error(f"Failed to save video {i} locally: {e}")
+                    raise
             
-            return s3_urls
+            return local_paths
             
         except Exception as e:
-            logger.error(f"Error uploading videos to S3: {e}")
+            logger.error(f"Error saving videos locally: {e}")
             raise
 
     async def _composite_products(
@@ -501,8 +526,9 @@ class GenerationPipeline:
                         text=overlay.text,
                         position=overlay.position,
                         duration=overlay.duration or scene.duration,
+                        start_time=overlay.start_time if hasattr(overlay, 'start_time') else 0.0,
                         font_size=overlay.font_size or 48,
-                        color=ad_project.brand.primary_color,  # Use brand primary color (Overlay schema doesn't have color field)
+                        color=ad_project.brand.primary_color,  # Use brand primary color
                         animation="fade_in",  # Default animation
                         project_id=str(self.project_id),
                         scene_index=i,  # Pass scene index for unique filenames
@@ -665,6 +691,51 @@ class GenerationPipeline:
         except Exception as e:
             logger.warning(f"⚠️ Failed to cleanup intermediate files: {e}")
             # Don't fail the pipeline if cleanup fails
+
+    async def _save_final_video_locally(
+        self, s3_video_url: str, aspect_ratio: str
+    ) -> str:
+        """Download final video from S3 and save to local storage.
+        
+        Args:
+            s3_video_url: S3 URL of the rendered video
+            aspect_ratio: Video aspect ratio (9:16, 1:1, 16:9)
+            
+        Returns:
+            Local file path
+        """
+        try:
+            import requests
+            import os
+            
+            logger.info(f"⬇️ Downloading {aspect_ratio} video from S3...")
+            
+            # Download from S3 URL
+            response = requests.get(s3_video_url, timeout=300)
+            response.raise_for_status()
+            
+            # Save to local storage
+            local_path = LocalStorageManager.save_final_video(
+                self.project_id,
+                aspect_ratio,
+                None  # We'll write bytes instead of copying
+            )
+            
+            # Create parent directory if needed
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            
+            # Write video bytes to local file
+            with open(local_path, 'wb') as f:
+                f.write(response.content)
+            
+            file_size = os.path.getsize(local_path)
+            logger.info(f"✅ Saved {aspect_ratio} ({file_size / 1024 / 1024:.1f} MB) to {local_path}")
+            
+            return local_path
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save {aspect_ratio} video locally: {e}")
+            raise
 
 
 def generate_video(project_id: str) -> Dict[str, Any]:
