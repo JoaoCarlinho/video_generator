@@ -509,51 +509,47 @@ graph TB
         SPA[React SPA]
     end
     
-    subgraph "Firebase"
+    subgraph "Supabase"
         Auth[Authentication]
+        Postgres[(PostgreSQL)]
+        EdgeFn[Edge Functions<br/>API Layer]
+        Realtime[Realtime<br/>Progress Updates]
     end
-    
-    subgraph "Railway - Backend"
-        LB[Load Balancer]
-        
-        subgraph "Services"
-            API[FastAPI Web Service]
-            Worker[RQ Worker Service]
-        end
-        
-        subgraph "Data"
-            Postgres[(PostgreSQL)]
-            Redis[(Redis)]
-            Volume[/Persistent Volume<br/>10GB/]
-        end
+
+    subgraph "AWS"
+        CF[CloudFront CDN]
+        S3_Static[S3 - Static Assets<br/>Frontend]
+        S3_Videos[S3 - Video Storage<br/>7-day lifecycle]
+        SQS[SQS Queue]
+        Lambda[Lambda Worker<br/>Video Generation]
     end
-    
+
     subgraph "External APIs"
         OpenAI_API[OpenAI API]
         Replicate_API[Replicate API]
     end
-    
-    Desktop --> CDN
-    Mobile --> CDN
-    CDN --> SPA
-    
-    SPA --> Auth
-    SPA --> LB
-    
-    LB --> API
-    
-    API --> Postgres
-    API --> Redis
-    
-    Redis --> Worker
-    
-    Worker --> Postgres
-    Worker --> Volume
-    Worker --> OpenAI_API
-    Worker --> Replicate_API
-    
-    Volume --> API
-    API --> SPA
+
+    Desktop --> CF
+    Mobile --> CF
+    CF --> S3_Static
+
+    S3_Static --> Auth
+    S3_Static --> EdgeFn
+
+    EdgeFn --> Postgres
+    EdgeFn --> SQS
+    EdgeFn --> S3_Videos
+    EdgeFn --> Realtime
+
+    SQS --> Lambda
+
+    Lambda --> Postgres
+    Lambda --> S3_Videos
+    Lambda --> OpenAI_API
+    Lambda --> Replicate_API
+    Lambda --> Realtime
+
+    S3_Videos --> CF
 ```
 
 ## Error Handling & Fallbacks
@@ -736,9 +732,11 @@ graph LR
 - pydub (audio processing)
 
 ### Infrastructure
-- Railway (backend + database + worker)
-- Vercel (frontend CDN)
-- Firebase (authentication)
+- **Frontend:** AWS S3 + CloudFront (React SPA + CDN)
+- **API Layer:** Supabase Edge Functions (TypeScript/Deno)
+- **Database & Auth:** Supabase (Postgres + authentication + realtime)
+- **Storage:** AWS S3 (video/image storage with 7-day lifecycle)
+- **Queue & Workers:** AWS SQS + Lambda (Python video generation pipeline)
 
 ---
 
@@ -764,6 +762,25 @@ graph LR
 - **Frame Rate**: 30 FPS
 - **Audio**: Professional AAC 192kbps
 - **Product Fidelity**: 100% (never AI-generated)
+
+---
+
+## Deployment Status
+
+### Current State (as of November 15, 2025)
+- **Development Phase:** Phase 5.4 - Integration & Testing
+- **Infrastructure:** NOT YET DEPLOYED
+- **Code Readiness:** Backend 60%, Frontend 50%
+
+### Deployed Services
+- ❌ Supabase (Database + Auth + Edge Functions not configured)
+- ❌ AWS S3 (Buckets not created - need 2: static frontend, video storage)
+- ❌ AWS CloudFront (CDN not configured)
+- ❌ AWS SQS (Queue not created)
+- ❌ AWS Lambda (Worker functions not deployed)
+
+### Next Steps
+See [DEPLOYMENT_PLAN.md](./DEPLOYMENT_PLAN.md) for complete infrastructure provisioning guide.
 
 ---
 
