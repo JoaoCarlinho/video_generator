@@ -7,6 +7,8 @@ import { ProgressTracker } from '@/components/PageComponents'
 import { useProgressPolling } from '@/hooks/useProgressPolling'
 import { useGeneration } from '@/hooks/useGeneration'
 import { ArrowLeft } from 'lucide-react'
+import { storeVideo, formatBytes, getStorageUsage } from '@/services/videoStorage'
+import { api } from '@/services/api'
 
 export const GenerationProgress = () => {
   const { projectId = '' } = useParams()
@@ -75,10 +77,39 @@ export const GenerationProgress = () => {
     projectId,
     enabled: true,
     interval: 2000,
-    onComplete: () => {
+    onComplete: async () => {
       // Clear sessionStorage when generation completes
       sessionStorage.removeItem(storageKey)
-      // Redirect to results page after a short delay
+      
+      // Download videos to IndexedDB for preview
+      try {
+        console.log('📥 Downloading videos to local storage...')
+        const aspects: Array<'9:16' | '1:1' | '16:9'> = ['9:16', '1:1', '16:9']
+        
+        for (const aspect of aspects) {
+          try {
+            // Get videos from local disk (NOT S3!)
+            const response = await api.get(`/api/projects/${projectId}/preview/${aspect}`, {
+              responseType: 'blob'
+            })
+            
+            if (response.data) {
+              await storeVideo(projectId, aspect, response.data, false)
+              console.log(`✅ Downloaded ${aspect} video from local storage`)
+            }
+          } catch (err) {
+            console.error(`⚠️ Failed to download ${aspect} video:`, err)
+            // Continue with other aspects even if one fails
+          }
+        }
+        
+        const usage = await getStorageUsage(projectId)
+        console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
+      } catch (err) {
+        console.error('⚠️ Failed to download videos to local storage:', err)
+      }
+      
+      // Redirect to results page after download completes
       setTimeout(() => {
         navigate(`/projects/${projectId}/results`)
       }, 1000)

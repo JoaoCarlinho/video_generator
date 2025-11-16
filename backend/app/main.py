@@ -70,9 +70,10 @@ async def root():
 
 
 # Import and include routers
-from app.api import projects, generation, storage, uploads
+from app.api import projects, generation, storage, uploads, local_generation
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
+app.include_router(local_generation.router, prefix="/api", tags=["local-generation"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 app.include_router(uploads.router, prefix="/api", tags=["uploads"])
 

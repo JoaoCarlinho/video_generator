@@ -1,0 +1,278 @@
+"""Local-first video generation endpoints.
+
+Handles preview from local storage and finalization to S3.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from uuid import UUID
+import logging
+
+from app.database.connection import get_db, init_db
+from app.database.crud import get_project_by_user, update_project_status
+from app.api.auth import get_current_user_id
+from app.utils.local_storage import LocalStorageManager, format_storage_size
+# S3 imports removed - using local storage only
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.get("/projects/{project_id}/preview/{aspect_ratio}")
+async def get_preview_video(
+    project_id: UUID,
+    aspect_ratio: str,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """Get preview video from local storage (NOT S3).
+    
+    Used during preview phase before finalization.
+    Streams video from local disk instead of S3.
+    
+    **Path Parameters:**
+    - project_id: UUID of the project
+    - aspect_ratio: '9:16', '1:1', or '16:9'
+    
+    **Response:** 
+    - Content-Type: video/mp4
+    - Video file from local storage
+    
+    **Errors:**
+    - 404: Project not found or video not available
+    - 403: Not authorized
+    - 400: Invalid aspect ratio
+    """
+    try:
+        # Validate aspect ratio
+        if aspect_ratio not in ['9:16', '1:1', '16:9']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid aspect ratio: {aspect_ratio}"
+            )
+        
+        init_db()
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check if videos are in local storage
+        local_video_paths = project.local_video_paths or {}
+        local_video_path = local_video_paths.get(aspect_ratio)
+        
+        # If local file exists, stream from local disk
+        if local_video_path and LocalStorageManager.file_exists(local_video_path):
+            logger.info(f"✅ Streaming preview {aspect_ratio} from local storage: {local_video_path}")
+            return FileResponse(
+                local_video_path,
+                media_type="video/mp4",
+                headers={
+                    "Content-Disposition": f"inline; filename=preview-{aspect_ratio}.mp4",
+                    "Cache-Control": "no-cache"
+                }
+            )
+        
+        # No video found in local storage
+        raise HTTPException(
+            status_code=404,
+            detail=f"Preview video not available for aspect ratio {aspect_ratio}"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get preview video: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get preview video: {str(e)}")
+
+
+@router.get("/projects/{project_id}/storage-info")
+async def get_storage_info(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """Get local storage information for a project.
+    
+    Returns storage usage and status.
+    
+    **Response:**
+    ```json
+    {
+        "project_id": "...",
+        "local_storage_size": 524288000,
+        "local_storage_size_formatted": "500 MB",
+        "status": "READY_FOR_REVIEW",
+        "local_video_paths": {
+            "9:16": "/tmp/genads/.../video_9-16.mp4",
+            "1:1": "/tmp/genads/.../video_1-1.mp4",
+            "16:9": "/tmp/genads/.../video_16-9.mp4"
+        }
+    }
+    ```
+    """
+    try:
+        init_db()
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Calculate storage size
+        storage_size = LocalStorageManager.get_project_storage_size(project_id)
+        
+        return {
+            "project_id": str(project_id),
+            "local_storage_size": storage_size,
+            "local_storage_size_formatted": format_storage_size(storage_size),
+            "status": project.status,
+            "local_video_paths": project.local_video_paths or {},
+            "has_all_aspects": all(
+                v in (project.local_video_paths or {})
+                for v in ['9:16', '1:1', '16:9']
+            )
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get storage info: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get storage info: {str(e)}")
+
+
+@router.post("/projects/{project_id}/finalize")
+async def finalize_project(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """Finalize video: mark as finalized and keep videos in local storage.
+    
+    Called when user confirms they want to keep the video.
+    - Marks project as FINALIZED
+    - Keeps videos in local storage (no S3 upload)
+    - Videos remain accessible via preview endpoint
+    
+    **Path Parameters:**
+    - project_id: UUID of the project
+    
+    **Response:**
+    ```json
+    {
+        "status": "finalized",
+        "project_id": "...",
+        "local_video_paths": {
+            "9:16": "/tmp/genads/.../video_9-16.mp4",
+            "1:1": "/tmp/genads/.../video_1-1.mp4",
+            "16:9": "/tmp/genads/.../video_16-9.mp4"
+        },
+        "message": "Project finalized. Videos remain in local storage."
+    }
+    ```
+    
+    **Errors:**
+    - 404: Project not found
+    - 403: Not authorized
+    - 400: Project not ready for finalization
+    """
+    try:
+        init_db()
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check if project is ready for finalization
+        if project.status not in ['READY_FOR_REVIEW', 'COMPLETED']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project cannot be finalized in status: {project.status}"
+            )
+        
+        # Get local video paths
+        local_video_paths = project.local_video_paths or {}
+        if not local_video_paths:
+            raise HTTPException(
+                status_code=400,
+                detail="No videos available for finalization"
+            )
+        
+        logger.info(f"🚀 Finalizing project {project_id} (keeping videos in local storage)")
+        
+        # Update project status to FINALIZED (keep videos in local storage)
+        project.status = 'FINALIZED'
+        db.commit()
+        
+        logger.info(f"✅ Updated project status to FINALIZED")
+        
+        return {
+            "status": "finalized",
+            "project_id": str(project_id),
+            "local_video_paths": local_video_paths,
+            "message": "Project finalized. Videos remain in local storage."
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to finalize project: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to finalize project: {str(e)}"
+        )
+
+
+@router.post("/projects/{project_id}/cleanup-local")
+async def cleanup_local_storage(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """Manual cleanup of local storage.
+    
+    Use if user wants to delete local files.
+    
+    **Warning:** This deletes all local files including final videos!
+    """
+    try:
+        init_db()
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Clear local storage metadata
+        project.local_project_path = None
+        project.local_video_paths = {}
+        project.local_input_files = {}
+        project.local_draft_files = {}
+        db.commit()
+        
+        # Delete files from disk
+        success = LocalStorageManager.cleanup_project_storage(project_id)
+        
+        return {
+            "status": "cleaned",
+            "project_id": str(project_id),
+            "message": "Local storage cleaned up"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to cleanup local storage: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cleanup: {str(e)}"
+        )
+

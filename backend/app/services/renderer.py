@@ -94,9 +94,15 @@ class Renderer:
                     output_path = Path(tmpdir) / f"final_{aspect_ratio.replace(':', '_')}.mp4"
                     await self._apply_aspect_ratio(mixed_path, output_path, aspect_ratio)
 
-                    # Upload to S3
-                    s3_url = await self._upload_final_video(output_path, project_id, aspect_ratio)
-                    outputs[aspect_ratio] = s3_url
+                    # Save to local storage (no S3 upload)
+                    from app.utils.local_storage import LocalStorageManager
+                    from uuid import UUID
+                    local_path = LocalStorageManager.save_final_video(
+                        UUID(project_id),
+                        aspect_ratio,
+                        str(output_path)
+                    )
+                    outputs[aspect_ratio] = local_path
 
                 logger.info(f"✅ Final videos rendered: {outputs}")
                 return outputs

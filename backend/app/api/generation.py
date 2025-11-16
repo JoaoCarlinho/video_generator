@@ -1,10 +1,13 @@
 """API endpoints for generation control."""
 
 from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
 from rq.job import Job
+import boto3
+from io import BytesIO
 
 from app.database.connection import get_db, init_db
 from app.database.crud import get_project_by_user, update_project_status
@@ -406,5 +409,107 @@ async def cancel_generation(
     except Exception as e:
         logger.error(f"❌ Failed to cancel generation: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel generation: {str(e)}")
+
+
+@router.get("/projects/{project_id}/download/{aspect_ratio}")
+async def download_video(
+    project_id: UUID,
+    aspect_ratio: str,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """
+    Download a video file as a blob for local storage (IndexedDB).
+    
+    This endpoint streams the video file from S3 directly to the browser,
+    allowing the frontend to store it locally for preview before finalization.
+    
+    **Path Parameters:**
+    - project_id: UUID of the project
+    - aspect_ratio: Video aspect ratio ('9:16', '1:1', or '16:9')
+    
+    **Headers:**
+    - Authorization: Bearer {token} (optional in development)
+    
+    **Response:** 
+    - Content-Type: video/mp4
+    - Video file as binary blob
+    
+    **Errors:**
+    - 404: Project not found or video not available
+    - 403: Not authorized
+    - 401: Missing or invalid authorization
+    - 400: Invalid aspect ratio
+    """
+    try:
+        # Validate aspect ratio
+        if aspect_ratio not in ['9:16', '1:1', '16:9']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be one of: 9:16, 1:1, 16:9"
+            )
+        
+        init_db()
+        
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Get video URL from ad_project_json aspectExports
+        ad_json = project.ad_project_json or {}
+        if isinstance(ad_json, str):
+            import json
+            ad_json = json.loads(ad_json)
+        output_videos = ad_json.get('aspectExports', {})
+        video_url = output_videos.get(aspect_ratio)
+        
+        if not video_url:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Video not available for aspect ratio {aspect_ratio}"
+            )
+        
+        # Extract S3 bucket and key from URL
+        # URL format: https://bucket.s3.amazonaws.com/key or https://s3.amazonaws.com/bucket/key
+        if '.s3.' in video_url:
+            # Format: https://bucket.s3.region.amazonaws.com/key
+            parts = video_url.split('/')
+            bucket = parts[2].split('.')[0]
+            key = '/'.join(parts[3:])
+        else:
+            # Fallback: assume it's a direct S3 URL
+            raise HTTPException(status_code=400, detail="Invalid S3 URL format")
+        
+        # Download from S3
+        s3_client = boto3.client('s3')
+        
+        try:
+            response = s3_client.get_object(Bucket=bucket, Key=key)
+            video_stream = response['Body'].read()
+        except s3_client.exceptions.NoSuchKey:
+            raise HTTPException(status_code=404, detail="Video file not found in S3")
+        except Exception as e:
+            logger.error(f"❌ Failed to download video from S3: {e}")
+            raise HTTPException(status_code=500, detail="Failed to download video from S3")
+        
+        # Stream the video file to client
+        return StreamingResponse(
+            iter([video_stream]),
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": f"inline; filename=video-{aspect_ratio}.mp4",
+                "Cache-Control": "public, max-age=3600"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to download video: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download video: {str(e)}")
 
 

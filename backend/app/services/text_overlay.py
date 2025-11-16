@@ -142,8 +142,18 @@ class TextOverlayRenderer:
         return current_url
 
     async def _download_file(self, url: str, output_path: Path):
-        """Download file from URL (S3 or HTTP)."""
+        """Download file from URL (S3 or HTTP) or copy from local path."""
         try:
+            # Check if it's a local file path (starts with / or contains /tmp/)
+            if url.startswith('/') or '/tmp/' in url or url.startswith('./'):
+                import shutil
+                source_path = Path(url)
+                if not source_path.exists():
+                    raise FileNotFoundError(f"Local file not found: {url}")
+                shutil.copy2(source_path, output_path)
+                logger.debug(f"Copied from local: {output_path.name}")
+                return
+            
             # Check if it's an S3 URL
             if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
                 # Extract S3 key from URL
