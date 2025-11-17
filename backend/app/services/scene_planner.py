@@ -95,7 +95,8 @@ class ScenePlanner:
         has_product: bool = False,
         has_logo: bool = False,
         aspect_ratio: str = "16:9",
-        selected_style: Optional[str] = None,  # PHASE 7: User-selected or LLM-inferred style
+        selected_style: Optional[str] = None,
+        extracted_style: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Generate video scene plan with full creative freedom and PHASE 7 style consistency.
@@ -154,17 +155,68 @@ class ScenePlanner:
             has_product=has_product,
             has_logo=has_logo,
             aspect_ratio=aspect_ratio,
+            chosen_style=chosen_style,
         )
 
+        style_to_background = {
+            "cinematic": "cinematic",
+            "dark_premium": "product_stage",
+            "minimal_studio": "product_stage",
+            "lifestyle": "lifestyle",
+            "2d_animated": "abstract",
+        }
+
+        forced_background_type = style_to_background.get(chosen_style, "cinematic")
+
+        for scene_dict in scenes_json:
+            role = scene_dict.get("role")
+
+            # 3) Enforce unified background_type
+            scene_dict["background_type"] = forced_background_type
+
+            # 4) Limit product usage — only hook & showcase
+            if role not in ["hook", "showcase"]:
+                scene_dict["use_product"] = False
+                scene_dict["product_position"] = None
+                scene_dict["product_scale"] = None
+
+            # 4) Limit logo usage — only hook & CTA
+            if role not in ["hook", "cta"]:
+                scene_dict["use_logo"] = False
+                scene_dict["logo_position"] = None
+                scene_dict["logo_scale"] = None
+
+            # 5) Remove text overlays except hook & CTA
+            if role not in ["hook", "cta"]:
+                if "overlay" in scene_dict:
+                    scene_dict["overlay"]["text"] = ""
+
+        # 6) Ensure last scene ends smoothly (CTA)
+        last_scene = scenes_json[-1]
+        last_scene["transition_to_next"] = "fade"
+        last_scene["camera_movement"] = "slow_zoom_out"
+
         # STEP 4: Generate style specification (with derived tone)
-        style_spec = await self._generate_style_spec(
-            creative_prompt=creative_prompt,
-            brand_name=brand_name,
-            brand_description=brand_description,
-            brand_colors=brand_colors,
-            brand_guidelines=brand_guidelines,
-            derived_tone=tone,
-        )
+        if extracted_style:
+            logger.info("Applying extracted style override from reference image")
+            style_spec = StyleSpec(
+                lighting_direction=extracted_style.get("lighting_direction", ""),
+                camera_style=extracted_style.get("camera_style", ""),
+                texture_materials=extracted_style.get("texture_materials", ""),
+                mood_atmosphere=extracted_style.get("mood_atmosphere", ""),
+                color_palette=extracted_style.get("color_palette", brand_colors[:3]),
+                grade_postprocessing=extracted_style.get("grade_postprocessing", ""),
+                music_mood=extracted_style.get("music_mood", "ambient")
+            )
+        else:
+            style_spec = await self._generate_style_spec(
+                creative_prompt=creative_prompt,
+                brand_name=brand_name,
+                brand_description=brand_description,
+                brand_colors=brand_colors,
+                brand_guidelines=brand_guidelines,
+                derived_tone=tone,
+            )
 
         # Parse scenes
         scenes = []
@@ -240,6 +292,7 @@ class ScenePlanner:
         has_product: bool,
         has_logo: bool,
         aspect_ratio: str = "16:9",
+        chosen_style: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Generate scene specifications using GPT-4o-mini with full creative freedom."""
 
@@ -263,7 +316,11 @@ class ScenePlanner:
             guidelines_preview = brand_guidelines[:500] + ("..." if len(brand_guidelines) > 500 else "")
             brand_context += f"\nBrand Guidelines: {guidelines_preview}"
 
-        prompt = f"""You are a world-class video director and creative director creating an advertising video.
+        prompt = f"""You are a world-class video director and creative director creating a **modern, cinematic product-first advertising video**.
+Think of the visual language used by brands like Apple, Nike, and Tesla: minimal, design-driven, and emotionally powerful, with the product as the hero.
+
+By default, avoid generic “people enjoying the product” shots and cliché stock-style scenes.
+If the creative prompt explicitly calls for people, use them sparingly, in stylized, cinematic ways (silhouettes, hands, partial figures), not staged group shots.
 
 === CREATIVE BRIEF ===
 {creative_prompt}
@@ -273,6 +330,8 @@ class ScenePlanner:
 Brand Colors: {', '.join(brand_colors)}
 Target Audience: {target_audience}
 
+If any style or tone is implied (e.g. cinematic, dark premium, minimal studio, lifestyle, 2D animated), you MUST reflect that in background_prompt, lighting, and mood.
+
 **CRITICAL BRAND NAME RULE:**
 - The FIRST scene (hook/intro) should mention or reference "{brand_name}"
 - The FINAL scene (CTA) MUST include "{brand_name}" in the text overlay
@@ -280,7 +339,7 @@ Target Audience: {target_audience}
 
 === PRODUCTION CONSTRAINTS ===
 Target Duration: {target_duration}s (flexible ±20%)
-Duration Range per Scene: 3-15 seconds
+Duration Range per Scene: 3-12 seconds
 Recommended Scene Count: 3-6 scenes
 Video Aspect Ratio: {aspect_ratio}
   - 16:9 (Horizontal): YouTube, Web, Presentations, Widescreen
@@ -291,40 +350,94 @@ Video Aspect Ratio: {aspect_ratio}
 {asset_instructions}
 
 === YOUR CREATIVE MISSION ===
-Create a video that brings this creative vision to life with complete directorial freedom.
+Create a **modern, cinematic, product-centric** video that brings this creative vision to life.
 
 You decide:
 • Number of scenes (3-6 recommended, but use what the story needs)
 • Duration of each scene (vary for pacing - some short punchy scenes, some longer)
 • When to show product/logo (strategic placement, not every scene)
-• Camera movements and angles
+• When to use text overlays (only when they add clarity or impact)
+• Camera movements and angles (modern, cinematic framing)
 • Scene transitions
-• Background styles that complement the creative vision
-• Text overlays that enhance the narrative
+• Background styles that complement the creative vision and chosen style
+• You MUST generate every background_prompt using the CHOSEN STYLE: {chosen_style}. 
+  Do not mix styles. Every scene must visually belong to the same style category.
+• Text overlays that enhance the narrative without clutter
+
+=== MODERN CREATIVE PRINCIPLES ===
+1. **Product-First Cinematic Approach**
+   - The product should feel like the “hero object” of the film.
+   - Use strong composition, macro close-ups, slow motion, controlled lighting, and negative space.
+   - Avoid outdated montages of random people smiling at the camera or using the product in a generic way.
+
+2. **Minimal Use of People (Default)**
+   - By default, do NOT include visible faces or crowds.
+   - If people are required by the brief, treat them as **cinematic elements** (silhouettes, hands interacting with product, reflections, partial figures) rather than the main subject.
+
+3. **Coherent Visual Language (All Scenes Must Fit Together)**
+   - All scenes should feel like parts of the SAME film, not random clips.
+   - Maintain consistent:
+     - Overall style (cinematic / dark premium / minimal studio / lifestyle / 2D animated)
+     - Color palette and lighting mood
+     - Level of realism and rendering quality
+   - Reuse visual motifs (lighting direction, environment type, product presentation) so cuts feel natural and intentional.
+
+4. **Use of Style**
+    - CHOSEN STYLE FOR ENTIRE VIDEO: {chosen_style} (or extracted style if provided)
+
+    - ALL SCENES MUST FOLLOW THIS STYLE.
+    - THIS IS CRITICAL — DO NOT MIX STYLES.
+
+    - EXAMPLES:
+        - cinematic → dramatic lighting, depth of field, premium realism  
+        - dark_premium → black studio, rim lighting, contrast-heavy  
+        - minimal_studio → bright white background, soft daylight, clean shadows  
+        - lifestyle → real environments, warm lighting, natural textures  
+        - 2d_animated → vector motion graphics, flat shading, illustrated look  
 
 === CREATIVE GUIDELINES ===
-1. **Narrative Flow**: Create a story arc that feels natural, not choppy
-2. **Strategic Asset Usage**:
-   - Use product image in 1-3 scenes where it makes narrative sense (showcase, proof)
-   - Use logo primarily in final scene (like professional commercials) or brand-building moments
-   - Don't force assets into every scene - backgrounds alone can be powerful
-3. **Background Types**:
-   - "cinematic": Rich, atmospheric, story-driven visuals
-   - "product_stage": Clean, simple backgrounds that complement product/logo overlays
-   - "lifestyle": Real-world settings, relatable moments
-   - "abstract": Motion graphics, textures, patterns, energetic
-4. **Pacing**: Vary scene lengths for impact (quick cuts for energy, longer holds for emotion)
-5. **Transitions**: Choose transitions that enhance flow:
-   - "cut": Sharp, energetic, modern
-   - "fade": Smooth, elegant, emotional
-   - "zoom": Dynamic, attention-grabbing
+1. **Narrative Flow**
+   - Create a clear visual arc: strong hook → build → showcase → proof/credibility → clean CTA.
+   - The story should feel like one continuous cinematic piece, not a set of disconnected shots.
+   - Ensure that each scene transitions smoothly into the next in tone, style, and visual language.
 
-=== SCENE ROLES ===
-- **hook**: Grab attention immediately (3-7s)
-- **build**: Build interest, set context (4-8s)
-- **showcase**: Show product/benefit in action (5-10s)
-- **proof**: Social proof, results, testimonials (4-8s)
-- **cta**: Clear call to action (3-6s)
+2. **Strategic Asset Usage (Modern Product Style)**
+   - Use the product image in scenes where it strengthens the story (hero shots, feature highlights, key moments), not mechanically in every scene.
+   - Use logo in the **intro** (subtle) and **CTA** (clear), and optionally in one brand-building moment.
+   - Text overlay, product placement, and logo are **NOT required in every scene**. Some scenes can be purely visual and atmospheric.
+
+3. **Background Types (Refined for Modern Ads)**
+   - "cinematic": Highly crafted visual environments, dramatic lighting, shallow depth of field, strong compositions, product integrated into the scene.
+   - "product_stage": Minimal, studio-like setups (dark or light), pedestals, soft gradients, controlled shadows; the product is the main focus.
+   - "lifestyle": Real-world or stylized environments that hint at use-case, but still keep product as hero. People optional and subtle.
+   - "abstract": Motion graphics, light streaks, gradients, textures, and product silhouettes that evoke brand feeling rather than literal scenes.
+
+4. **Pacing**
+   - Vary scene lengths for rhythm: quick, impactful moments mixed with longer, lingering shots on the product.
+   - Hooks are shorter and punchy; hero product shots and macro close-ups can hold longer for impact.
+   - Ensure the pacing across scenes feels intentional and smooth, not chaotic.
+
+5. **Transitions**
+   - Use modern, confident transitions:
+     - "cut": Clean, decisive, modern.
+     - "fade": Elegant, premium, often between emotional or tonal shifts.
+     - "zoom": Use sparingly for emphasis (e.g. reveal, hero moment).
+   - Transitions should support flow. Avoid jarring, random-feeling changes.
+   - The **final scene must end smoothly**: the composition should resolve and the movement should naturally slow or fade out rather than an abrupt or random cut.
+
+6. **Camera & Framing**
+   - Emphasize modern product cinematography:
+     - Macro close-ups of materials, edges, textures, and logos.
+     - Slow, deliberate camera motion (slow_zoom_in / slow_zoom_out / pan_left / pan_right).
+     - Use negative space and center-weighted framing for iconic hero shots.
+   - Avoid chaotic or handheld wobble unless explicitly justified by the concept.
+
+=== SCENE ROLES (MODERN INTERPRETATION) ===
+- **hook**: Immediate, striking visual of the product or its silhouette. Strong lighting and composition that feels premium (3-7s).
+- **build**: Expand the world around the product: variations of angles, context, or features (4-8s).
+- **showcase**: Highlight specific benefits or design features with macro details and slow motion (5-10s).
+- **proof**: Use visual proof (comparisons, feature demos, UI overlays, numbers, or abstract visual metaphors) instead of cheesy testimonials (4-8s).
+- **cta**: Clean, minimal end card with product + logo + very short CTA text (3-6s). The final moment should feel like a natural conclusion, not a hard, random cut.
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON array. Example structure:
@@ -334,21 +447,21 @@ Return ONLY valid JSON array. Example structure:
     "scene_id": 0,
     "role": "hook",
     "duration": 5,
-    "background_prompt": "Dynamic fast-paced urban environment at golden hour, young professionals walking confidently, modern architecture, shallow depth of field, cinematic look with warm tones and high contrast",
-    "background_type": "lifestyle",
-    "use_product": false,
-    "product_position": null,
-    "product_scale": null,
+    "background_prompt": "Ultra-minimal dark studio with a single spotlight revealing the edge of the shoe, subtle fog, high contrast, shallow depth of field, premium cinematic commercial lighting",
+    "background_type": "product_stage",
+    "use_product": true,
+    "product_position": "center",
+    "product_scale": 0.5,
     "use_logo": true,
     "logo_position": "top_right",
     "logo_scale": 0.10,
     "camera_movement": "slow_zoom_in",
     "transition_to_next": "cut",
     "overlay": {{
-      "text": "Transform Your Skin",
-      "position": "center",
+      "text": "{brand_name}",
+      "position": "bottom",
       "duration": 3.0,
-      "font_size": 56,
+      "font_size": 48,
       "color": "{brand_colors[0] if brand_colors else '#FFFFFF'}",
       "animation": "fade_in"
     }}
@@ -357,7 +470,7 @@ Return ONLY valid JSON array. Example structure:
     "scene_id": 1,
     "role": "showcase",
     "duration": 8,
-    "background_prompt": "Minimal clean white studio background with subtle gradient, soft diffused lighting from top-left, modern aesthetic, product-focused environment with gentle shadows",
+    "background_prompt": "Clean white studio with soft natural light, the product on a floating pedestal, gentle shadows, modern high-end product photography aesthetic, macro focus on materials and logo",
     "background_type": "product_stage",
     "use_product": true,
     "product_position": "center",
@@ -365,10 +478,10 @@ Return ONLY valid JSON array. Example structure:
     "use_logo": false,
     "logo_position": null,
     "logo_scale": null,
-    "camera_movement": "static",
+    "camera_movement": "pan_left",
     "transition_to_next": "fade",
     "overlay": {{
-      "text": "Proven Results in 7 Days",
+      "text": "Design That Moves",
       "position": "bottom",
       "duration": 4.0,
       "font_size": 44,
@@ -380,7 +493,7 @@ Return ONLY valid JSON array. Example structure:
     "scene_id": 2,
     "role": "cta",
     "duration": 5,
-    "background_prompt": "Abstract flowing gradient background with brand colors, smooth motion, modern and energetic feel, professional commercial aesthetic",
+    "background_prompt": "Abstract, softly animated gradient background using brand colors, subtle particles, product in silhouette or clean outline, premium minimal end card design",
     "background_type": "abstract",
     "use_product": false,
     "product_position": null,
@@ -391,7 +504,7 @@ Return ONLY valid JSON array. Example structure:
     "camera_movement": "slow_zoom_out",
     "transition_to_next": "fade",
     "overlay": {{
-      "text": "Get Yours Today",
+      "text": "Get {brand_name}",
       "position": "center",
       "duration": 3.0,
       "font_size": 52,
@@ -402,17 +515,18 @@ Return ONLY valid JSON array. Example structure:
 ]
 
 === PRODUCT & LOGO POSITIONING GUIDELINES ===
+   IMPORTANT: DO NOT place product in every scene. DO NOT place logo in every scene.
 1. **Product Positioning** (when use_product=true):
    - "center": Hero shots, product-focused scenes (product_scale: 0.4-0.6)
-   - "bottom_right": Lifestyle scenes, with text top/center (product_scale: 0.25-0.35)
-   - "left" or "right": Side placement when text needs opposite side (product_scale: 0.3-0.4)
+   - "bottom_right": Scenes where text or graphics occupy top/left (product_scale: 0.25-0.35)
+   - "left" or "right": Side placement when text or secondary visuals occupy the opposite side (product_scale: 0.3-0.4)
    - Set product_position and product_scale explicitly in JSON
    - If use_product=false, set product_position=null and product_scale=null
 
 2. **Logo Positioning** (when use_logo=true):
    - First scene (intro): "top_left" or "top_right" subtle branding (logo_scale: 0.08-0.12)
    - Final scene (CTA): "bottom_center" or near CTA text (logo_scale: 0.12-0.18)
-   - Don't use logo in EVERY scene - strategic placement only (intro + final typically)
+   - Don't use logo in EVERY scene - intro + CTA are usually enough for modern premium ads
    - Set logo_position and logo_scale explicitly in JSON
    - If use_logo=false, set logo_position=null and logo_scale=null
 
@@ -424,14 +538,19 @@ Return ONLY valid JSON array. Example structure:
 **CRITICAL**: Output product_position, product_scale, logo_position, logo_scale fields explicitly for EVERY scene!
 
 === IMPORTANT NOTES ===
-- background_prompt should be 2-3 detailed sentences for AI video generation
-- Include lighting, mood, camera angle, style descriptors
-- Text overlays should be SHORT (2-8 words max)
-- Camera movements: static, slow_zoom_in, slow_zoom_out, pan_left, pan_right
-- Make sure total duration is roughly {target_duration}s (some variance is fine)
-- Don't use product/logo in EVERY scene - be strategic
+- background_prompt should be 2-3 detailed sentences optimized for AI video generation.
+- Always include lighting, mood, camera perspective, and style descriptors.
+- Text overlays should be SHORT (2-8 words max) and used only in scenes where they genuinely add value.
+- Some scenes can have no text overlay at all; when no overlay is needed, you may set overlay text to an empty string or keep it extremely minimal.
+- Camera movements: static, slow_zoom_in, slow_zoom_out, pan_left, pan_right.
+- Make sure total duration is roughly {target_duration}s (some variance is fine).
+- Don't use product/logo/text overlay in EVERY scene - be strategic, cinematic, and modern.
+- Ensure all scenes feel stylistically consistent and that the **final scene ends smoothly**, with a natural visual resolution rather than a random or abrupt cut.
+- The final CTA must end smoothly with slow zoom out + fade.
+- Most scenes should have NO text overlay. Only hook + CTA should include text.
 
-Create the video now!"""
+Plan the scene now!"""
+
 
         try:
             response = await self.client.chat.completions.create(

@@ -117,55 +117,107 @@ class AudioEngine:
         return prompt
 
     async def _call_musicgen_model(self, prompt: str, duration: float) -> str:
-        """Call Replicate MusicGen model (non-blocking, runs in thread pool)."""
-        try:
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
-            
-            logger.info("Calling MusicGen model...")
+        """Call Replicate MusicGen model (non-blocking, runs in thread pool).
+        
+        Includes retry logic for transient API errors (500, 502, 503, 504).
+        """
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+        
+        # Retry configuration
+        max_retries = 3
+        retry_delays = [2, 5, 10]  # seconds between retries
+        
+        logger.info("Calling MusicGen model...")
 
-            # MusicGen model parameters
-            duration_sec = int(min(duration, 30))  # Cap at 30 seconds
+        # MusicGen model parameters
+        duration_sec = int(min(duration, 30))  # Cap at 30 seconds
 
-            # Run synchronous replicate.run() in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
-            executor = ThreadPoolExecutor(max_workers=1)
-            
-            def _run_replicate():
-                """Synchronous wrapper for replicate.run()"""
-                return replicate.run(
-                    "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
-                    input={
-                        "top_k": 250,
-                        "top_p": 0,
-                        "prompt": prompt,
-                        "duration": duration_sec,
-                        "temperature": 1,
-                        "continuation": False,
-                        "model_version": "stereo-large",
-                        "output_format": "mp3",
-                        "continuation_start": 0,
-                        "multi_band_diffusion": False,
-                        "normalization_strategy": "peak",
-                        "classifier_free_guidance": 3,
-                    },
-                    wait=True,
+        # Run synchronous replicate.run() in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        executor = ThreadPoolExecutor(max_workers=1)
+        
+        def _run_replicate():
+            """Synchronous wrapper for replicate.run()"""
+            return replicate.run(
+                "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
+                input={
+                    "top_k": 250,
+                    "top_p": 0,
+                    "prompt": prompt,
+                    "duration": duration_sec,
+                    "temperature": 1,
+                    "continuation": False,
+                    "model_version": "stereo-large",
+                    "output_format": "mp3",
+                    "continuation_start": 0,
+                    "multi_band_diffusion": False,
+                    "normalization_strategy": "peak",
+                    "classifier_free_guidance": 3,
+                },
+                wait=True,
+            )
+        
+        # Retry logic for transient errors
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                # Run in thread pool (non-blocking)
+                output = await loop.run_in_executor(executor, _run_replicate)
+
+                if isinstance(output, list) and len(output) > 0:
+                    music_url = output[0]
+                else:
+                    music_url = output
+
+                logger.info(f"🎵 MusicGen output: {music_url}")
+                return str(music_url)
+                
+            except Exception as e:
+                # Check if it's a ReplicateError (handle both old and new exception paths)
+                is_replicate_error = (
+                    hasattr(e, 'status') and 
+                    hasattr(e, 'detail') and
+                    type(e).__name__ == 'ReplicateError'
                 )
-            
-            # Run in thread pool (non-blocking)
-            output = await loop.run_in_executor(executor, _run_replicate)
-
-            if isinstance(output, list) and len(output) > 0:
-                music_url = output[0]
-            else:
-                music_url = output
-
-            logger.info(f"🎵 MusicGen output: {music_url}")
-            return str(music_url)
-
-        except Exception as e:
-            logger.error(f"❌ Replicate API error: {e}")
-            raise
+                
+                if is_replicate_error:
+                    last_exception = e
+                    # Check if it's a retryable error (5xx server errors)
+                    error_status = getattr(e, 'status', None)
+                    error_detail = getattr(e, 'detail', str(e))
+                    
+                    is_retryable = (
+                        error_status and 
+                        error_status >= 500 and 
+                        error_status < 600
+                    )
+                    
+                    if is_retryable and attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(
+                            f"❌ Replicate API error (attempt {attempt + 1}/{max_retries}): "
+                            f"status={error_status}, detail={error_detail}. Retrying in {delay}s..."
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        # Non-retryable error or max retries reached
+                        logger.error(
+                            f"❌ Replicate API error (attempt {attempt + 1}/{max_retries}): "
+                            f"status={error_status}, detail={error_detail}"
+                        )
+                        raise
+                else:
+                    # Non-ReplicateError exceptions don't get retried
+                    logger.error(f"❌ Unexpected error calling MusicGen: {e}")
+                    raise
+        
+        # Should never reach here, but just in case
+        if last_exception:
+            raise last_exception
+        raise RuntimeError("Failed to generate music after retries")
 
     async def _save_music_locally(self, music_url: str, project_id: str, mood: str) -> str:
         """Download music from Replicate and save to local storage.
