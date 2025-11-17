@@ -19,6 +19,23 @@ export interface AuthContextType {
   error: string | null
 }
 
+// Reference Image Types (NEW)
+export interface ExtractedStyle {
+  colors: string[]
+  mood: string
+  lighting: string
+  camera: string
+  atmosphere: string
+  texture: string
+}
+
+export interface ReferenceImage {
+  localPath?: string
+  uploadedAt?: string
+  extractedStyle?: ExtractedStyle
+  extractedAt?: string
+}
+
 // Project Types
 export interface BrandConfig {
   name: string
@@ -78,6 +95,8 @@ export interface CreateProjectInput {
   brief?: string
   mood?: string
   duration?: number
+  target_audience?: string
+  target_duration?: number
 }
 
 // Generation Types
@@ -121,5 +140,32 @@ export interface SignupFormData {
   password: string
   confirmPassword: string
   agreeToTerms: boolean
+}
+
+// PHASE 7: Video Style Types
+export type VideoStyleType = 'cinematic' | 'dark_premium' | 'minimal_studio' | 'lifestyle' | '2d_animated'
+
+export interface VideoStyle {
+  id: string
+  name: string
+  description: string
+  short_description?: string
+  keywords: string[]
+  examples?: string[]
+  best_for?: string[]
+  icon?: string
+  color?: string
+}
+
+export interface SelectedStyleConfig {
+  style: VideoStyleType | null
+  source?: 'user_selected' | 'llm_inferred'
+  applied_at?: string
+  display_name?: string
+}
+
+// PHASE 7: Update CreateProjectInput to include style
+export interface CreateProjectInputWithStyle extends CreateProjectInput {
+  selected_style?: VideoStyleType | null
 }
 

@@ -41,6 +41,9 @@ class Project(Base):
     local_input_files = Column(JSON, nullable=True)          # {"product_image": "/path/to/image.png", ...}
     local_draft_files = Column(JSON, nullable=True)          # {"scene_1_bg": "/path/to/video.mp4", ...}
     
+    # PHASE 7: Style Selection
+    selected_style = Column(String(50), nullable=True)       # 'cinematic', 'dark_premium', 'minimal_studio', 'lifestyle', '2d_animated', or NULL
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
