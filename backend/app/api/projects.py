@@ -186,8 +186,7 @@ async def create_new_project(
             "status": project.status,
             "progress": project.progress,
             "cost": float(project.cost) if project.cost else 0.0,
-            "s3_project_folder": getattr(project, 's3_project_folder', None),
-            "s3_project_folder_url": getattr(project, 's3_project_folder_url', None),
+            "aspect_ratio": getattr(project, 'aspect_ratio', '16:9'),
             "created_at": project.created_at,
             "updated_at": project.updated_at,
         })
@@ -294,8 +293,7 @@ async def list_user_projects(
                 "status": p.status,
                 "progress": p.progress,
                 "cost": float(p.cost) if p.cost else 0.0,
-                "s3_project_folder": getattr(p, 's3_project_folder', None),
-                "s3_project_folder_url": getattr(p, 's3_project_folder_url', None),
+                "aspect_ratio": getattr(p, 'aspect_ratio', '16:9'),
                 "created_at": p.created_at,
                 "updated_at": p.updated_at,
             })

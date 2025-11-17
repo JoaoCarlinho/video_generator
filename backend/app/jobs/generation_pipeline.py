@@ -189,7 +189,19 @@ class GenerationPipeline:
                 self.s3_folders = None  # Fallback to old behavior
 
             # Parse AdProject JSON
-            ad_project = AdProject(**project.ad_project_json)
+            # Ensure ad_project_json is a dict (handle JSONB/string cases)
+            project_json = project.ad_project_json
+            if isinstance(project_json, str):
+                import json
+                project_json = json.loads(project_json)
+            elif not isinstance(project_json, dict):
+                raise ValueError(f"Invalid ad_project_json type: {type(project_json)}")
+            
+            # Ensure video_metadata exists in the JSON
+            if 'video_metadata' not in project_json:
+                project_json['video_metadata'] = {}
+            
+            ad_project = AdProject(**project_json)
 
             # ===== STEP 0: Extract Reference Image Style (Optional, NEW) =====
             logger.info("🎨 Step 0: Checking for reference image...")
@@ -213,9 +225,10 @@ class GenerationPipeline:
                             extractor = ReferenceImageStyleExtractor(openai_client)
                             
                             # Extract style
+                            brand_name = project.ad_project_json.get("brand", {}).get("name", "Brand") if isinstance(project.ad_project_json, dict) else "Brand"
                             extracted_style = await extractor.extract_style(
                                 image_path=reference_local_path,
-                                brand_name=project.brand.get("name", "Brand")
+                                brand_name=brand_name
                             )
                             
                             # Save to database
@@ -225,7 +238,18 @@ class GenerationPipeline:
                             
                             # Reload project to get updated JSON
                             project = get_project(self.db, self.project_id)
-                            ad_project = AdProject(**project.ad_project_json)
+                            project_json = project.ad_project_json
+                            if isinstance(project_json, str):
+                                import json
+                                project_json = json.loads(project_json)
+                            elif not isinstance(project_json, dict):
+                                raise ValueError(f"Invalid ad_project_json type: {type(project_json)}")
+                            
+                            # Ensure video_metadata exists in the JSON
+                            if 'video_metadata' not in project_json:
+                                project_json['video_metadata'] = {}
+                            
+                            ad_project = AdProject(**project_json)
                             
                             # Delete temp file
                             os.unlink(reference_local_path)
@@ -247,7 +271,7 @@ class GenerationPipeline:
 
             # ===== STEP 1: Extract Product (Optional) =====
             product_url = None
-            has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
+            has_product = ad_project.product_asset is not None and (ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False)
             
             if has_product:
                 logger.info("📦 Step 1: Extracting product...")
@@ -303,11 +327,12 @@ class GenerationPipeline:
 
             # ===== STEP 4B: Composite Logo (Optional, NEW - Task 4) =====
             # Note: Music is still generating in background
-            if ad_project.brand.logo_url:
+            logo_url = ad_project.brand.get('logo_url') if isinstance(ad_project.brand, dict) else None
+            if logo_url:
                 logger.info("🏷️  Step 4B: Compositing logo onto scenes (music still generating)...")
                 logo_composited_videos = await self._composite_logos(
                     composited_videos,
-                    ad_project.brand.logo_url,
+                    logo_url,
                     ad_project,
                     progress_start=55 if product_url else 50
                 )
@@ -320,7 +345,7 @@ class GenerationPipeline:
             # ===== STEP 5: Add Text Overlays =====
             # Note: Music is still generating in background
             logger.info("📝 Step 5: Rendering text overlays (music still generating)...")
-            overlay_start = 65 if (product_url or ad_project.brand.logo_url) else 50
+            overlay_start = 65 if (product_url or logo_url) else 50
             text_rendered_videos = await self._add_text_overlays(
                 logo_composited_videos, ad_project, progress_start=overlay_start
             )
@@ -477,8 +502,11 @@ class GenerationPipeline:
                 self.db, self.project_id, "EXTRACTING_PRODUCT", progress=10
             )
 
-            if not ad_project.product_asset or not ad_project.product_asset.original_url:
+            product_asset = ad_project.product_asset
+            if not product_asset or not (product_asset.get('original_url') if isinstance(product_asset, dict) else None):
                 raise ValueError("Product asset not found or missing original_url")
+            
+            product_image_url = product_asset.get('original_url') if isinstance(product_asset, dict) else None
             
             from app.config import settings
             extractor = ProductExtractor(
@@ -489,7 +517,7 @@ class GenerationPipeline:
             )
             
             product_url = await extractor.extract_product(
-                image_url=ad_project.product_asset.original_url,
+                image_url=product_image_url,
                 project_id=str(self.project_id),
             )
 
@@ -523,12 +551,13 @@ class GenerationPipeline:
                     logger.info(f"🎨 Using colors from reference image: {brand_colors}")
             
             # Check if product/logo are available
-            has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
-            has_logo = ad_project.brand.logo_url is not None
+            has_product = ad_project.product_asset is not None and ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False
+            has_logo = ad_project.brand.get('logo_url') is not None if isinstance(ad_project.brand, dict) else False
             
             # ===== STEP 1B: Extract Brand Guidelines (Optional, NEW - Task 5) =====
             extracted_guidelines = None
-            if ad_project.brand.guidelines_url:
+            guidelines_url = ad_project.brand.get('guidelines_url') if isinstance(ad_project.brand, dict) else None
+            if guidelines_url:
                 logger.info(f"📄 Step 1B: Extracting brand guidelines from document...")
                 try:
                     from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
@@ -544,8 +573,8 @@ class GenerationPipeline:
                     )
                     
                     extracted_guidelines = await extractor.extract_guidelines(
-                        guidelines_url=ad_project.brand.guidelines_url,
-                        brand_name=ad_project.brand.name
+                        guidelines_url=guidelines_url,
+                        brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else ''
                     )
                     
                     if extracted_guidelines:
@@ -554,7 +583,7 @@ class GenerationPipeline:
                             f"tone='{extracted_guidelines.tone_of_voice}'"
                         )
                         # Store in video_metadata for reference
-                        if not ad_project.video_metadata:
+                        if ad_project.video_metadata is None:
                             ad_project.video_metadata = {}
                         ad_project.video_metadata['extractedGuidelines'] = extracted_guidelines.to_dict()
                     else:
@@ -611,15 +640,15 @@ BRAND GUIDELINES (extracted from guidelines document):
             # PHASE 7: Pass selected_style to ScenePlanner
             plan = await planner.plan_scenes(
                 creative_prompt=creative_prompt,
-                brand_name=ad_project.brand.name,
-                brand_description=ad_project.brand.description,
+                brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else '',
+                brand_description=ad_project.brand.get('description', '') if isinstance(ad_project.brand, dict) else '',
                 brand_colors=brand_colors,
                 brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
                 target_audience=ad_project.target_audience or "general consumers",
                 target_duration=ad_project.target_duration,
                 has_product=has_product,
                 has_logo=has_logo,
-                aspect_ratio=ad_project.video_settings.aspect_ratio,
+                aspect_ratio=ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else '16:9',
                 selected_style=project.selected_style,  # PHASE 7: Pass user-selected style if any
             )
 
@@ -681,17 +710,20 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             
             # Convert StyleSpec from plan to AdProject StyleSpec format
-            ad_project.style_spec = StyleSpec(
-                lighting=plan_style_spec.get('lighting_direction', ''),
-                camera_style=plan_style_spec.get('camera_style', ''),
-                mood=plan_style_spec.get('mood_atmosphere', ''),
-                color_palette=plan_style_spec.get('color_palette', []),
-                texture=plan_style_spec.get('texture_materials', ''),
-                grade=plan_style_spec.get('grade_postprocessing', ''),
-            )
+            # Handle both correct field names and LLM variations
+            style_spec_dict = {
+                'lighting_direction': plan_style_spec.get('lighting_direction') or plan_style_spec.get('lighting', ''),
+                'camera_style': plan_style_spec.get('camera_style', ''),
+                'texture_materials': plan_style_spec.get('texture_materials') or plan_style_spec.get('texture', ''),
+                'mood_atmosphere': plan_style_spec.get('mood_atmosphere') or plan_style_spec.get('mood', ''),
+                'color_palette': plan_style_spec.get('color_palette', []),
+                'grade_postprocessing': plan_style_spec.get('grade_postprocessing', ''),
+                'music_mood': plan_style_spec.get('music_mood', 'uplifting'),
+            }
+            ad_project.style_spec = StyleSpec(**style_spec_dict)
 
             # PHASE 7 + Task 2: Store chosen style and derived tone in ad_project_json
-            if not ad_project.video_metadata:
+            if ad_project.video_metadata is None:
                 ad_project.video_metadata = {}
             ad_project.video_metadata['selectedStyle'] = {
                 'style': chosen_style,
@@ -741,7 +773,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
             
             # Task 3: Get aspect ratio from video settings
-            aspect_ratio = ad_project.video_settings.aspect_ratio if ad_project.video_settings else "16:9"
+            aspect_ratio = ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else "16:9"
             logger.info(f"📐 Generating videos with aspect ratio: {aspect_ratio}")
 
             # Task 7: Create tasks with better error tracking
@@ -750,7 +782,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 try:
                     task = generator.generate_scene_background(
                         prompt=scene.background_prompt,
-                        style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
+                        style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else (ad_project.style_spec if isinstance(ad_project.style_spec, dict) else {}),
                         duration=scene.duration,
                         aspect_ratio=aspect_ratio,  # Task 3: Pass aspect ratio
                         extracted_style=extracted_style,  # Pass extracted style to generator
@@ -982,7 +1014,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             
             # Task 3: Get aspect ratio for proper text positioning
-            aspect_ratio = ad_project.video_settings.aspect_ratio if ad_project.video_settings else "16:9"
+            aspect_ratio = ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else "16:9"
             logger.info(f"📐 Adding text overlays for {aspect_ratio} aspect ratio")
 
             # Add overlays to each scene
@@ -1040,9 +1072,17 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             
             # Get mood from style_spec (set by LLM during planning)
-            music_mood = ad_project.style_spec.mood if ad_project.style_spec else "uplifting"
-            if hasattr(ad_project.style_spec, 'music_mood'):
-                music_mood = ad_project.style_spec.music_mood
+            if ad_project.style_spec:
+                if isinstance(ad_project.style_spec, dict):
+                    music_mood = ad_project.style_spec.get('music_mood') or ad_project.style_spec.get('mood', 'uplifting')
+                elif hasattr(ad_project.style_spec, 'music_mood'):
+                    music_mood = ad_project.style_spec.music_mood
+                elif hasattr(ad_project.style_spec, 'mood'):
+                    music_mood = ad_project.style_spec.mood
+                else:
+                    music_mood = "uplifting"
+            else:
+                music_mood = "uplifting"
             
             # Task 2: Use derived tone to influence music mood if available
             if ad_project.video_metadata and 'derivedTone' in ad_project.video_metadata:

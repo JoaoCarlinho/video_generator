@@ -9,6 +9,7 @@ import { api } from '@/services/api'
 import { ArrowLeft, Download, Copy, Check, Trash2, Cloud, HardDrive, Lock } from 'lucide-react'
 import {
   getVideoURL,
+  getVideo,
   deleteProjectVideos,
   getStorageUsage,
   formatBytes,
@@ -23,7 +24,7 @@ export const VideoResults = () => {
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [aspect, setAspect] = useState<'16:9'>('16:9')
+  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('16:9')
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloadingAspect, setDownloadingAspect] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -43,15 +44,19 @@ export const VideoResults = () => {
         const data = await getProject(projectId)
         setProject(data)
         
-        // Try to load video from local storage
-        const localVideoUrl = await getVideoURL(projectId, aspect)
+        // Get project's aspect ratio and set it as default
+        const projectAspectRatio = (data.aspect_ratio || '16:9') as '9:16' | '1:1' | '16:9'
+        setAspect(projectAspectRatio)
+        
+        // Try to load video from local storage with the project's aspect ratio
+        const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
-          console.log(`✅ Loaded video from local storage for ${aspect}`)
+          console.log(`✅ Loaded video from local storage for ${projectAspectRatio}`)
         } else {
           // Fallback to S3 URL if local storage is empty
-          setVideoUrl(data.output_videos?.[aspect] || '')
+          setVideoUrl(data.output_videos?.[projectAspectRatio] || '')
           setUseLocalStorage(false)
         }
         
@@ -69,27 +74,70 @@ export const VideoResults = () => {
     if (projectId) {
       loadProjectAndVideos()
     }
-  }, [projectId, getProject, aspect])
-
-  const handleDownload = (aspectRatio: '16:9') => {
-    const videoUrl = project.output_videos?.[aspectRatio]
-    if (!videoUrl) {
-      setError('Video URL not available')
-      return
+  }, [projectId, getProject])
+  
+  // Reload video when aspect changes
+  useEffect(() => {
+    const loadVideoForAspect = async () => {
+      if (!projectId || !aspect) return
+      
+      try {
+        // Try to load video from local storage
+        const localVideoUrl = await getVideoURL(projectId, aspect)
+        if (localVideoUrl) {
+          setVideoUrl(localVideoUrl)
+          setUseLocalStorage(true)
+          console.log(`✅ Loaded video from local storage for ${aspect}`)
+        } else {
+          // Fallback to S3 URL if local storage is empty
+          const s3Url = project?.output_videos?.[aspect] || ''
+          setVideoUrl(s3Url)
+          setUseLocalStorage(false)
+        }
+      } catch (err) {
+        console.error(`Failed to load video for ${aspect}:`, err)
+      }
     }
+    
+    if (project) {
+      loadVideoForAspect()
+    }
+  }, [aspect, projectId, project])
 
+  const handleDownload = async (aspectRatio: '9:16' | '1:1' | '16:9') => {
     try {
       setDownloadingAspect(aspectRatio)
       
+      // Try to get video from local storage first
+      const videoBlob = await getVideo(projectId, aspectRatio)
+      let videoUrlToDownload: string
+      
+      if (videoBlob) {
+        // Create blob URL from local storage
+        videoUrlToDownload = URL.createObjectURL(videoBlob)
+      } else {
+        // Fallback to S3 URL
+        videoUrlToDownload = project.output_videos?.[aspectRatio] || ''
+        if (!videoUrlToDownload) {
+          setError('Video URL not available')
+          setDownloadingAspect(null)
+          return
+        }
+      }
+      
       // Create a temporary anchor element for download
       const link = document.createElement('a')
-      link.href = videoUrl
+      link.href = videoUrlToDownload
       
       // Generate filename based on aspect ratio
       const aspectNames: Record<string, string> = {
+        '9:16': 'vertical',
+        '1:1': 'square',
         '16:9': 'horizontal',
       }
       const resolutions: Record<string, string> = {
+        '9:16': '1080x1920',
+        '1:1': '1080x1080',
         '16:9': '1920x1080',
       }
       
@@ -103,6 +151,11 @@ export const VideoResults = () => {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      
+      // Clean up blob URL if we created one
+      if (videoBlob && videoUrlToDownload.startsWith('blob:')) {
+        URL.revokeObjectURL(videoUrlToDownload)
+      }
       
       // Clear the downloading state after a short delay
       setTimeout(() => setDownloadingAspect(null), 1000)
@@ -183,6 +236,16 @@ export const VideoResults = () => {
   }
 
   const aspectInfo = {
+    '9:16': {
+      label: 'Vertical',
+      description: 'TikTok, Instagram Reels, Shorts',
+      icon: '📱',
+    },
+    '1:1': {
+      label: 'Square',
+      description: 'Instagram Feed, Facebook, Pinterest',
+      icon: '⬜',
+    },
     '16:9': {
       label: 'Horizontal',
       description: 'YouTube, Web, Presentations',
@@ -255,13 +318,13 @@ export const VideoResults = () => {
       />
 
       {/* Main Content */}
-      <div className="flex-1">
-        <Container size="lg" className="py-12">
+      <div className="flex-1 overflow-y-auto">
+        <Container size="lg" className="py-4 sm:py-6 md:py-8">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="space-y-8"
+            className="space-y-4 sm:space-y-6"
           >
             {/* Success Message */}
             <motion.div
@@ -276,9 +339,9 @@ export const VideoResults = () => {
             {/* Video Player */}
             <motion.div variants={itemVariants}>
               <Card variant="glass">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle>Preview - {aspectInfo[aspect].label}</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-lg">Preview - {aspectInfo[aspect].label}</CardTitle>
                     {useLocalStorage && (
                       <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-300">
                         <HardDrive className="w-3 h-3" />
@@ -299,14 +362,16 @@ export const VideoResults = () => {
                     </div>
                   )}
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 sm:px-6">
                   {videoUrl ? (
-                    <VideoPlayer
-                      videoUrl={videoUrl}
-                      title={project.title}
-                      aspect={aspect}
-                      onDownload={() => handleDownload(aspect)}
-                    />
+                    <div className="flex justify-center">
+                      <VideoPlayer
+                        videoUrl={videoUrl}
+                        title={project.title}
+                        aspect={aspect}
+                        onDownload={() => handleDownload(aspect)}
+                      />
+                    </div>
                   ) : (
                     <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 text-center">
                       <p className="text-slate-400">No video available</p>

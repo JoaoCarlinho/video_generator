@@ -700,8 +700,27 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             # Ensure music_mood is present
             if "music_mood" not in style_dict:
                 style_dict["music_mood"] = "uplifting"
+            
+            # Normalize field names - handle LLM variations
+            normalized_dict = {
+                'lighting_direction': style_dict.get('lighting_direction') or style_dict.get('lighting', ''),
+                'camera_style': style_dict.get('camera_style', ''),
+                'texture_materials': style_dict.get('texture_materials') or style_dict.get('texture', ''),
+                'mood_atmosphere': style_dict.get('mood_atmosphere') or style_dict.get('mood', ''),
+                'color_palette': style_dict.get('color_palette', []),
+                'grade_postprocessing': style_dict.get('grade_postprocessing') or style_dict.get('grade', ''),
+                'music_mood': style_dict.get('music_mood', 'uplifting'),
+            }
+            
+            # Ensure all required fields have values
+            if not normalized_dict['lighting_direction']:
+                normalized_dict['lighting_direction'] = self._get_default_style_spec([])['lighting_direction']
+            if not normalized_dict['texture_materials']:
+                normalized_dict['texture_materials'] = self._get_default_style_spec([])['texture_materials']
+            if not normalized_dict['mood_atmosphere']:
+                normalized_dict['mood_atmosphere'] = self._get_default_style_spec([])['mood_atmosphere']
 
-            return StyleSpec(**style_dict)
+            return StyleSpec(**normalized_dict)
 
         except Exception as e:
             logger.error(f"Error generating style spec: {e}")

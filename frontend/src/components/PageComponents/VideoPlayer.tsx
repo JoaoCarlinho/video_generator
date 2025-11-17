@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 interface VideoPlayerProps {
   videoUrl?: string
   title?: string
-  aspect: '16:9'
+  aspect: '9:16' | '1:1' | '16:9'
   onDownload?: () => void
   isLoading?: boolean
 }
@@ -69,18 +69,33 @@ export const VideoPlayer = ({
   }
 
   const aspectRatios = {
+    '9:16': 'aspect-[9/16]',
+    '1:1': 'aspect-square',
     '16:9': 'aspect-video',
+  }
+
+  const aspectLabels = {
+    '9:16': 'Vertical',
+    '1:1': 'Square',
+    '16:9': 'Horizontal',
+  }
+
+  // Responsive max-width based on aspect ratio
+  const maxWidthClasses = {
+    '9:16': 'max-w-sm sm:max-w-md', // Smaller for vertical videos
+    '1:1': 'max-w-md sm:max-w-lg',   // Medium for square videos
+    '16:9': 'max-w-2xl sm:max-w-3xl', // Larger for horizontal videos
   }
 
   return (
     <motion.div
-      className="space-y-4"
+      className="space-y-4 w-full"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
-      {/* Player Container */}
-      <div className={`bg-slate-900 rounded-lg overflow-hidden border border-slate-700/50 ${aspectRatios[aspect]}`}>
+      {/* Player Container - Responsive with max-width constraints */}
+      <div className={`bg-slate-900 rounded-lg overflow-hidden border border-slate-700/50 ${aspectRatios[aspect]} w-full ${maxWidthClasses[aspect]} mx-auto`}>
         {videoUrl ? (
           <div className="relative w-full h-full bg-black group">
             <video
@@ -108,7 +123,7 @@ export const VideoPlayer = ({
             {/* Top Controls */}
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="px-3 py-1 bg-black/50 backdrop-blur rounded text-sm text-white font-medium">
-                Horizontal
+                {aspectLabels[aspect]}
               </div>
             </div>
 
