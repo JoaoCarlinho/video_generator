@@ -23,7 +23,6 @@ interface CreateProjectInput {
   brand_name: string
   mood?: string
   duration?: number
-  aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
   logo_url?: string
   guidelines_url?: string
@@ -31,6 +30,9 @@ interface CreateProjectInput {
   brand_description?: string
   target_audience?: string
   target_duration?: number
+  // Phase 9: Perfume-specific fields
+  perfume_name: string
+  perfume_gender: 'masculine' | 'feminine' | 'unisex'
 }
 
 export const useProjects = () => {
@@ -73,10 +75,32 @@ export const useProjects = () => {
 
         setProjects((prev) => [newProject, ...prev])
         return newProject
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create project'
+      } catch (err: any) {
+        // Extract error message from API response
+        let message = 'Failed to create project'
+        if (err?.response?.data) {
+          const errorData = err.response.data
+          if (errorData.detail) {
+            // Handle validation errors
+            if (Array.isArray(errorData.detail)) {
+              const validationErrors = errorData.detail.map((e: any) => 
+                `${e.loc?.join('.')}: ${e.msg}`
+              ).join(', ')
+              message = `Validation error: ${validationErrors}`
+            } else if (typeof errorData.detail === 'string') {
+              message = errorData.detail
+            } else {
+              message = errorData.message || JSON.stringify(errorData.detail)
+            }
+          } else if (errorData.message) {
+            message = errorData.message
+          }
+        } else if (err instanceof Error) {
+          message = err.message
+        }
         setError(message)
-        throw err
+        console.error('Create project error:', err)
+        throw new Error(message)
       } finally {
         setLoading(false)
       }

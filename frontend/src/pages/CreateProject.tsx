@@ -24,7 +24,8 @@ export const CreateProject = () => {
     creative_prompt: '',
     target_audience: '',
     target_duration: 30,
-    aspect_ratio: '16:9' as '9:16' | '1:1' | '16:9',
+    perfume_name: '',
+    perfume_gender: 'unisex' as 'masculine' | 'feminine' | 'unisex',
   })
 
   const [productImage, setProductImage] = useState<File | null>(null)
@@ -119,6 +120,10 @@ export const CreateProject = () => {
       }
       if (!formData.brand_name.trim()) {
         setSubmitError('Brand name is required')
+        return false
+      }
+      if (!formData.perfume_name.trim()) {
+        setSubmitError('Perfume name is required')
         return false
       }
       return true
@@ -223,7 +228,8 @@ export const CreateProject = () => {
         brand_description: formData.brand_description || undefined,
         target_audience: formData.target_audience || undefined,
         target_duration: formData.target_duration,
-        aspect_ratio: formData.aspect_ratio,
+        perfume_name: formData.perfume_name,
+        perfume_gender: formData.perfume_gender,
         logo_url: uploadedLogoUrl || undefined,
         product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
@@ -328,7 +334,7 @@ export const CreateProject = () => {
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g., Premium Skincare - Summer Campaign"
+                        placeholder="e.g., Chanel Noir TikTok Ad"
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
@@ -426,25 +432,40 @@ export const CreateProject = () => {
                       />
                     </div>
 
-                    {/* Aspect Ratio */}
+                    {/* Perfume Name */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Perfume Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Noir Élégance"
+                        value={formData.perfume_name}
+                        onChange={(e) => setFormData({ ...formData, perfume_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
+                    </div>
+
+                    {/* Perfume Gender */}
                     <div>
                       <label className="block text-sm font-semibold text-off-white mb-2">
-                        Video Aspect Ratio
+                        Perfume Gender <span className="text-red-400">*</span>
                       </label>
                       <div className="grid grid-cols-3 gap-2">
-                        {(['9:16', '1:1', '16:9'] as const).map((ar) => (
+                        {(['masculine', 'feminine', 'unisex'] as const).map((gender) => (
                           <button
-                            key={ar}
+                            key={gender}
                             type="button"
-                            onClick={() => setFormData({ ...formData, aspect_ratio: ar })}
+                            onClick={() => setFormData({ ...formData, perfume_gender: gender })}
                             className={`p-2.5 rounded-lg border-2 transition-all duration-200 ${
-                              formData.aspect_ratio === ar
+                              formData.perfume_gender === gender
                                 ? 'border-gold bg-gold/10 shadow-gold'
                                 : 'border-olive-600 bg-olive-700/30 hover:border-olive-500'
                             }`}
                           >
-                            <div className={`text-sm font-semibold ${formData.aspect_ratio === ar ? 'text-gold' : 'text-off-white'}`}>
-                              {ar === '9:16' ? 'Vertical' : ar === '1:1' ? 'Square' : 'Horizontal'}
+                            <div className={`text-sm font-semibold capitalize ${formData.perfume_gender === gender ? 'text-gold' : 'text-off-white'}`}>
+                              {gender}
                             </div>
                           </button>
                         ))}
@@ -461,14 +482,14 @@ export const CreateProject = () => {
                           value={[formData.target_duration]}
                           onValueChange={(value) => setFormData({ ...formData, target_duration: value[0] })}
                           min={15}
-                          max={120}
+                          max={60}
                           step={5}
                           className="w-full"
                         />
                         <div className="flex justify-between text-xs text-muted-gray">
                           <span>15s</span>
+                          <span>30s</span>
                           <span>60s</span>
-                          <span>120s</span>
                         </div>
                       </div>
                     </div>

@@ -40,7 +40,7 @@ export const VideoResults = () => {
         const data = await getProject(projectId)
         setProject(data)
         
-        const projectAspectRatio = (data.aspect_ratio || '16:9') as '9:16' | '1:1' | '16:9'
+        const projectAspectRatio = (data.aspect_ratio || '9:16') as '9:16' | '1:1' | '16:9'
         setAspect(projectAspectRatio)
         
         const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)

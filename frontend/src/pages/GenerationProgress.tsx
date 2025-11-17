@@ -87,7 +87,7 @@ export const GenerationProgress = () => {
         
         const projectResponse = await api.get(`/api/projects/${projectId}`)
         const project = projectResponse.data
-        const projectAspectRatio = project.aspect_ratio || '16:9'
+        const projectAspectRatio = project.aspect_ratio || '9:16'
         
         console.log(`📐 Project aspect ratio: ${projectAspectRatio}`)
         

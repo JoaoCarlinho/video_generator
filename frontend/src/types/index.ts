@@ -72,7 +72,6 @@ export interface CreateProjectInput {
   brand_name: string
   mood?: string
   duration?: number
-  aspect_ratio?: '9:16' | '1:1' | '16:9'
   product_image_url?: string
   logo_url?: string
   guidelines_url?: string
@@ -80,6 +79,9 @@ export interface CreateProjectInput {
   brand_description?: string
   target_audience?: string
   target_duration?: number
+  // Phase 9: Perfume-specific fields
+  perfume_name: string
+  perfume_gender: 'masculine' | 'feminine' | 'unisex'
 }
 
 // Generation Types
@@ -125,8 +127,8 @@ export interface SignupFormData {
   agreeToTerms: boolean
 }
 
-// PHASE 7: Video Style Types
-export type VideoStyleType = 'cinematic' | 'dark_premium' | 'minimal_studio' | 'lifestyle' | '2d_animated'
+// PHASE 9: Video Style Types (Updated to 3 perfume styles only)
+export type VideoStyleType = 'gold_luxe' | 'dark_elegance' | 'romantic_floral'
 
 export interface VideoStyle {
   id: string

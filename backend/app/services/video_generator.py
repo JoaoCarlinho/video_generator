@@ -61,27 +61,25 @@ class VideoGenerator:
         prompt: str,
         style_spec_dict: dict,
         duration: float = 5.0,
-        aspect_ratio: str = "16:9",
         seed: Optional[int] = None,
         extracted_style: Optional[dict] = None,
         style_override: Optional[str] = None,
     ) -> str:
         """
-        Generate background video for a scene via HTTP API.
+        Generate background video for a scene via HTTP API (TikTok vertical 9:16).
 
         Args:
             prompt: Scene description prompt
             style_spec_dict: Style specification dict with visual guidelines
             duration: Video duration in seconds (typical: 2-5 seconds)
-            aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
             seed: Random seed for reproducibility (optional, not used by SeedAnce)
             extracted_style: Optional extracted style from reference image
-            style_override: Override style selection (one of the 5 predefined styles)
+            style_override: Override style selection (one of the 3 perfume styles)
 
         Returns:
             URL of generated video from Replicate
         """
-        logger.info(f"Generating background video: {prompt[:60]}...")
+        logger.info(f"Generating TikTok vertical background video: {prompt[:60]}...")
 
         try:
             # Apply chosen style to prompt if style_override provided
@@ -91,8 +89,8 @@ class VideoGenerator:
             else:
                 enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
 
-            # Create prediction via HTTP API (with "Prefer: wait" - returns completed result)
-            prediction_data = await self._create_prediction(enhanced_prompt, int(duration), aspect_ratio)
+            # Create prediction via HTTP API (hardcoded 9:16 for TikTok vertical)
+            prediction_data = await self._create_prediction(enhanced_prompt, int(duration), "9:16")
             
             # With "Prefer: wait", the prediction should already be complete
             status = prediction_data.get("status")
@@ -181,12 +179,14 @@ class VideoGenerator:
         style_string = ". ".join(style_parts)
         enhanced = f"{prompt}. {style_string}. Modern cinematic product commercial."
 
-        logger.debug(f"Enhanced prompt: {enhanced}")
+        logger.info(f"📝 Enhanced prompt for video generation:")
+        logger.info(f"   Original: {prompt}")
+        logger.info(f"   Enhanced: {enhanced}")
         return enhanced
 
 
-    async def _create_prediction(self, prompt: str, duration: int, aspect_ratio: str = "16:9") -> dict:
-        """Create a prediction via HTTP API using seedance-1-pro model."""
+    async def _create_prediction(self, prompt: str, duration: int, aspect_ratio: str = "9:16") -> dict:
+        """Create a prediction via HTTP API using seedance-1-pro model (TikTok vertical)."""
         headers = {
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
@@ -199,7 +199,7 @@ class VideoGenerator:
                 "prompt": prompt,
                 "duration": min(duration, 10),  # Cap at 10s
                 "resolution": "480p",  # 480p for faster generation, good quality
-                "aspect_ratio": aspect_ratio,
+                "aspect_ratio": "9:16",  # Hardcoded TikTok vertical
                 "camera_fixed": False
             }
         }
@@ -266,31 +266,31 @@ class VideoGenerator:
         prompts: list,
         style_spec_dict: dict,
         durations: list,
-        aspect_ratio: str = "16:9",
         extracted_style: Optional[dict] = None,
         style_override: Optional[str] = None,
     ) -> list:
         """
-        Generate multiple scene videos concurrently.
+        Generate multiple scene videos concurrently (TikTok vertical 9:16).
 
         Args:
             prompts: List of scene prompts
             style_spec_dict: Global style specification
-            duration: Duration for each scene
+            durations: Duration for each scene
+            extracted_style: Optional extracted style from reference image
+            style_override: Override style selection
 
         Returns:
             List of video URLs
         """
-        logger.info(f"Generating {len(prompts)} scene videos in parallel...")
+        logger.info(f"Generating {len(prompts)} TikTok vertical scene videos in parallel...")
 
         try:
-            # Generate all scenes concurrently
+            # Generate all scenes concurrently (all 9:16)
 
             tasks = [
                 self.generate_scene_background(
                 prompt=prompts[i],
                 style_spec_dict=style_spec_dict,
-                aspect_ratio=aspect_ratios,
                 duration=durations[i],
                 extracted_style=extracted_style,
                 style_override=style_override,

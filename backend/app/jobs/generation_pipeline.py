@@ -1,13 +1,19 @@
-"""RQ Background job for end-to-end video generation pipeline.
+"""RQ Background job for end-to-end luxury perfume TikTok video generation pipeline.
 
 This module contains the main generation pipeline that orchestrates all services:
 1. Product Extraction (remove background)
-2. Scene Planning (LLM-based)
-3. Video Generation (parallel for all scenes)
+2. Scene Planning (LLM-based with perfume shot grammar constraints)
+3. Video Generation (parallel for all scenes, TikTok vertical 9:16 only)
 4. Compositing (product overlay)
-5. Text Overlay Rendering
-6. Audio Generation (MusicGen)
-7. Horizontal Rendering (16:9)
+5. Text Overlay Rendering (luxury typography)
+6. Audio Generation (luxury ambient music)
+7. Final Rendering (TikTok vertical 9:16 only)
+
+PERFUME-SPECIFIC FEATURES (Phase 8):
+- Perfume shot grammar validation
+- Perfume name extraction and storage
+- Grammar compliance checking
+- TikTok vertical optimization (9:16 hardcoded)
 
 LOCAL-FIRST ARCHITECTURE:
 - All intermediate files stored locally in /tmp/genads/{project_id}/
@@ -295,10 +301,10 @@ class GenerationPipeline:
                     logger.debug(f"Task exception details: {music_task.exception()}")
                 raise
 
-            # STEP 7: Render Multi-Aspect
-            logger.info("Step 7: Rendering final videos (multi-aspect)...")
+            # STEP 7: Render Final TikTok Vertical Video (9:16 only)
+            logger.info("Step 7: Rendering final TikTok vertical video (9:16)...")
             render_start = 85 if has_product else 80
-            final_videos = await self._render_final(
+            final_video_path = await self._render_final(
                 text_rendered_videos, audio_url, ad_project, progress_start=render_start
             )
 
@@ -306,20 +312,23 @@ class GenerationPipeline:
             logger.info(f"Pipeline complete in {total_elapsed:.1f}s")
             logger.info(f"Step timings: {self.step_timings}")
 
-            # ===== LOCAL-FIRST: Final videos already saved locally by renderer =====
-            logger.info("Final videos already saved to local storage by renderer")
-            local_video_paths = final_videos
+            # ===== LOCAL-FIRST: Final video already saved locally by renderer =====
+            logger.info("Final TikTok vertical video already saved to local storage by renderer")
+            # Store as dict with single 9:16 entry for backward compatibility
+            local_video_paths = {"9:16": final_video_path}
 
             # Calculate local storage size
             storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
             logger.info(f"Total local storage: {format_storage_size(storage_size)}")
 
-            # Update project with local paths
-            project.local_video_paths = local_video_paths
+            # Update project with local path
+            project.local_video_paths = local_video_paths  # Backward compat (deprecated)
+            project.local_video_path = final_video_path  # Phase 9: Single TikTok vertical video path
+            project.aspect_ratio = "9:16"  # Set default aspect ratio
             project.status = 'COMPLETED'
             self.db.commit()
 
-            logger.info(f"Project ready for preview. Videos stored locally.")
+            logger.info(f"Project ready for preview. TikTok vertical video stored locally.")
 
             # Update legacy output_videos field for backward compatibility
             update_project_output(
@@ -333,10 +342,11 @@ class GenerationPipeline:
             return {
                 "status": "COMPLETED",
                 "project_id": str(self.project_id),
-                "local_video_paths": local_video_paths,
+                "local_video_paths": local_video_paths,  # Backward compat (deprecated)
+                "local_video_path": final_video_path,  # Phase 9: Single TikTok vertical video path
                 "storage_size": storage_size,
                 "storage_size_formatted": format_storage_size(storage_size),
-                "message": "Videos ready for preview. Videos stored in local storage.",
+                "message": "TikTok vertical video ready for preview. Video stored in local storage.",
                 "timing_seconds": total_elapsed,
                 "step_timings": self.step_timings,
             }
@@ -427,7 +437,7 @@ class GenerationPipeline:
 
     @timed_step("Scene Planning")
     async def _plan_scenes(self, project: Any, ad_project: AdProject, progress_start: int = 15) -> Any:
-        """Plan scenes using LLM and generate style spec."""
+        """Plan perfume scenes using LLM with shot grammar constraints."""
         try:
             update_project_status(
                 self.db, self.project_id, "PLANNING", progress=progress_start
@@ -435,6 +445,16 @@ class GenerationPipeline:
 
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
+            
+            # Extract perfume-specific info (Phase 9)
+            # First check ad_project (from schema), then fallback to ad_project_json
+            perfume_name = getattr(ad_project, 'perfume_name', None) or None
+            if not perfume_name and project.ad_project_json and isinstance(project.ad_project_json, dict):
+                perfume_name = project.ad_project_json.get("perfume_name")
+            # Fallback to brand name if perfume_name not available
+            if not perfume_name:
+                perfume_name = ad_project.brand.get('name', 'Perfume') if isinstance(ad_project.brand, dict) else 'Perfume'
+            logger.info(f"Using perfume name: {perfume_name}")
             
             # Brand colors from LLM or reference image if available
             brand_colors = []
@@ -539,7 +559,6 @@ BRAND GUIDELINES (extracted from guidelines document):
                 target_duration=ad_project.target_duration,
                 has_product=has_product,
                 has_logo=has_logo,
-                aspect_ratio=ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else '16:9',
                 selected_style=project.selected_style,
                 extracted_style=extracted_style,
             )
@@ -550,6 +569,40 @@ BRAND GUIDELINES (extracted from guidelines document):
             plan_style_spec = plan.get('style_spec', {})
             
             logger.info(f"ScenePlanner chose style: {chosen_style} ({style_source})")
+            
+            # PHASE 8: Validate grammar compliance
+            # CRITICAL: Validate BEFORE conversion to ensure shot_type is preserved
+            from app.services.perfume_grammar_loader import PerfumeGrammarLoader
+            grammar_loader = PerfumeGrammarLoader()
+            
+            # LOG: Show shot_types received from ScenePlanner
+            logger.info(f"📋 Scenes received from ScenePlanner ({len(plan_scenes_list)} scenes):")
+            for i, scene in enumerate(plan_scenes_list):
+                shot_type = scene.get('shot_type', 'MISSING')
+                shot_variation = scene.get('shot_variation', 'N/A')
+                role = scene.get('role', 'N/A')
+                duration = scene.get('duration', 'N/A')
+                logger.info(f"   Scene {i+1}: shot_type='{shot_type}', shot_variation='{shot_variation}', role='{role}', duration={duration}s")
+            
+            # Ensure all scenes have shot_type before validation
+            for scene in plan_scenes_list:
+                if 'shot_type' not in scene or scene.get('shot_type') is None:
+                    logger.error(f"❌ Scene {scene.get('scene_id', 'unknown')} missing shot_type field!")
+                    logger.error(f"   Scene keys: {list(scene.keys())}")
+                    # This should never happen if ScenePlanner is working correctly
+                    # But if it does, we need to fix it
+            
+            is_valid, violations = grammar_loader.validate_scene_plan(plan_scenes_list)
+            
+            if not is_valid:
+                logger.error(f"❌ Grammar violations detected: {violations}")
+                logger.error("Scene plan does NOT comply with perfume shot grammar rules")
+                # Log scene details for debugging
+                for i, scene in enumerate(plan_scenes_list):
+                    logger.error(f"   Scene {i}: shot_type={scene.get('shot_type')}, role={scene.get('role')}")
+                # Don't fail pipeline, but log error clearly
+            else:
+                logger.info("✅ Scene plan validated against perfume shot grammar - all rules passed")
 
             # Update ad_project with scenes and style spec from plan
             # Convert plan scenes to AdProject scenes format
@@ -621,6 +674,11 @@ BRAND GUIDELINES (extracted from guidelines document):
             if 'derivedTone' in plan:
                 ad_project.video_metadata['derivedTone'] = plan['derivedTone']
                 logger.info(f"Stored derived tone in metadata: {plan['derivedTone']}")
+            
+            # PHASE 8: Store perfume_name in ad_project_json for future use
+            if perfume_name:
+                project.ad_project_json['perfume_name'] = perfume_name
+                logger.info(f"Stored perfume_name in ad_project_json: {perfume_name}")
 
             # Save back to database
             project.ad_project_json = ad_project.dict()
@@ -659,10 +717,16 @@ BRAND GUIDELINES (extracted from guidelines document):
                 chosen_style = style_info.get("style")
                 logger.info(f"Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
             
-            # Get aspect ratio from video settings
-            aspect_ratio = ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else "16:9"
-            logger.info(f"Generating videos with aspect ratio: {aspect_ratio}")
+            # Generate TikTok vertical videos (9:16 hardcoded)
+            logger.info("Generating TikTok vertical videos (9:16)")
 
+            # LOG: Show background prompts that will be sent to video generator
+            logger.info(f"📝 Scene prompts to send to video generator ({len(ad_project.scenes)} scenes):")
+            for i, scene in enumerate(ad_project.scenes):
+                shot_type = getattr(scene, 'shot_type', 'N/A') if hasattr(scene, 'shot_type') else 'N/A'
+                logger.info(f"   Scene {i+1} (shot_type='{shot_type}', role='{scene.role}', duration={scene.duration}s):")
+                logger.info(f"      Original prompt: {scene.background_prompt}")
+            
             tasks = []
             for i, scene in enumerate(ad_project.scenes):
                 try:
@@ -670,7 +734,6 @@ BRAND GUIDELINES (extracted from guidelines document):
                         prompt=scene.background_prompt,
                         style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else (ad_project.style_spec if isinstance(ad_project.style_spec, dict) else {}),
                         duration=scene.duration,
-                        aspect_ratio=aspect_ratio,
                         extracted_style=extracted_style,
                         style_override=scene.style or chosen_style,
                     )
@@ -778,17 +841,20 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
 
-            # Composite for each scene that has use_product=True
+            # Composite perfume bottles for each scene that has use_product=True
             composited = []
             for i, (video_url, scene) in enumerate(zip(scene_videos, ad_project.scenes)):
                 if scene.use_product:
                     position = scene.product_position or "center"
-                    scale = scene.product_scale or 0.3
+                    # Use explicit scale if set, otherwise let compositor use role-based scaling
+                    scale = scene.product_scale if scene.product_scale is not None else None
                     opacity = scene.product_opacity or 1.0
+                    scene_role = scene.role  # Pass scene role for perfume-specific scaling
                     
                     logger.info(
-                        f"Compositing scene {i}/{len(scene_videos)}: "
-                        f"position={position}, scale={scale:.2f}, opacity={opacity:.2f}"
+                        f"Compositing perfume bottle on scene {i}/{len(scene_videos)}: "
+                        f"role={scene_role}, position={position}, "
+                        f"scale={'auto' if scale is None else f'{scale:.2f}'}, opacity={opacity:.2f}"
                     )
                     
                     composited_url = await compositor.composite_product(
@@ -796,9 +862,10 @@ BRAND GUIDELINES (extracted from guidelines document):
                         product_image_url=product_url,
                         project_id=str(self.project_id),
                         position=position,
-                        scale=scale,
+                        scale=scale,  # None = use role-based scaling
                         opacity=opacity,
                         scene_index=i,
+                        scene_role=scene_role,  # Pass role for perfume scaling
                     )
                     composited.append(composited_url)
                 else:
@@ -886,7 +953,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     async def _add_text_overlays(
         self, video_urls: List[str], ad_project: AdProject, progress_start: int = 60
     ) -> List[str]:
-        """Render text overlays on videos."""
+        """Render text overlays on videos with luxury perfume typography constraints."""
         try:
             update_project_status(
                 self.db, self.project_id, "ADDING_OVERLAYS", progress=progress_start
@@ -900,30 +967,49 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # Get aspect ratio for proper text positioning
-            aspect_ratio = ad_project.video_settings.get('aspect_ratio', '16:9') if isinstance(ad_project.video_settings, dict) else "16:9"
-            logger.info(f"Adding text overlays for {aspect_ratio} aspect ratio")
+            # Add text overlays to TikTok vertical videos (9:16) with luxury typography
+            logger.info("Adding luxury perfume text overlays to TikTok vertical videos")
+
+            # Collect all text overlays for validation
+            text_overlays = []
+            for i, scene in enumerate(ad_project.scenes):
+                overlay = scene.overlay
+                if overlay and overlay.text:
+                    text_overlays.append(i)
+            
+            # Validate max text blocks (3-4 max for perfume ads)
+            max_text_blocks = 4
+            if len(text_overlays) > max_text_blocks:
+                logger.warning(
+                    f"Too many text overlays: {len(text_overlays)} (max {max_text_blocks}). "
+                    f"Only first {max_text_blocks} scenes will have text overlays."
+                )
+                # Track which scenes should have overlays
+                allowed_indices = set(text_overlays[:max_text_blocks])
+            else:
+                allowed_indices = set(text_overlays)
 
             # Add overlays to each scene
             overlaid = []
-            for i, (video_url, scene) in enumerate(
-                zip(video_urls, ad_project.scenes)
-            ):
+            text_overlay_count = 0
+            for i, (video_url, scene) in enumerate(zip(video_urls, ad_project.scenes)):
                 overlay = scene.overlay
-                if overlay and overlay.text:
-                    overlaid_url = await renderer.add_text_overlay(
+                if overlay and overlay.text and i in allowed_indices:
+                    # Determine text type based on scene role and position
+                    text_type = self._infer_text_type(scene, overlay, i, len(ad_project.scenes))
+                    
+                    # Use perfume-specific luxury text overlay
+                    overlaid_url = await renderer.add_perfume_text_overlay(
                         video_url=video_url,
                         text=overlay.text,
-                        position=overlay.position,
-                        duration=overlay.duration or scene.duration,
-                        start_time=overlay.start_time if hasattr(overlay, 'start_time') else 0.0,
-                        font_size=overlay.font_size or 48,
-                        color="#FFFFFF",
-                        animation="fade_in",
+                        text_type=text_type,
+                        position=overlay.position or "bottom",
+                        duration=overlay.duration or min(scene.duration, 4.0),  # Max 4s per grammar
+                        start_time=0.0,  # Start at beginning of scene
                         project_id=str(self.project_id),
                         scene_index=i,
-                        aspect_ratio=aspect_ratio,
                     )
+                    text_overlay_count += 1
                 else:
                     overlaid_url = video_url
                 overlaid.append(overlaid_url)
@@ -932,16 +1018,59 @@ BRAND GUIDELINES (extracted from guidelines document):
                     self.db, self.project_id, "ADDING_OVERLAYS", progress=int(progress)
                 )
 
-            logger.info(f"Added text overlays to {len(overlaid)} videos")
+            logger.info(f"Added {text_overlay_count} luxury text overlays to videos")
             return overlaid
 
         except Exception as e:
             logger.error(f"Text overlay rendering failed: {e}")
             raise
 
+    def _infer_text_type(self, scene: Any, overlay: Any, scene_index: int, total_scenes: int) -> str:
+        """Infer text type for perfume ad text overlay.
+        
+        Args:
+            scene: Scene object
+            overlay: Overlay object
+            scene_index: Current scene index (0-based)
+            total_scenes: Total number of scenes
+            
+        Returns:
+            Text type: 'perfume_name', 'brand_name', 'tagline', or 'cta'
+        """
+        # Last scene is typically brand moment with perfume/brand name
+        is_last_scene = scene_index == total_scenes - 1
+        
+        # Check scene role
+        scene_role = getattr(scene, 'role', '').lower()
+        
+        # Infer from text content (simple heuristics)
+        text_lower = overlay.text.lower()
+        
+        # Check if text contains brand indicators
+        if any(word in text_lower for word in ['discover', 'explore', 'experience', 'unveil']):
+            return 'tagline'
+        
+        # Check if text is short (likely perfume/brand name)
+        word_count = len(overlay.text.split())
+        if word_count <= 3 and is_last_scene:
+            # Could be perfume name or brand name - default to perfume_name
+            return 'perfume_name'
+        
+        # CTA scenes
+        if scene_role in ['cta', 'call_to_action'] or 'shop' in text_lower or 'buy' in text_lower:
+            return 'cta'
+        
+        # Default based on scene position
+        if is_last_scene:
+            return 'brand_name'  # Last scene typically shows brand
+        elif scene_index == 0:
+            return 'tagline'  # First scene might have tagline
+        else:
+            return 'tagline'  # Default to tagline
+
     @timed_step("Audio Generation")
     async def _generate_audio(self, project: Any, ad_project: AdProject, progress_start: int = 75) -> str:
-        """Generate background music using MusicGen."""
+        """Generate luxury perfume background music using MusicGen."""
         try:
             update_project_status(
                 self.db, self.project_id, "GENERATING_AUDIO", progress=progress_start
@@ -956,42 +1085,70 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # Get mood from style_spec (set by LLM during planning)
-            if ad_project.style_spec:
-                if isinstance(ad_project.style_spec, dict):
-                    music_mood = ad_project.style_spec.get('music_mood') or ad_project.style_spec.get('mood', 'uplifting')
-                elif hasattr(ad_project.style_spec, 'music_mood'):
-                    music_mood = ad_project.style_spec.music_mood
-                elif hasattr(ad_project.style_spec, 'mood'):
-                    music_mood = ad_project.style_spec.mood
-                else:
-                    music_mood = "uplifting"
-            else:
-                music_mood = "uplifting"
-            
-            # Use derived tone to influence music mood if available
-            if ad_project.video_metadata and 'derivedTone' in ad_project.video_metadata:
-                tone = ad_project.video_metadata['derivedTone']
-                music_mood = self._map_tone_to_music_mood(tone, music_mood)
-                logger.info(f"Using tone-derived music mood: {music_mood} (from tone: {tone})")
-            else:
-                logger.info(f"Using default music mood: {music_mood}")
+            # Infer perfume gender from selected style or default to unisex
+            gender = self._infer_perfume_gender(ad_project)
+            logger.info(f"Using perfume gender: {gender} (inferred from style/context)")
             
             # Calculate total duration from scenes
             total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else ad_project.target_duration
             
-            audio_url = await audio_engine.generate_background_music(
-                mood=music_mood,
+            # Use new perfume-specific audio generation method
+            audio_url = await audio_engine.generate_perfume_background_music(
                 duration=total_duration,
                 project_id=str(self.project_id),
+                gender=gender,
             )
 
-            logger.info(f"Generated audio: {audio_url}")
+            logger.info(f"Generated perfume audio: {audio_url}")
             return audio_url
 
         except Exception as e:
             logger.error(f"Audio generation failed: {e}")
             raise
+
+    def _infer_perfume_gender(self, ad_project: AdProject) -> str:
+        """Infer perfume gender from selected style or context.
+        
+        Returns:
+            'masculine', 'feminine', or 'unisex'
+        """
+        from app.services.style_manager import StyleManager
+        
+        # Phase 9: Check if perfume_gender is already set in ad_project
+        if ad_project.perfume_gender:
+            valid_genders = ['masculine', 'feminine', 'unisex']
+            if ad_project.perfume_gender in valid_genders:
+                return ad_project.perfume_gender
+        
+        # Check if style is selected
+        if ad_project.selectedStyle:
+            style_id = None
+            if isinstance(ad_project.selectedStyle, dict):
+                style_id = ad_project.selectedStyle.get('id') or ad_project.selectedStyle.get('style')
+            elif isinstance(ad_project.selectedStyle, str):
+                style_id = ad_project.selectedStyle
+            
+            if style_id:
+                style_config = StyleManager.get_style_config(style_id)
+                if style_config:
+                    best_for = style_config.get('best_for', [])
+                    # Check best_for descriptions for gender hints
+                    best_for_str = ' '.join(best_for).lower()
+                    if 'masculine' in best_for_str:
+                        return 'masculine'
+                    elif 'feminine' in best_for_str:
+                        return 'feminine'
+        
+        # Check creative prompt for gender hints
+        if ad_project.creative_prompt:
+            prompt_lower = ad_project.creative_prompt.lower()
+            if any(word in prompt_lower for word in ['masculine', 'men', 'male', 'gentleman', 'man']):
+                return 'masculine'
+            elif any(word in prompt_lower for word in ['feminine', 'women', 'female', 'lady', 'woman']):
+                return 'feminine'
+        
+        # Default to unisex
+        return 'unisex'
 
     def _normalize_scene_durations(
         self,
@@ -1076,8 +1233,8 @@ BRAND GUIDELINES (extracted from guidelines document):
         audio_url: str,
         ad_project: AdProject,
         progress_start: int = 85,
-    ) -> Dict[str, str]:
-        """Render final multi-aspect videos."""
+    ) -> str:
+        """Render final TikTok vertical video (9:16 only)."""
         try:
             update_project_status(
                 self.db, self.project_id, "RENDERING", progress=progress_start
@@ -1091,24 +1248,19 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # Get project from database to retrieve stored aspect_ratio
-            project = get_project(self.db, self.project_id)
-            # Use the aspect ratio specified when project was created
-            output_aspect_ratios = [project.aspect_ratio] if project.aspect_ratio else ["16:9"]
-            
-            final_videos = await renderer.render_final_video(
+            # Render final TikTok vertical video (9:16 hardcoded)
+            final_video_path = await renderer.render_final_video(
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
                 project_id=str(self.project_id),
-                output_aspect_ratios=output_aspect_ratios,
             )
 
             update_project_status(
                 self.db, self.project_id, "RENDERING", progress=100
             )
 
-            logger.info(f"Rendered final videos: {final_videos.keys()}")
-            return final_videos
+            logger.info(f"✅ Rendered final TikTok vertical video: {final_video_path}")
+            return final_video_path
 
         except Exception as e:
             logger.error(f"Final rendering failed: {e}")
@@ -1177,13 +1329,12 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.warning(f"Failed to cleanup intermediate files: {e}")
 
     async def _save_final_video_locally(
-        self, s3_video_url: str, aspect_ratio: str
+        self, s3_video_url: str
     ) -> str:
-        """Download final video from S3 and save to local storage.
+        """Download final TikTok vertical video from S3 and save to local storage.
         
         Args:
             s3_video_url: S3 URL of the rendered video
-            aspect_ratio: Video aspect ratio (16:9)
             
         Returns:
             Local file path
@@ -1192,14 +1343,14 @@ BRAND GUIDELINES (extracted from guidelines document):
             import requests
             import os
             
-            logger.info(f"Downloading {aspect_ratio} video from S3...")
+            logger.info("Downloading TikTok vertical (9:16) video from S3...")
             
             response = requests.get(s3_video_url, timeout=300)
             response.raise_for_status()
             
             local_path = LocalStorageManager.save_final_video(
                 self.project_id,
-                aspect_ratio,
+                "9:16",  # Hardcoded TikTok vertical
                 None
             )
             
@@ -1209,12 +1360,12 @@ BRAND GUIDELINES (extracted from guidelines document):
                 f.write(response.content)
             
             file_size = os.path.getsize(local_path)
-            logger.info(f"Saved {aspect_ratio} ({file_size / 1024 / 1024:.1f} MB) to {local_path}")
+            logger.info(f"Saved TikTok vertical (9:16) ({file_size / 1024 / 1024:.1f} MB) to {local_path}")
             
             return local_path
             
         except Exception as e:
-            logger.error(f"Failed to save {aspect_ratio} video locally: {e}")
+            logger.error(f"Failed to save TikTok vertical video locally: {e}")
             raise
 
 

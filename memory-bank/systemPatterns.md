@@ -245,9 +245,11 @@ VideoGenerator
   └─> Output: Background video (S3 URL)
 
 Compositor
-  └─> Input: Background video + Product PNG + Scene config
-  └─> Uses: OpenCV + PIL
-  └─> Output: Composited video (S3 URL)
+  └─> Input: Background video + Product PNG + Scene config + Scene role
+  └─> Uses: OpenCV + PIL, TikTok vertical safe zones (15-75%)
+  └─> Positioning: center, center_upper, center_lower (perfume-specific)
+  └─> Scaling: Role-based (hook: 0.5, showcase: 0.6, cta: 0.5) or explicit override
+  └─> Output: Composited video (local path)
 
 TextOverlayRenderer
   └─> Input: Video + Overlay config + Brand
@@ -255,14 +257,16 @@ TextOverlayRenderer
   └─> Output: Video with text (S3 URL)
 
 AudioEngine
-  └─> Input: Mood + Duration
+  └─> Input: Duration + Gender (masculine/feminine/unisex)
   └─> Uses: Replicate MusicGen
-  └─> Output: Music track (S3 URL)
+  └─> Method: generate_perfume_background_music() (perfume-specific)
+  └─> Prompt: Luxury ambient cinematic with gender-aware descriptors
+  └─> Output: Music track (local path)
 
 Renderer
   └─> Input: Scene videos + Audio
   └─> Uses: FFmpeg concat + mux
-  └─> Output: Final videos [9:16, 1:1, 16:9] (S3 URLs)
+  └─> Output: Final TikTok vertical video (9:16 only) (local path as string)
 ```
 
 **Dependency Direction:** Always forward, no cycles.
@@ -457,5 +461,50 @@ async def test_full_pipeline():
 
 ---
 
-**Last Updated:** November 14, 2025
+## Perfume-Specific Patterns (Phase 8)
+
+### Grammar Validation Pattern
+```python
+# After scene planning, validate against perfume shot grammar
+from app.services.perfume_grammar_loader import PerfumeGrammarLoader
+grammar_loader = PerfumeGrammarLoader()
+is_valid, violations = grammar_loader.validate_scene_plan(plan_scenes_list)
+
+if not is_valid:
+    logger.warning(f"⚠️ Grammar violations detected: {violations}")
+else:
+    logger.info("✅ Scene plan validated against perfume shot grammar")
+```
+
+**Why:** Ensures all scenes follow perfume shot grammar rules. Scene planner already has 3-retry system with fallback templates, so violations are rare. This validation is for observability.
+
+### Perfume Name Extraction Pattern
+```python
+# Extract perfume_name from ad_project_json or fallback to brand name
+perfume_name = None
+if project.ad_project_json and isinstance(project.ad_project_json, dict):
+    perfume_name = project.ad_project_json.get("perfume_name")
+if not perfume_name:
+    perfume_name = ad_project.brand.get('name', 'Perfume')
+    
+# Store for future use
+project.ad_project_json['perfume_name'] = perfume_name
+```
+
+**Why:** Perfume name is required for perfume-specific scene planning. Stored in JSON for future use (Phase 9 will add database field).
+
+### TikTok Vertical Hardcoding Pattern
+```python
+# All rendering returns single string path (not dict)
+final_video_path = await renderer.render_final_video(...)  # Returns str
+
+# Pipeline stores as dict for backward compatibility
+local_video_paths = {"9:16": final_video_path}
+```
+
+**Why:** Maintains backward compatibility with existing data structures while simplifying code (no multi-aspect logic).
+
+---
+
+**Last Updated:** November 17, 2025 (Phase 10 Complete)
 

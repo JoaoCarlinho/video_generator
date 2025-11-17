@@ -27,11 +27,13 @@ def create_project(
     ad_project_json: Dict[str, Any],
     mood: str = "uplifting",
     duration: int = 30,
-    aspect_ratio: str = "16:9",
-    selected_style: Optional[str] = None  # PHASE 7: User-selected style
+    aspect_ratio: str = "9:16",  # Phase 9: Default to TikTok vertical
+    selected_style: Optional[str] = None,  # PHASE 7: User-selected style
+    perfume_name: Optional[str] = None,  # Phase 9: Perfume product name
+    perfume_gender: Optional[str] = None  # Phase 9: Perfume gender
 ) -> Project:
     """
-    Create a new project in the database.
+    Create a new luxury perfume TikTok ad project in the database.
     
     Args:
         db: Database session
@@ -39,10 +41,12 @@ def create_project(
         title: Project title
         brief: Product brief/description
         ad_project_json: Complete ad project configuration as JSON
-        mood: Video mood/style
+        mood: Video mood/style (deprecated, kept for compatibility)
         duration: Video duration in seconds
-        aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9)
+        aspect_ratio: Video aspect ratio (always 9:16 for TikTok vertical)
         selected_style: (PHASE 7) User-selected video style or None
+        perfume_name: (Phase 9) Perfume product name (e.g., "Noir Élégance")
+        perfume_gender: (Phase 9) Perfume gender ('masculine', 'feminine', 'unisex')
     
     Returns:
         Project: Created project object
@@ -59,7 +63,9 @@ def create_project(
             selected_style=selected_style,  # PHASE 7: Store selected style
             progress=0,
             cost=0.0,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            perfume_name=perfume_name,  # Phase 9: Store perfume name
+            perfume_gender=perfume_gender  # Phase 9: Store perfume gender
         )
         db.add(project)
         db.commit()

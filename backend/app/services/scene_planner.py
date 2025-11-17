@@ -1,15 +1,15 @@
-"""Scene Planner Service - LLM-based scene generation with full creative freedom.
+"""Scene Planner Service - LLM-based scene generation with perfume shot grammar constraints.
 
 This service takes a creative prompt and brand information, then uses GPT-4o-mini
-to generate a structured scene plan for the video with complete directorial freedom.
+to generate a structured scene plan for LUXURY PERFUME videos with strict shot grammar constraints.
 
 Key Features:
-- Flexible scene count (3-6 scenes based on content)
-- Variable scene durations (3-15s per scene)
-- Smart asset placement (logo/product only when makes sense)
-- Background type categorization for better compositing
-- Camera movements and transitions
-- Adaptive pacing based on narrative
+- CONSTRAINED scene generation (only allowed perfume shot types)
+- Scene count based on duration (3-5 scenes for 15-60s videos)
+- Perfume-specific visual language (macro bottles, luxury B-roll, atmospheric)
+- 3-retry system with fallback to predefined templates
+- TikTok vertical optimization (9:16 only)
+- Style consistency enforcement across all scenes
 """
 
 import json
@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from app.services.style_manager import StyleManager
+from app.services.perfume_grammar_loader import PerfumeGrammarLoader
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +77,14 @@ class AdProjectPlan(BaseModel):
 # ============================================================================
 
 class ScenePlanner:
-    """Plans video scenes using LLM with full creative freedom."""
+    """Plans LUXURY PERFUME video scenes using LLM with shot grammar constraints."""
 
     def __init__(self, api_key: str):
-        """Initialize with OpenAI API key."""
+        """Initialize with OpenAI API key and perfume grammar constraints."""
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-4o-mini"
+        self.grammar_loader = PerfumeGrammarLoader()
+        logger.info("✅ ScenePlanner initialized with perfume shot grammar constraints")
 
     async def plan_scenes(
         self,
@@ -94,12 +97,11 @@ class ScenePlanner:
         target_duration: int = 30,
         has_product: bool = False,
         has_logo: bool = False,
-        aspect_ratio: str = "16:9",
         selected_style: Optional[str] = None,
         extracted_style: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Generate video scene plan with full creative freedom and PHASE 7 style consistency.
+        Generate TikTok vertical video scene plan with perfume grammar constraints.
 
         Args:
             creative_prompt: User's creative vision for the video
@@ -111,8 +113,8 @@ class ScenePlanner:
             target_duration: Target total duration in seconds (flexible ±20%)
             has_product: Whether product image is available
             has_logo: Whether logo is available
-            aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9) to optimize scene planning
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
+            extracted_style: Optional extracted style from reference image
 
         Returns:
             Dictionary with scenes, style_spec, chosenStyle, styleSource
@@ -143,18 +145,19 @@ class ScenePlanner:
                 target_audience=target_audience or "general consumers"
             )
 
-        # STEP 3: Generate scene plan via LLM (with tone context)
-        scenes_json = await self._generate_scenes_via_llm(
+        # STEP 3: Generate scene plan via LLM with PERFUME GRAMMAR CONSTRAINTS
+        # Extract perfume-specific info (required for Phase 2 refactor)
+        perfume_name = brand_name  # Use brand_name as perfume name for now
+        
+        scenes_json = await self._generate_perfume_scenes_with_grammar(
             creative_prompt=creative_prompt,
             brand_name=brand_name,
+            perfume_name=perfume_name,
             brand_description=brand_description,
             brand_colors=brand_colors,
             brand_guidelines=brand_guidelines,
             target_audience=target_audience or "general consumers",
             target_duration=target_duration,
-            has_product=has_product,
-            has_logo=has_logo,
-            aspect_ratio=aspect_ratio,
             chosen_style=chosen_style,
         )
 
@@ -249,10 +252,19 @@ class ScenePlanner:
 
         # PHASE 7: CRITICAL - All scenes MUST use the same style
         # Enforce this by adding style to each scene
+        # CRITICAL: Preserve shot_type and shot_variation from original scene_dict
         scenes_dict = []
-        for scene in scenes:
+        for i, scene in enumerate(scenes):
             scene_data = scene.model_dump()
             scene_data['style'] = chosen_style  # Force same style on all scenes
+            
+            # CRITICAL: Preserve perfume grammar fields from original scene_dict
+            original_dict = scenes_json[i]
+            if 'shot_type' in original_dict:
+                scene_data['shot_type'] = original_dict['shot_type']
+            if 'shot_variation' in original_dict:
+                scene_data['shot_variation'] = original_dict['shot_variation']
+            
             scenes_dict.append(scene_data)
         
         # Validate: all scenes have same style
@@ -266,6 +278,17 @@ class ScenePlanner:
         
         logger.info(f"✅ Generated plan with {len(scenes)} scenes (total: {total_duration}s, style: {chosen_style})")
         logger.info(f"✅ CRITICAL: All {len(scenes)} scenes enforced to use SAME style: {chosen_style}")
+        
+        # LOG: Show final shot_types and prompts after all processing
+        logger.info(f"📋 Final scene plan shot_types and prompts:")
+        for i, scene_data in enumerate(scenes_dict):
+            shot_type = scene_data.get('shot_type', 'MISSING')
+            shot_variation = scene_data.get('shot_variation', 'N/A')
+            role = scene_data.get('role', 'N/A')
+            duration = scene_data.get('duration', 'N/A')
+            background_prompt = scene_data.get('background_prompt', 'MISSING')
+            logger.info(f"   Scene {i+1}: shot_type='{shot_type}', shot_variation='{shot_variation}', role='{role}', duration={duration}s, style='{scene_data.get('style')}'")
+            logger.info(f"      Background prompt: {background_prompt}")
 
         # PHASE 7 + Task 2: Return dict with style information and derived tone
         return {
@@ -291,10 +314,9 @@ class ScenePlanner:
         target_duration: int,
         has_product: bool,
         has_logo: bool,
-        aspect_ratio: str = "16:9",
         chosen_style: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Generate scene specifications using GPT-4o-mini with full creative freedom."""
+        """Generate scene specifications using GPT-4o-mini (legacy method - not used for perfume)."""
 
         # Build context about available assets
         asset_context = []
@@ -319,7 +341,7 @@ class ScenePlanner:
         prompt = f"""You are a world-class video director and creative director creating a **modern, cinematic product-first advertising video**.
 Think of the visual language used by brands like Apple, Nike, and Tesla: minimal, design-driven, and emotionally powerful, with the product as the hero.
 
-By default, avoid generic “people enjoying the product” shots and cliché stock-style scenes.
+By default, avoid generic "people enjoying the product" shots and cliché stock-style scenes.
 If the creative prompt explicitly calls for people, use them sparingly, in stylized, cinematic ways (silhouettes, hands, partial figures), not staged group shots.
 
 === CREATIVE BRIEF ===
@@ -341,10 +363,7 @@ If any style or tone is implied (e.g. cinematic, dark premium, minimal studio, l
 Target Duration: {target_duration}s (flexible ±20%)
 Duration Range per Scene: 3-12 seconds
 Recommended Scene Count: 3-6 scenes
-Video Aspect Ratio: {aspect_ratio}
-  - 16:9 (Horizontal): YouTube, Web, Presentations, Widescreen
-  - 9:16 (Vertical): TikTok, Instagram Reels, Shorts (Portrait mode)
-  - 1:1 (Square): Instagram Feed, Facebook, Pinterest
+Video Aspect Ratio: 9:16 (TikTok vertical - hardcoded)
 
 === AVAILABLE ASSETS ===
 {asset_instructions}
@@ -605,6 +624,474 @@ Plan the scene now!"""
         except Exception as e:
             logger.error(f"Error generating scenes: {e}")
             raise
+
+    async def _generate_perfume_scenes_with_grammar(
+        self,
+        creative_prompt: str,
+        brand_name: str,
+        perfume_name: str,
+        brand_description: Optional[str],
+        brand_colors: List[str],
+        brand_guidelines: Optional[str],
+        target_audience: str,
+        target_duration: int,
+        chosen_style: str,
+        retry_count: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate PERFUME SCENE PLAN using STRICT SHOT GRAMMAR CONSTRAINTS.
+        
+        This method constrains LLM to ONLY generate scenes using allowed perfume shot types.
+        If LLM violates grammar, retry up to 3 times. After 3 failures, use predefined template.
+        
+        Args:
+            creative_prompt: User's creative vision
+            brand_name: Brand name
+            perfume_name: Perfume product name
+            brand_description: Brand story
+            brand_colors: Brand colors
+            brand_guidelines: Brand guidelines
+            target_audience: Target audience
+            target_duration: Target duration
+            chosen_style: Perfume style (gold_luxe, dark_elegance, romantic_floral)
+            retry_count: Current retry attempt (0-3)
+            
+        Returns:
+            List of scene dictionaries conforming to perfume grammar
+        """
+        
+        # Get grammar constraints
+        shot_types = self.grammar_loader.get_allowed_shot_types()
+        scene_count = self.grammar_loader.get_scene_count_for_duration(target_duration)
+        flow_rules = self.grammar_loader.get_flow_rules()
+        
+        # Get allowed shot type IDs (for validation)
+        allowed_shot_ids = self.grammar_loader.get_shot_type_ids()
+        
+        logger.info(f"🎬 Generating perfume scenes (attempt {retry_count + 1}/3)")
+        logger.info(f"   Shot count: {scene_count}, Duration: {target_duration}s, Style: {chosen_style}")
+        
+        # Build shot type descriptions for LLM
+        # CRITICAL: Use the 'id' field from config, NOT the dictionary key
+        shot_descriptions = []
+        allowed_ids = []  # Track allowed IDs for validation
+        for type_key, config in shot_types.items():
+            shot_id = config.get("id")  # Get the actual ID (e.g., "macro_bottle")
+            allowed_ids.append(shot_id)
+            variations = ", ".join(config["variations"][:3]) + ", ..."  # Show first 3
+            shot_descriptions.append(
+                f"**{config['display_name']} (shot_type ID: '{shot_id}')**\n"
+                f"  {config['description']}\n"
+                f"  Duration: {config['duration_range'][0]}-{config['duration_range'][1]}s\n"
+                f"  Variations: {variations}\n"
+                f"  ⚠️ YOU MUST USE THIS EXACT ID: '{shot_id}' (NOT '{type_key}')"
+            )
+        
+        # Build perfume-specific prompt with STRICT grammar
+        prompt = f"""You are a LUXURY PERFUME COMMERCIAL DIRECTOR creating a TikTok vertical video (9:16).
+
+🎯 PERFUME INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Brand: {brand_name}
+Perfume Name: {perfume_name}
+Brand Description: {brand_description or 'Luxury perfume brand'}
+Target Audience: {target_audience}
+{f"Brand Guidelines: {brand_guidelines[:300]}" if brand_guidelines else ""}
+
+🎨 CREATIVE VISION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{creative_prompt}
+
+🎬 PLATFORM & STYLE CONSTRAINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Platform: TikTok Vertical (9:16, 1080×1920)
+Video Style: {chosen_style}
+Duration: ~{target_duration}s
+Scene Count: EXACTLY {scene_count} scenes
+Aspect Ratio: Always 9:16 (portrait mode only)
+
+🔒 CRITICAL - PERFUME SHOT GRAMMAR (YOU MUST FOLLOW EXACTLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You MUST use ONLY these allowed shot types. DO NOT invent new types.
+
+{chr(10).join(shot_descriptions)}
+
+📋 MANDATORY RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Generate EXACTLY {scene_count} scenes (no more, no less)
+2. FIRST scene must be: {flow_rules.get('first_scene_must_be', ['macro_bottle', 'atmospheric'])} shot type
+3. LAST scene must be: {flow_rules.get('last_scene_must_be', ['brand_moment'])} shot type
+4. Product must appear in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
+5. Total duration should be ±{int(target_duration * 0.15)}s from {target_duration}s
+6. ALL scenes must use ONLY transitions: {', '.join(flow_rules.get('transition_rules', {}).get('allowed_transitions', ['fade', 'cut']))}
+7. FINAL scene MUST include text with perfume name + brand name
+8. ALL scenes must match style: {chosen_style}
+
+✅ PERFUME SHOT TYPE REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Each scene MUST have:
+- shot_type: (MUST be one of the allowed IDs above)
+- shot_variation: (MUST be from the allowed variations for that type)
+- role: (hook, showcase, cta, etc.)
+- duration: (within allowed range)
+- background_prompt: (detailed visual description using {chosen_style} aesthetic)
+- use_product: (true/false based on shot type)
+- camera_movement: (from allowed movements)
+- transition_to_next: (fade or cut only)
+
+⚠️ CRITICAL VALIDATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ EVERY shot_type MUST be EXACTLY one of these IDs: {', '.join(allowed_ids)}
+✓ DO NOT use dictionary keys like 'macro_bottle_shots' - use the ID 'macro_bottle' instead
+✓ EVERY shot_variation must be in the allowed list for that type
+✓ NO shot types that are not in the allowed list above
+✓ NO "generic" or invented shot types
+✓ Product positioning: ONLY in macro_bottle, human_silhouette, brand_moment
+✓ NO multi-product scenes (perfume bottles only)
+✓ NO conflicting rules (follow grammar EXACTLY)
+
+🚨 EXACT SHOT TYPE IDs YOU MUST USE:
+{', '.join([f"'{id}'" for id in allowed_ids])}
+
+DO NOT USE THESE (they are wrong):
+- 'macro_bottle_shots' → USE 'macro_bottle'
+- 'luxury_aesthetic_broll' → USE 'aesthetic_broll'
+- 'atmospheric_scenes' → USE 'atmospheric'
+- 'final_brand_moment' → USE 'brand_moment'
+
+📄 OUTPUT FORMAT (STRICT JSON)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Return ONLY valid JSON array with {scene_count} scene objects:
+
+[
+  {{
+    "scene_id": 0,
+    "shot_type": "macro_bottle",
+    "shot_variation": "extreme_closeup_cap",
+    "role": "hook",
+    "duration": 6,
+    "background_prompt": "Extreme close-up of perfume bottle cap with engraved logo, soft golden rim lighting, black background, premium commercial aesthetic",
+    "use_product": true,
+    "product_position": "center",
+    "product_scale": 0.6,
+    "camera_movement": "slow_zoom_in",
+    "transition_to_next": "fade",
+    "overlay": {{
+      "text": "{perfume_name}",
+      "position": "bottom",
+      "duration": 2.0,
+      "font_size": 48,
+      "color": "{brand_colors[0] if brand_colors else '#FFFFFF'}",
+      "animation": "fade_in"
+    }}
+  }},
+  ...
+]
+
+⚠️ DO NOT DEVIATE FROM GRAMMAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ DO NOT use shot types not in the list
+❌ DO NOT use variations not in the shot type
+❌ DO NOT ignore scene count requirement
+❌ DO NOT mix styles or aesthetics
+❌ DO NOT create more than {scene_count} scenes
+❌ DO NOT create fewer than {scene_count} scenes
+
+✅ FOLLOW GRAMMAR RULES EXACTLY AND GENERATE NOW"""
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=4000,
+                temperature=0.5,  # Lower temperature for stricter grammar compliance
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"""You are a luxury perfume commercial director. You MUST follow perfume shot grammar constraints EXACTLY.
+
+CRITICAL RULES:
+1. Use ONLY these exact shot_type IDs: {', '.join(allowed_ids)}
+2. DO NOT use dictionary keys like 'macro_bottle_shots' - use 'macro_bottle' instead
+3. DO NOT invent new shot types
+4. Every scene MUST have a shot_type field with one of the exact IDs above
+5. Output only valid JSON arrays
+
+Example CORRECT shot_type: "macro_bottle"
+Example WRONG shot_type: "macro_bottle_shots" (this is a dictionary key, not the ID)
+
+Follow the grammar rules EXACTLY."""
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            )
+            
+            # Extract JSON from response
+            response_text = response.choices[0].message.content
+            
+            # Try to parse JSON
+            try:
+                scenes = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Try extracting from code blocks
+                if "```json" in response_text:
+                    json_str = response_text.split("```json")[1].split("```")[0].strip()
+                    scenes = json.loads(json_str)
+                elif "```" in response_text:
+                    json_str = response_text.split("```")[1].split("```")[0].strip()
+                    scenes = json.loads(json_str)
+                else:
+                    raise ValueError("Could not extract JSON from response")
+            
+            # LOG: Show shot_type and background_prompt for each scene generated by LLM
+            logger.info(f"📋 LLM generated {len(scenes)} scenes (attempt {retry_count + 1}/3):")
+            for i, scene in enumerate(scenes):
+                shot_type = scene.get('shot_type', 'MISSING')
+                shot_variation = scene.get('shot_variation', 'N/A')
+                role = scene.get('role', 'N/A')
+                duration = scene.get('duration', 'N/A')
+                background_prompt = scene.get('background_prompt', 'MISSING')
+                logger.info(f"   Scene {i+1}: shot_type='{shot_type}', shot_variation='{shot_variation}', role='{role}', duration={duration}s")
+                logger.info(f"      Background prompt: {background_prompt}")
+            
+            # VALIDATE AGAINST GRAMMAR
+            # Ensure all scenes have shot_type set
+            for scene in scenes:
+                if 'shot_type' not in scene or scene.get('shot_type') is None:
+                    # Try to infer from other fields or set default
+                    logger.warning(f"Scene {scene.get('scene_id', 'unknown')} missing shot_type, attempting to infer...")
+                    # This shouldn't happen, but if it does, we'll catch it in validation
+                    
+            is_valid, violations = self.grammar_loader.validate_scene_plan(scenes)
+            
+            if not is_valid:
+                logger.warning(f"⚠️ Grammar violations detected (attempt {retry_count + 1}/3):")
+                for v in violations:
+                    logger.warning(f"   - {v}")
+                
+                # Log current shot_types for debugging
+                logger.warning(f"   Current scene shot_types: {[s.get('shot_type', 'MISSING') for s in scenes]}")
+                
+                if retry_count < 2:
+                    # Retry with more explicit prompt
+                    logger.info(f"Retrying with more explicit grammar instructions...")
+                    return await self._generate_perfume_scenes_with_grammar(
+                        creative_prompt=creative_prompt,
+                        brand_name=brand_name,
+                        perfume_name=perfume_name,
+                        brand_description=brand_description,
+                        brand_colors=brand_colors,
+                        brand_guidelines=brand_guidelines,
+                        target_audience=target_audience,
+                        target_duration=target_duration,
+                        chosen_style=chosen_style,
+                        retry_count=retry_count + 1,
+                    )
+                else:
+                    # 3 retries failed - use predefined template
+                    logger.error(f"❌ Grammar violations after 3 retries. Using fallback template.")
+                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
+                    logger.info(f"📋 Fallback template scenes:")
+                    for i, scene in enumerate(fallback_scenes):
+                        logger.info(f"   Scene {i+1}: shot_type='{scene.get('shot_type')}', role='{scene.get('role')}', duration={scene.get('duration')}s")
+                    return fallback_scenes
+            
+            # Validate scene count
+            if len(scenes) != scene_count:
+                logger.warning(f"Scene count mismatch: expected {scene_count}, got {len(scenes)}")
+                if retry_count < 2:
+                    logger.info(f"Retrying to get exact scene count...")
+                    return await self._generate_perfume_scenes_with_grammar(
+                        creative_prompt=creative_prompt,
+                        brand_name=brand_name,
+                        perfume_name=perfume_name,
+                        brand_description=brand_description,
+                        brand_colors=brand_colors,
+                        brand_guidelines=brand_guidelines,
+                        target_audience=target_audience,
+                        target_duration=target_duration,
+                        chosen_style=chosen_style,
+                        retry_count=retry_count + 1,
+                    )
+                else:
+                    logger.error(f"Fallback to template due to scene count mismatch")
+                    return self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
+            
+            logger.info(f"✅ Generated {len(scenes)} perfume scenes (grammar validated)")
+            logger.info(f"📋 Final validated scenes:")
+            for i, scene in enumerate(scenes):
+                logger.info(f"   Scene {i+1}: shot_type='{scene.get('shot_type')}', shot_variation='{scene.get('shot_variation')}', role='{scene.get('role')}', duration={scene.get('duration')}s")
+            return scenes
+            
+        except Exception as e:
+            logger.error(f"Error generating perfume scenes: {e}")
+            if retry_count < 2:
+                logger.info(f"Retrying due to error...")
+                return await self._generate_perfume_scenes_with_grammar(
+                    creative_prompt=creative_prompt,
+                    brand_name=brand_name,
+                    perfume_name=perfume_name,
+                    brand_description=brand_description,
+                    brand_colors=brand_colors,
+                    brand_guidelines=brand_guidelines,
+                    target_audience=target_audience,
+                    target_duration=target_duration,
+                    chosen_style=chosen_style,
+                    retry_count=retry_count + 1,
+                )
+            else:
+                logger.error(f"Fallback to template due to LLM error")
+                return self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
+
+    def _get_fallback_template(
+        self,
+        scene_count: int,
+        target_duration: int,
+        style: str,
+        perfume_name: str,
+        brand_name: str,
+        brand_colors: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Return predefined scene template as fallback when LLM fails grammar validation.
+        
+        Template structure is perfume-appropriate and follows shot grammar rules.
+        """
+        logger.info(f"🎬 Using fallback template: {scene_count} scenes, {style} style")
+        
+        color = brand_colors[0] if brand_colors else "#FFFFFF"
+        
+        # Template for 3 scenes (15-30s)
+        if scene_count <= 3:
+            return [
+                {
+                    "scene_id": 0,
+                    "shot_type": "macro_bottle",
+                    "shot_variation": "extreme_closeup_cap",
+                    "role": "hook",
+                    "duration": max(3, min(8, target_duration // 3)),
+                    "background_prompt": f"Extreme close-up of luxury perfume bottle, elegant lighting, {style} aesthetic, premium cinematic commercial",
+                    "use_product": True,
+                    "product_position": "center",
+                    "product_scale": 0.6,
+                    "camera_movement": "slow_zoom_in",
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": perfume_name,
+                        "position": "bottom",
+                        "duration": 2.0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                },
+                {
+                    "scene_id": 1,
+                    "shot_type": "aesthetic_broll",
+                    "shot_variation": "silk_fabric_flowing",
+                    "role": "showcase",
+                    "duration": max(3, min(8, target_duration // 3)),
+                    "background_prompt": f"Luxurious silk and textures, {style} lighting and mood, premium aesthetic",
+                    "use_product": False,
+                    "camera_movement": "slow_zoom_in",
+                    "transition_to_next": "fade",
+                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
+                },
+                {
+                    "scene_id": 2,
+                    "shot_type": "brand_moment",
+                    "shot_variation": "product_centered_minimal",
+                    "role": "cta",
+                    "duration": max(3, min(8, target_duration // 3 + 2)),
+                    "background_prompt": f"Clean minimalist studio, perfume bottle centered, {style} aesthetic, premium final moment",
+                    "use_product": True,
+                    "product_position": "center",
+                    "product_scale": 0.5,
+                    "camera_movement": "slow_zoom_out",
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": f"{perfume_name}\n{brand_name}",
+                        "position": "bottom",
+                        "duration": 3.0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                }
+            ]
+        
+        # Template for 4-5 scenes (30-60s)
+        else:
+            return [
+                {
+                    "scene_id": 0,
+                    "shot_type": "macro_bottle",
+                    "shot_variation": "spray_mist_macro",
+                    "role": "hook",
+                    "duration": 5,
+                    "background_prompt": f"Perfume spray mist in macro, golden particles, {style} lighting, cinematic premium",
+                    "use_product": True,
+                    "product_position": "center",
+                    "product_scale": 0.5,
+                    "camera_movement": "static",
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": perfume_name,
+                        "position": "bottom",
+                        "duration": 2.0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                },
+                {
+                    "scene_id": 1,
+                    "shot_type": "aesthetic_broll",
+                    "shot_variation": "rose_petals_falling",
+                    "role": "build",
+                    "duration": 6,
+                    "background_prompt": f"Rose petals in luxury motion, soft lighting, {style} mood",
+                    "use_product": False,
+                    "camera_movement": "slow_pan_right",
+                    "transition_to_next": "fade",
+                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
+                },
+                {
+                    "scene_id": 2,
+                    "shot_type": "atmospheric",  # Use ID, not dictionary key
+                    "shot_variation": "light_rays_through_window",
+                    "role": "showcase",
+                    "duration": 6,
+                    "background_prompt": f"Light rays through premium materials, {style} aesthetic",
+                    "use_product": False,
+                    "camera_movement": "slow_zoom_in",
+                    "transition_to_next": "fade",
+                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
+                },
+                {
+                    "scene_id": 3,
+                    "shot_type": "brand_moment",
+                    "shot_variation": "bottle_with_tagline",
+                    "role": "cta",
+                    "duration": 7,
+                    "background_prompt": f"Perfume bottle hero shot with elegant background, {style} premium aesthetic",
+                    "use_product": True,
+                    "product_position": "center",
+                    "product_scale": 0.5,
+                    "camera_movement": "slow_zoom_out",
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": f"{perfume_name}\n{brand_name}",
+                        "position": "bottom",
+                        "duration": 3.0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                }
+            ]
 
     async def _llm_choose_style(
         self,

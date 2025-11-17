@@ -1,72 +1,90 @@
-# Project Brief — AI Ad Video Generator
+# Project Brief — AI Ad Video Generator (Luxury Perfume Specialist)
 
-**Version:** 1.0  
+**Version:** 2.0 - LUXURY PERFUME REFACTOR  
 **Created:** November 14, 2025  
-**Status:** Planning Complete → Ready for Implementation  
-**Timeline:** Flexible (MVP-focused development)
+**Refactor Started:** November 17, 2025  
+**Status:** Refactor Planning Complete → Ready for Phase 1 Implementation  
+**Timeline:** 10 phases, 50-70 hours over 2-3 weeks
 
 ---
 
 ## Overview
 
-AI Ad Video Generator is an end-to-end automated system that transforms a simple product brief into professional, brand-consistent promotional videos. The system's core innovation is **product visual consistency** through compositing rather than unreliable AI generation.
+**NEW FOCUS:** GenAds is pivoting from a generic ad generator to a **specialized luxury perfume TikTok ad creator**. The system generates 15-60 second vertical videos (9:16) using constrained-creative AI that follows strict perfume shot grammar while maintaining brand elegance.
 
 ---
 
-## Core Problem
+## Core Problem (REFINED FOR PERFUME NICHE)
 
-Current AI video generators produce inconsistent product representations with:
-- Warped logos and incorrect colors
-- Disconnected clips with varying art styles
-- No ability to edit after generation
-- Single aspect ratio outputs
+Luxury perfume brands need **TikTok-native ads** (9:16 vertical) that:
+1. **Maintain Brand Elegance** - Cinematic, high-end, sophisticated aesthetic
+2. **Follow Perfume Visual Language** - Macro shots, atmospheric scenes, luxury materials
+3. **Stay On-Brand** - Respect brand guidelines (colors, tone, dos/donts)
+4. **Generate Fast** - Create variations in minutes, not weeks
+5. **Cost-Effective** - < $2 per 30s video vs $5K-50K agency fees
 
-**Market Need:** Brands need hundreds of ad variations for A/B testing across platforms (TikTok 9:16, YouTube 16:9, Instagram 1:1). Creating these manually is expensive ($5K-50K per ad) and slow (weeks).
-
----
-
-## Core Innovation
-
-### Product Consistency Strategy
-**Never let AI generate the product.** Instead:
-1. Extract product from uploaded image (remove background)
-2. Generate clean backgrounds WITHOUT product
-3. Composite real product onto backgrounds with OpenCV
-
-**Result:** Pixel-perfect product across all scenes.
-
-### Style Consistency System
-Generate a global **Style Spec** once:
-- Lighting direction
-- Camera style
-- Texture & materials
-- Mood & atmosphere
-- Color palette (from brand colors)
-- Grade & post-processing
-
-Apply to ALL scenes → Visual coherence guaranteed.
+**Current Solutions Fail:**
+- Generic AI tools don't understand perfume shot grammar
+- Freeform generation produces inconsistent, non-luxury results
+- Can't maintain brand identity across scenes
+- No TikTok vertical optimization
 
 ---
 
-## MVP Scope (Generation Pipeline)
+## Core Innovation (REFACTORED)
 
-**What's IN MVP:**
-- ✅ Scene planning with LLM (GPT-4o-mini)
-- ✅ Product extraction + compositing
-- ✅ Multi-scene video generation (Wān model)
-- ✅ Background music generation
-- ✅ Text overlay rendering
-- ✅ Multi-aspect export (9:16, 1:1, 16:9)
-- ✅ Modern UI with cool landing page
-- ✅ 7-day auto-cleanup
+### 1. Constrained-Creative AI System
+**LLM generates scenes BUT must follow strict perfume shot grammar:**
+- 5 Allowed Categories: Macro Bottle, Luxury B-roll, Atmospheric, Minimal Human (optional), Brand Moment
+- 30+ variations within categories (spray mist, silk fabric, light rays, etc.)
+- Duration-based limits (15s→3 scenes, 60s→8 scenes)
+- 3-retry validation with fallback to predefined templates
+- **Result:** Creative scenes that always look "perfume-like"
 
-**What's POST-MVP:**
-- ❌ Timeline editor (drag-and-drop)
-- ❌ Prompt-based editing
-- ❌ A/B variation generator
-- ❌ Voiceover narration (TTS)
+### 2. Style Cascading System (NEW)
+**Merge style inputs with clear priority:**
+1. **Brand Guidelines** (Highest) - Colors, tone, fonts from PDF/DOCX
+2. **User Style Selection** (More Weight) - Choose from GOLD_LUXE, DARK_ELEGANCE, ROMANTIC_FLORAL
+3. **Reference Image** (Some Weight) - Extract visual inspiration
 
-**Rationale:** Build solid generation pipeline first, then add editing layer. Clean separation ensures MVP code won't need refactoring.
+**Apply unified style to ALL scenes → Theme consistency guaranteed**
+
+### 3. Product Consistency Strategy (KEPT)
+**Never let AI generate the product:**
+1. Extract perfume bottle from uploaded image
+2. Generate luxury backgrounds WITHOUT bottle
+3. Composite bottle onto backgrounds (OpenCV)
+- **Result:** Pixel-perfect bottle across all scenes
+
+---
+
+## Refactor Scope (Luxury Perfume Specialization)
+
+**What's CHANGING:**
+- 🔄 **Scene Planning:** LLM constrained by perfume shot grammar (5 categories)
+- 🔄 **Style System:** 3 perfume styles + cascading priority (Brand > User > Reference)
+- 🔄 **Video Output:** Hardcoded TikTok vertical (9:16, 1080x1920) ONLY
+- 🔄 **Text Overlays:** Luxury fonts (Playfair Display, Montserrant), 3-4 blocks max
+- 🔄 **Audio:** Single luxury ambient prompt, simplified pipeline
+- 🔄 **Compositing:** Perfume-specific positioning, TikTok safe zones
+
+**What's REMOVED:**
+- ❌ Multi-aspect rendering (16:9, 1:1)
+- ❌ Generic ad categories and templates
+- ❌ Multi-product support
+- ❌ Adaptive dynamic positioning
+- ❌ Multi-industry flexibility
+
+**What's ADDED:**
+- ✅ Perfume shot grammar JSON (30+ variations)
+- ✅ PerfumeGrammarLoader service
+- ✅ StyleCascadingManager (400+ lines)
+- ✅ Fallback templates (3 styles × 4 durations)
+- ✅ TikTok-optimized everything
+
+**Timeline:** 10 phases, 50-70 hours, 2-3 weeks
+
+**Rationale:** Focus on ONE niche done exceptionally well. Perfume brands need consistent, elegant TikTok ads. Generic = mediocre. Specialized = exceptional.
 
 ---
 
@@ -149,5 +167,5 @@ Apply to ALL scenes → Visual coherence guaranteed.
 
 ---
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 17, 2025 (Phase 10 Complete)
 
