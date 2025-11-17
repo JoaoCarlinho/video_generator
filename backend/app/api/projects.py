@@ -31,7 +31,7 @@ from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 
 
 # Note: get_current_user_id imported from app.api.auth
@@ -185,7 +185,7 @@ async def create_new_project(
             # STORY 3: Pass new multi-format fields
             product_images=product_images_list,
             scene_backgrounds=scene_backgrounds_list,
-            output_formats=output_formats_list
+            output_formats=output_formats_list,
             selected_style=request.selected_style  # PHASE 7: Store selected style
         )
         

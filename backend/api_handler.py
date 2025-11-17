@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 # Create Lambda handler
 # Mangum wraps the FastAPI app and adapts it for AWS Lambda
-# - lifespan="off" disables lifespan events (startup/shutdown) for better Lambda performance
+# - lifespan="on" enables startup/shutdown events (needed for DB initialization)
 # - api_gateway_base_path is handled automatically by Mangum
-handler = Mangum(app, lifespan="off")
+handler = Mangum(app, lifespan="on")
 
 # The handler function signature matches Lambda's requirements:
 # def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]

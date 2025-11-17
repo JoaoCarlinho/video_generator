@@ -31,7 +31,7 @@ def create_project(
     # STORY 3: New multi-format parameters
     product_images: Optional[List[str]] = None,
     scene_backgrounds: Optional[List[Dict[str, str]]] = None,
-    output_formats: Optional[List[str]] = None
+    output_formats: Optional[List[str]] = None,
     selected_style: Optional[str] = None  # PHASE 7: User-selected style
 ) -> Project:
     """

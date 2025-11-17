@@ -12,11 +12,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
+# redirect_slashes=False prevents automatic redirects between /path and /path/
+# This is crucial for Lambda Function URLs which also handle redirects
 app = FastAPI(
     title="AI Ad Video Generator",
     description="Generate professional ad videos with product compositing",
-    version="1.0.0"
+    version="1.0.0",
+    redirect_slashes=False
 )
+
+# Middleware to prevent redirect loops
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+class NoRedirectMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Prevent 307 redirects that cause loops
+        if response.status_code == 307:
+            location = response.headers.get("location", "")
+            # If redirecting to the same path, return 404 instead
+            if location.rstrip('/') == str(request.url).rstrip('/'):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+        return response
+
+app.add_middleware(NoRedirectMiddleware)
 
 # CORS configuration
 app.add_middleware(
@@ -26,6 +48,8 @@ app.add_middleware(
         "http://localhost:5176",  # Vite frontend dev (alternate)
         "http://localhost:3000",  # Alternative dev port
         "https://localhost:5173",
+        "http://adgen-frontend-1763351975.s3-website-us-east-1.amazonaws.com",  # Production frontend
+        "*",  # Allow all origins for now (remove in production if needed)
     ],
     allow_credentials=True,
     allow_methods=["*"],
