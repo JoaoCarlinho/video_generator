@@ -60,7 +60,7 @@ const Modal = ({
       {/* Overlay */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-200 animate-fade-in',
+          'fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-200 animate-fade-in',
           overlayClassName
         )}
         onClick={onClose}
@@ -71,7 +71,7 @@ const Modal = ({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
           className={cn(
-            'bg-slate-800 rounded-lg shadow-2xl border border-slate-700 w-full pointer-events-auto animate-scale-in',
+            'bg-white rounded-xl shadow-2xl border border-gray-200 w-full pointer-events-auto animate-scale-in',
             sizeClasses[size],
             className
           )}
@@ -81,15 +81,15 @@ const Modal = ({
         >
           {/* Header */}
           {(title || closeButton) && (
-            <div className="flex items-start justify-between p-6 border-b border-slate-700">
+            <div className="flex items-start justify-between p-6 border-b border-gray-200">
               <div>
-                {title && <h2 className="text-lg font-semibold text-slate-100">{title}</h2>}
-                {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+                {title && <h2 className="text-lg font-semibold text-gray-900">{title}</h2>}
+                {description && <p className="text-sm text-gray-600 mt-1">{description}</p>}
               </div>
               {closeButton && (
                 <button
                   onClick={onClose}
-                  className="text-slate-400 hover:text-slate-200 transition-colors"
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
                   aria-label="Close modal"
                 >
                   <X size={20} />

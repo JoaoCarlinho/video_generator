@@ -172,7 +172,7 @@ export const MultiImageUpload = ({
                   className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all opacity-0 group-hover:opacity-100 shadow-lg"
                   aria-label={`Remove image ${index + 1}`}
                 >
-                  <X className="w-4 h-4 text-white" />
+                  <X className="w-4 h-4 text-gray-50" />
                 </button>
                 {/* Image Count Badge */}
                 <div className="absolute bottom-2 left-2 px-2 py-1 bg-slate-900/80 backdrop-blur-sm rounded text-xs text-slate-300 font-medium">

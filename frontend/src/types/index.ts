@@ -95,8 +95,6 @@ export interface CreateProjectInput {
   brief?: string
   mood?: string
   duration?: number
-  target_audience?: string
-  target_duration?: number
 }
 
 // Generation Types

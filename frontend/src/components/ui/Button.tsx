@@ -3,17 +3,24 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../utils/cn'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/20 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed',
   {
     variants: {
       variant: {
-        default: 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 shadow-md hover:shadow-lg',
-        secondary: 'bg-slate-800 text-white hover:bg-slate-700 active:bg-slate-600 border border-slate-700',
-        outline: 'border border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white',
-        ghost: 'text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700',
-        danger: 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700 shadow-md hover:shadow-lg',
-        success: 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 shadow-md hover:shadow-lg',
-        gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-glow hover:shadow-glow-lg',
+        // Primary button (solid red)
+        default: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-gray-50 shadow-sm hover:shadow-md',
+        // Secondary button (light with border)
+        secondary: 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400',
+        // Outline button (subtle border, text only)
+        outline: 'border border-gray-300 text-gray-900 hover:border-primary-500 hover:text-primary-600',
+        // Ghost button (minimal, text only)
+        ghost: 'text-gray-600 hover:text-primary-500 hover:bg-gray-50',
+        // Danger button (solid red)
+        danger: 'bg-error-500 text-gray-50 hover:bg-error-600 active:bg-error-700 shadow-sm hover:shadow-md',
+        // Success button (solid green)
+        success: 'bg-success-500 text-gray-50 hover:bg-success-600 active:bg-success-700 shadow-sm hover:shadow-md',
+        // Gradient variant (kept for backward compatibility, but using solid primary)
+        gradient: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-gray-50 shadow-sm hover:shadow-md',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

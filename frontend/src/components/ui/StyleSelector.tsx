@@ -70,7 +70,7 @@ export const StyleSelector = ({
           >
             {/* Style Name */}
             <h4 className="font-semibold text-neutral-900 text-sm mb-1">
-              {style.display_name}
+              {style.name}
             </h4>
 
             {/* Short Description */}

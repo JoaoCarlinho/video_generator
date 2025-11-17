@@ -156,7 +156,7 @@ export const ProgressTracker = ({
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 >
-                  <Clock className="w-6 h-6 text-white" />
+                  <Clock className="w-6 h-6 text-gray-50" />
                 </motion.div>
               ) : (
                 <div className="w-12 h-12 bg-slate-800 border-2 border-slate-700 rounded-full flex items-center justify-center">
@@ -221,7 +221,7 @@ export const ProgressTracker = ({
                       </div>
                     ) : stepStatus === 'current' ? (
                       <div className="w-6 h-6 bg-indigo-500 border border-indigo-600 rounded-full flex items-center justify-center">
-                        <Clock className="w-3 h-3 text-white" />
+                        <Clock className="w-3 h-3 text-gray-50" />
                       </div>
                     ) : (
                       <div className="w-6 h-6 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center">

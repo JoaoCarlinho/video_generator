@@ -7,6 +7,7 @@ import { VideoPlayer } from '@/components/PageComponents'
 import { useProjects } from '@/hooks/useProjects'
 import { api } from '@/services/api'
 import { ArrowLeft, Copy, Check, Trash2, Cloud, HardDrive, Lock } from 'lucide-react'
+import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
 import {
   getVideoURL,
   deleteProjectVideos,
@@ -22,8 +23,8 @@ export const VideoResults = () => {
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [aspect, setAspect] = useState<string>('16:9')
-  const [availableAspects, setAvailableAspects] = useState<string[]>(['16:9'])
+  const [aspect, setAspect] = useState<AspectRatio>('16:9')
+  const [availableAspects, setAvailableAspects] = useState<AspectRatio[]>(['16:9'])
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloadingAspect, setDownloadingAspect] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -46,7 +47,7 @@ export const VideoResults = () => {
         // STORY 3 (AC#7): Detect available aspect ratios from local_video_paths or output_videos
         const localPaths = data.local_video_paths || {}
         const outputVideos = data.output_videos || {}
-        const aspects = Object.keys({...localPaths, ...outputVideos})
+        const aspects = Object.keys({...localPaths, ...outputVideos}) as AspectRatio[]
 
         if (aspects.length > 0) {
           setAvailableAspects(aspects)
@@ -309,7 +310,7 @@ export const VideoResults = () => {
                       onClick={() => setAspect(ar)}
                       className={`px-4 py-2 rounded-lg border transition-all ${
                         aspect === ar
-                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          ? 'bg-indigo-600 border-indigo-500 text-gray-50'
                           : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
                       }`}
                     >

@@ -11,3 +11,8 @@ export { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, type SkeletonProp
 export { ProgressBar, CircularProgress, type ProgressBarProps, type CircularProgressProps } from './ProgressBar'
 export { AspectRatioSelector, type AspectRatioSelectorProps, type AspectRatio } from './AspectRatioSelector'
 
+// Tab Wizard Components
+export { TabWizard, type TabWizardProps, type TabConfig } from './TabWizard'
+export { TabPanel, type TabPanelProps } from './TabPanel'
+export { FormNavigation, type FormNavigationProps } from './FormNavigation'
+

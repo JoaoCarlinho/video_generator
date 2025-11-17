@@ -136,7 +136,7 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
                       className={cn(
                         'w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors duration-150',
                         'hover:bg-slate-700',
-                        value === option.value && 'bg-indigo-600 text-white'
+                        value === option.value && 'bg-indigo-600 text-gray-50'
                       )}
                     >
                       {option.icon && <span>{option.icon}</span>}
