@@ -8,6 +8,7 @@
 .env.*.local
 *.env
 .envrc
+tokens
 
 # API keys and credentials
 *_credentials.json
@@ -338,7 +339,11 @@ pytestdebug.log
 # DEPLOYMENT & CLOUD
 # ============================================
 # Railway
+deploy_scripts/
 .railway/
+deploy_scripts/
+
+
 
 # Vercel
 .vercel
@@ -411,3 +416,10 @@ user_uploads/
 
 .ignore/
 backend/test_extraction.py
+
+# Project documentation (local)
+docs/
+bmad/
+.bmad/
+.claude/
+frontend/.env.production

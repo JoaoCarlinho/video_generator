@@ -9,4 +9,5 @@ export { Select, type SelectProps, type SelectOption } from './Select'
 export { Tooltip, type TooltipProps } from './Tooltip'
 export { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, type SkeletonProps } from './Skeleton'
 export { ProgressBar, CircularProgress, type ProgressBarProps, type CircularProgressProps } from './ProgressBar'
+export { AspectRatioSelector, type AspectRatioSelectorProps, type AspectRatio } from './AspectRatioSelector'
 

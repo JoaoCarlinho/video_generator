@@ -96,7 +96,7 @@ class ScenePlanner:
         has_logo: bool = False,
         aspect_ratio: str = "16:9",
         selected_style: Optional[str] = None,  # PHASE 7: User-selected or LLM-inferred style
-    ) -> Dict[str, Any]:
+    ) -> AdProjectPlan:
         """
         Generate video scene plan with full creative freedom and PHASE 7 style consistency.
 

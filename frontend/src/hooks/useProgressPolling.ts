@@ -149,7 +149,7 @@ export const useProgressPolling = ({
       }
       setIsPolling(false)
     }
-  }, [projectId, enabled, interval]) // Removed 'poll' from dependencies to prevent re-creation
+  }, [projectId, enabled, interval, poll])
 
   // Manual stop polling
   const stopPolling = useCallback(() => {

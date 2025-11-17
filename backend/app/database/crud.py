@@ -28,11 +28,15 @@ def create_project(
     mood: str = "uplifting",
     duration: int = 30,
     aspect_ratio: str = "16:9",
+    # STORY 3: New multi-format parameters
+    product_images: Optional[List[str]] = None,
+    scene_backgrounds: Optional[List[Dict[str, str]]] = None,
+    output_formats: Optional[List[str]] = None
     selected_style: Optional[str] = None  # PHASE 7: User-selected style
 ) -> Project:
     """
     Create a new project in the database.
-    
+
     Args:
         db: Database session
         user_id: ID of the user creating the project
@@ -41,16 +45,23 @@ def create_project(
         ad_project_json: Complete ad project configuration as JSON
         mood: Video mood/style
         duration: Video duration in seconds
-        aspect_ratio: Video aspect ratio (9:16, 1:1, or 16:9)
+        aspect_ratio: DEPRECATED - Video aspect ratio (9:16, 1:1, or 16:9)
+        product_images: STORY 3 - Array of product image URLs (max 10)
+        scene_backgrounds: STORY 3 - Array of scene background mappings
+        output_formats: STORY 3 - Array of desired aspect ratios
         selected_style: (PHASE 7) User-selected video style or None
-    
+
     Returns:
         Project: Created project object
-    
+
     Raises:
         Exception: If database insert fails
     """
     try:
+        # Default output_formats if not provided
+        if output_formats is None:
+            output_formats = [aspect_ratio]  # Use aspect_ratio as fallback
+
         project = Project(
             user_id=user_id,
             title=title,
@@ -59,12 +70,16 @@ def create_project(
             selected_style=selected_style,  # PHASE 7: Store selected style
             progress=0,
             cost=0.0,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,  # Kept for backward compatibility
+            # STORY 3: New fields
+            product_images=product_images,
+            scene_backgrounds=scene_backgrounds,
+            output_formats=output_formats
         )
         db.add(project)
         db.commit()
         db.refresh(project)
-        logger.info(f"✅ Created project {project.id} for user {user_id}")
+        logger.info(f"✅ Created project {project.id} for user {user_id} with {len(output_formats)} output formats")
         return project
     except Exception as e:
         try:

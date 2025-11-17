@@ -389,9 +389,9 @@ class GenerationPipeline:
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Brand colors from LLM or reference image if available
+            # Brand colors are now determined by LLM during scene planning
+            # based on creative prompt and brand guidelines
             brand_colors = []
-            
             # Check if reference image style was extracted
             extracted_style = None
             if project.ad_project_json:
@@ -399,10 +399,19 @@ class GenerationPipeline:
                 if extracted_style:
                     brand_colors = extracted_style.get("colors", [])
                     logger.info(f"🎨 Using colors from reference image: {brand_colors}")
-            
-            # Check if product/logo are available
-            has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
+
+            # STORY 3: Check if product/logo are available (support multiple product images)
+            has_product = (ad_project.product_asset is not None and ad_project.product_asset.original_url) or \
+                          (ad_project.product_images is not None and len(ad_project.product_images) > 0)
             has_logo = ad_project.brand.logo_url is not None
+
+            # STORY 3: Prepare product reference images for scene planner
+            # First image is primary, rest are references for AI understanding
+            product_reference_images = ad_project.product_images if ad_project.product_images else []
+            if ad_project.product_asset and ad_project.product_asset.original_url:
+                # Backward compatibility: include product_asset as primary if no product_images
+                if not product_reference_images:
+                    product_reference_images = [ad_project.product_asset.original_url]
             
             # TODO: Load brand guidelines from S3 if guidelines_url is present
             brand_guidelines = None
@@ -507,7 +516,10 @@ Incorporate this visual style consistently throughout all scenes."""
     async def _generate_scene_videos(
         self, project: Any, ad_project: AdProject, progress_start: int = 25
     ) -> List[str]:
-        """Generate background videos for all scenes in parallel."""
+        """Generate background videos for all scenes in parallel.
+
+        STORY 3 (AC#5): For scenes with custom backgrounds, use uploaded image instead of AI generation.
+        """
         try:
             update_project_status(
                 self.db, self.project_id, "GENERATING_SCENES", progress=progress_start
@@ -516,6 +528,36 @@ Incorporate this visual style consistently throughout all scenes."""
             from app.config import settings
             generator = VideoGenerator(api_token=settings.replicate_api_token)
 
+            # STORY 3: Build scene background mapping for quick lookup
+            scene_background_map = {}
+            if ad_project.scene_backgrounds:
+                for sb in ad_project.scene_backgrounds:
+                    scene_background_map[sb.get('scene_id')] = sb.get('background_url')
+
+            # Create tasks for all scenes
+            tasks = []
+            for scene in ad_project.scenes:
+                # STORY 3 (AC#5): Check if this scene has a custom background
+                custom_bg_url = scene_background_map.get(scene.id)
+
+                if custom_bg_url:
+                    # Use custom background - just return the URL (no AI generation needed)
+                    logger.info(f"Scene {scene.id}: Using custom background {custom_bg_url}")
+                    # Create a coroutine that returns the custom URL directly
+                    async def return_custom_bg(url=custom_bg_url):
+                        return url
+                    tasks.append(return_custom_bg())
+                else:
+                    # Generate AI background as normal
+                    tasks.append(
+                        generator.generate_scene_background(
+                    prompt=scene.background_prompt,
+                    style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
+                    duration=scene.duration,
+                    extracted_style=extracted_style,  # Pass extracted style to generator
+                    style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
+                )
+                    )
             # Check if reference style was extracted
             extracted_style = None
             if project.ad_project_json:
@@ -529,22 +571,10 @@ Incorporate this visual style consistently throughout all scenes."""
                 chosen_style = style_info.get("style")
                 logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
 
-            # Create tasks for all scenes
-            tasks = [
-                generator.generate_scene_background(
-                    prompt=scene.background_prompt,
-                    style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
-                    duration=scene.duration,
-                    extracted_style=extracted_style,  # Pass extracted style to generator
-                    style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
-                )
-                for scene in ad_project.scenes
-            ]
-
             # Run all tasks concurrently
             scene_videos = await asyncio.gather(*tasks)
 
-            logger.info(f"✅ Generated {len(scene_videos)} videos")
+            logger.info(f"✅ Generated {len(scene_videos)} videos ({len(scene_background_map)} custom backgrounds)")
             return scene_videos
 
         except Exception as e:
@@ -744,11 +774,19 @@ Incorporate this visual style consistently throughout all scenes."""
                 aws_region=settings.aws_region,
             )
             
-            # Get project from database to retrieve stored aspect_ratio
+            # STORY 3 (AC#6): Get project from database to retrieve output_formats
             project = get_project(self.db, self.project_id)
-            # Use the aspect ratio specified when project was created
-            output_aspect_ratios = [project.aspect_ratio] if project.aspect_ratio else ["16:9"]
-            
+
+            # Use output_formats array if available, fall back to aspect_ratio for backward compat
+            if project.output_formats and len(project.output_formats) > 0:
+                output_aspect_ratios = project.output_formats
+            elif project.aspect_ratio:
+                output_aspect_ratios = [project.aspect_ratio]
+            else:
+                output_aspect_ratios = ["16:9"]  # Default fallback
+
+            logger.info(f"Rendering {len(output_aspect_ratios)} aspect ratios: {output_aspect_ratios}")
+
             final_videos = await renderer.render_final_video(
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
