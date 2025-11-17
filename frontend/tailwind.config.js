@@ -14,6 +14,59 @@ export default {
       white: '#ffffff',
       black: '#000000',
       transparent: 'transparent',
+
+      // Light theme - Gray scale for backgrounds, text, borders
+      gray: {
+        50: '#F9FAFB',   // bg-surface
+        100: '#F3F4F6',  // bg-elevated
+        200: '#E5E7EB',  // bg-muted, border-light
+        300: '#D1D5DB',  // border-medium
+        400: '#9CA3AF',  // border-dark, text-disabled
+        500: '#6B7280',  // text-muted
+        600: '#4B5563',  // text-secondary
+        700: '#374151',
+        800: '#1F2937',
+        900: '#111827',  // text-primary
+      },
+
+      // Primary color - Red (Replicate-inspired)
+      primary: {
+        500: '#EF4444',  // Red-500 - primary actions
+        600: '#DC2626',  // Red-600 - hover states
+        700: '#B91C1C',  // Red-700 - active states
+      },
+
+      // Secondary color - Blue (trust/professional)
+      secondary: {
+        500: '#3B82F6',  // Blue-500 - secondary actions
+        600: '#2563EB',  // Blue-600 - hover
+      },
+
+      // Success color
+      success: {
+        500: '#10B981',  // Green-500
+        600: '#059669',  // Green-600
+      },
+
+      // Warning color
+      warning: {
+        500: '#F59E0B',  // Amber-500
+        600: '#D97706',  // Amber-600
+      },
+
+      // Error color (uses primary red)
+      error: {
+        500: '#EF4444',  // Red-500
+        600: '#DC2626',  // Red-600
+      },
+
+      // Info color (uses secondary blue)
+      info: {
+        500: '#3B82F6',  // Blue-500
+        600: '#2563EB',  // Blue-600
+      },
+
+      // Legacy colors (keeping for backward compatibility during migration)
       slate: {
         50: '#f8fafc',
         100: '#f1f5f9',
@@ -64,6 +117,7 @@ export default {
         400: '#f87171',
         500: '#ef4444',
         600: '#dc2626',
+        700: '#b91c1c',
       },
       amber: {
         500: '#f59e0b',
@@ -144,11 +198,14 @@ export default {
       gradient: 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
       'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
     }),
-    
+
     backgroundImage: {
       'gradient-to-br': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
       'gradient-indigo-purple': 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
       'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      // Light theme - very light blue gradient (almost white)
+      'gradient-light': 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 50%, #F0F9FF 100%)',
+      'gradient-light-subtle': 'linear-gradient(135deg, #FAFBFF 0%, #F5FAFF 50%, #FAFBFF 100%)',
     },
     
     animation: {

@@ -1,325 +1,204 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Modal, Badge } from '@/components/ui'
-import { StyleSelector } from '@/components/ui/StyleSelector'
+import { Button, Card, CardContent, Modal } from '@/components/ui'
+import { TabWizard, TabPanel, FormNavigation } from '@/components/ui'
+import { BrandInfoTab } from '@/components/forms/BrandInfoTab'
+import { CreativeVisionTab } from '@/components/forms/CreativeVisionTab'
+import { AssetsTab } from '@/components/forms/AssetsTab'
 import { useProjects } from '@/hooks/useProjects'
-import { Upload, X, Zap } from 'lucide-react'
-import { MultiImageUpload } from '@/components/forms/MultiImageUpload'
-import { useReferenceImage } from '@/hooks/useReferenceImage'
-import { AspectRatioSelector, type AspectRatio } from '@/components/ui/AspectRatioSelector'
-import { uploadProductImages } from '@/services/storage'
-import { useStyleSelector } from '@/hooks/useStyleSelector'
+import { Zap } from 'lucide-react'
+import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
+
+// Tab configuration
+const TABS = [
+  { id: 'brand-info', label: 'Brand Info' },
+  { id: 'creative-vision', label: 'Creative Vision' },
+  { id: 'assets', label: 'Assets' },
+]
+
+interface FormData {
+  // Brand Info
+  title: string
+  brand_name: string
+  brand_description: string
+
+  // Creative Vision
+  creative_prompt: string
+  target_audience: string
+  target_duration: number
+  aspect_ratios: AspectRatio[]
+
+  // Assets
+  product_images: File[]
+  logo_images: File[]
+  guidelines_file: File | null
+}
+
+const INITIAL_FORM_DATA: FormData = {
+  title: '',
+  brand_name: '',
+  brand_description: '',
+  creative_prompt: '',
+  target_audience: '',
+  target_duration: 30,
+  aspect_ratios: ['16:9'],
+  product_images: [],
+  logo_images: [],
+  guidelines_file: null,
+}
 
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
-  const { uploadReferenceImage, isLoading: isUploadingReference, error: referenceError } = useReferenceImage()
-  const { styles, selectedStyle, setSelectedStyle, clearSelection, isLoading: isLoadingStyles } = useStyleSelector()
 
-  const [formData, setFormData] = useState({
-    title: '',
-    creative_prompt: '',
-    brand_name: '',
-    brand_description: '',
-    target_audience: '',
-    target_duration: 30,
-    aspect_ratio: '16:9' as '9:16' | '1:1' | '16:9',
-    logo_url: '',
-    product_image_url: '',
-    guidelines_url: '',
-  })
-
-  const [productImages, setProductImages] = useState<File[]>([])
-  const [selectedAspectRatios, setSelectedAspectRatios] = useState<AspectRatio[]>(['16:9'])
-  const [productImage, setProductImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string>('')
-  const [logoImage, setLogoImage] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string>('')
-  const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
-  const [referenceImage, setReferenceImage] = useState<File | null>(null)
-  const [referenceImageUploaded, setReferenceImageUploaded] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [currentTab, setCurrentTab] = useState(0)
+  const [completedTabs, setCompletedTabs] = useState<number[]>([])
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [autoGenerate, setAutoGenerate] = useState(true)
-  const [uploading, setUploading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setSubmitError('Image must be less than 10MB')
-        return
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('draft-project')
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft)
+        setFormData({ ...INITIAL_FORM_DATA, ...parsed })
+      } catch (e) {
+        console.error('Failed to parse draft:', e)
+      }
+    }
+  }, [])
+
+  // Save draft to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('draft-project', JSON.stringify(formData))
+  }, [formData])
+
+  // Validation functions
+  const isTab1Valid = () => {
+    return formData.title.trim().length >= 3 && formData.brand_name.trim().length >= 2
+  }
+
+  const isTab2Valid = () => {
+    return formData.creative_prompt.trim().length >= 20 && formData.aspect_ratios.length > 0
+  }
+
+  const canProceedToNext = () => {
+    if (currentTab === 0) return isTab1Valid()
+    if (currentTab === 1) return isTab2Valid()
+    return true // Tab 3 has no required fields
+  }
+
+  // Navigation handlers
+  const handleNext = () => {
+    if (canProceedToNext()) {
+      if (!completedTabs.includes(currentTab)) {
+        setCompletedTabs([...completedTabs, currentTab])
       }
 
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file')
-        return
+      if (currentTab < TABS.length - 1) {
+        setCurrentTab(currentTab + 1)
+      } else {
+        // Last tab - show confirmation
+        setShowConfirmation(true)
       }
-
-      setProductImage(file)
-      setSubmitError(null)
-
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
     }
   }
 
-  const handleRemoveImage = () => {
-    setProductImage(null)
-    setImagePreview('')
-  }
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 5MB for logo)
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Logo must be less than 5MB')
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file for logo')
-        return
-      }
-
-      setLogoImage(file)
-      setSubmitError(null)
-
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
+  const handleBack = () => {
+    if (currentTab > 0) {
+      setCurrentTab(currentTab - 1)
     }
   }
 
-  const handleRemoveLogo = () => {
-    setLogoImage(null)
-    setLogoPreview('')
+  const handleTabChange = (index: number) => {
+    setCurrentTab(index)
   }
 
-  const handleGuidelinesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setSubmitError('Guidelines file must be less than 10MB')
-        return
-      }
-
-      // Validate file type (PDF or TXT)
-      if (!file.type.includes('pdf') && !file.type.includes('text')) {
-        setSubmitError('Please select a PDF or TXT file for guidelines')
-        return
-      }
-
-      setGuidelinesFile(file)
-      setSubmitError(null)
-    }
+  const handleSaveDraft = () => {
+    // Already saved via useEffect, just notify user
+    alert('Draft saved! You can come back anytime.')
+    navigate('/dashboard')
   }
 
-  const handleRemoveGuidelines = () => {
-    setGuidelinesFile(null)
-  }
-
-  const handleReferenceImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Reference image must be less than 5MB')
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file for reference')
-        return
-      }
-
-      setReferenceImage(file)
-      setReferenceImageUploaded(false)
-      setSubmitError(null)
-    }
-  }
-
-  const handleRemoveReferenceImage = () => {
-    setReferenceImage(null)
-    setReferenceImageUploaded(false)
-  }
-
-  const handleUploadReferenceImage = async () => {
-    if (!referenceImage) {
-      setSubmitError('No reference image selected')
-      return
-    }
-
-    // We need a project ID to upload, so we'll do this after creating the project
-    // For now, just mark it as ready to upload
-    console.log('Reference image ready to upload after project creation')
-  }
-
-  const validateForm = (): boolean => {
-    if (!formData.title.trim()) {
-      setSubmitError('Project title is required')
-      return false
-    }
-
-    if (!formData.creative_prompt.trim()) {
-      setSubmitError('Creative prompt is required')
-      return false
-    }
-
-    if (formData.creative_prompt.trim().length < 20) {
-      setSubmitError('Creative prompt must be at least 20 characters')
-      return false
-    }
-
-    if (!formData.brand_name.trim()) {
-      setSubmitError('Brand name is required')
-      return false
-    }
-
-    if (formData.target_duration < 15 || formData.target_duration > 120) {
-      setSubmitError('Duration must be between 15 and 120 seconds')
-      return false
-    }
-
-    if (selectedAspectRatios.length === 0) {
-      setSubmitError('Please select at least one aspect ratio')
-      return false
-    }
-
-    return true
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitError(null)
-
-    if (!validateForm()) {
-      return
-    }
-
-    // Show confirmation modal instead of creating directly
-    setShowConfirmation(true)
-  }
-
+  // File upload helper
   const uploadFileToBackend = async (
     file: File,
     assetType: 'logo' | 'product' | 'guidelines'
   ): Promise<string | null> => {
     try {
-      console.log(`📤 Uploading ${assetType}: ${file.name}`)
-      
-      // Create FormData for multipart upload
       const uploadFormData = new FormData()
       uploadFormData.append('file', file)
       uploadFormData.append('asset_type', assetType)
-      
-      // Upload file to backend (local filesystem)
+
       const uploadResponse = await fetch('http://localhost:8000/api/upload-asset', {
         method: 'POST',
         body: uploadFormData,
-        // Don't set Content-Type header - browser will set it with boundary for multipart
       })
-      
+
       if (!uploadResponse.ok) {
         throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
       }
-      
+
       const { file_path } = await uploadResponse.json()
-      
-      console.log(`✅ Uploaded ${assetType} to local filesystem: ${file_path}`)
       return file_path
-      
     } catch (error) {
       console.error(`❌ Failed to upload ${assetType}:`, error)
       return null
     }
   }
 
+  // Submit handler
   const handleConfirmCreate = async () => {
     setShowConfirmation(false)
-    setUploading(true)
     setSubmitError(null)
 
     try {
-      console.log('🚀 Creating project with data:', {
-        title: formData.title,
-        brand_name: formData.brand_name,
-        target_duration: formData.target_duration,
-        productImagesCount: productImages.length,
-        aspectRatios: selectedAspectRatios,
-      })
+      // Upload assets in parallel
+      const uploadPromises: Promise<any>[] = []
+      let uploadedProductUrls: string[] = []
+      let uploadedLogoUrls: string[] = []
+      let uploadedGuidelinesUrl: string | null = null
 
-      // Upload files to S3/Supabase if selected
-      let uploadedProductUrl = formData.product_image_url
-      let uploadedLogoUrl = formData.logo_url
-      let uploadedGuidelinesUrl = formData.guidelines_url
-      let uploadedProductImagesUrls: string[] = []
-
-      // Create a temporary project ID for upload organization
-      const tempProjectId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      if (productImages.length > 0 || productImage || logoImage || guidelinesFile) {
-        console.log('📦 Uploading files...')
-
-        // Upload files in parallel
-        const uploadPromises = []
-
-        // Upload multiple product images to Supabase Storage
-        if (productImages.length > 0) {
+      // Upload product images
+      if (formData.product_images.length > 0) {
+        formData.product_images.forEach((file) => {
           uploadPromises.push(
-            uploadProductImages(tempProjectId, productImages).then(urls => {
-              uploadedProductImagesUrls = urls
-              console.log(`✅ Uploaded ${urls.length} product images`)
+            uploadFileToBackend(file, 'product').then((url) => {
+              if (url) uploadedProductUrls.push(url)
             })
           )
-        }
-
-        // Fallback: single product image upload (backend)
-        if (productImage) {
-          uploadPromises.push(
-            uploadFileToBackend(productImage, 'product').then(url => {
-              if (url) uploadedProductUrl = url
-            })
-          )
-        }
-
-        if (logoImage) {
-          uploadPromises.push(
-            uploadFileToBackend(logoImage, 'logo').then(url => {
-              if (url) uploadedLogoUrl = url
-            })
-          )
-        }
-
-        if (guidelinesFile) {
-          uploadPromises.push(
-            uploadFileToBackend(guidelinesFile, 'guidelines').then(url => {
-              if (url) uploadedGuidelinesUrl = url
-            })
-          )
-        }
-
-        // Wait for all uploads to complete
-        await Promise.all(uploadPromises)
-        console.log('✅ All files uploaded successfully')
+        })
       }
 
-      // PHASE 7: Include selected style if user chose one
+      // Upload logo images
+      if (formData.logo_images.length > 0) {
+        formData.logo_images.forEach((file) => {
+          uploadPromises.push(
+            uploadFileToBackend(file, 'logo').then((url) => {
+              if (url) uploadedLogoUrls.push(url)
+            })
+          )
+        })
+      }
+
+      // Upload guidelines
+      if (formData.guidelines_file) {
+        uploadPromises.push(
+          uploadFileToBackend(formData.guidelines_file, 'guidelines').then((url) => {
+            uploadedGuidelinesUrl = url
+          })
+        )
+      }
+
+      // Wait for all uploads
+      await Promise.all(uploadPromises)
+
+      // Create project
       const newProject = await createProject({
         title: formData.title,
         creative_prompt: formData.creative_prompt,
@@ -327,46 +206,28 @@ export const CreateProject = () => {
         brand_description: formData.brand_description || undefined,
         target_audience: formData.target_audience || undefined,
         target_duration: formData.target_duration,
-        aspect_ratio: formData.aspect_ratio,
-        logo_url: uploadedLogoUrl || undefined,
-        product_image_url: uploadedProductUrl || undefined,
-        productImages: uploadedProductImagesUrls.length > 0 ? uploadedProductImagesUrls : undefined,
-        outputFormats: selectedAspectRatios,
+        aspect_ratio: formData.aspect_ratios[0], // Primary aspect ratio
+        outputFormats: formData.aspect_ratios,
+        product_image_url: uploadedProductUrls[0] || undefined,
+        productImages: uploadedProductUrls.length > 0 ? uploadedProductUrls : undefined,
+        logo_url: uploadedLogoUrls[0] || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
-        selected_style: selectedStyle || undefined,  // PHASE 7: Pass selected style (optional)
       } as any)
 
-      console.log('✅ Project created:', newProject)
+      // Clear draft
+      localStorage.removeItem('draft-project')
 
-      // Upload reference image if selected
-      if (referenceImage) {
-        console.log('📤 Uploading reference image for visual style...')
-        const success = await uploadReferenceImage(referenceImage, newProject.id)
-        if (success) {
-          console.log('✅ Reference image uploaded successfully')
-          setReferenceImageUploaded(true)
-        } else {
-          console.warn('⚠️ Reference image upload failed, but project created')
-          // Continue anyway - reference image is optional
-        }
-      }
-
-      setUploading(false)
-
-      // Navigate immediately or to dashboard based on autoGenerate
+      // Navigate
       if (autoGenerate) {
-        console.log('📍 Navigating to progress page:', `/projects/${newProject.id}/progress`)
         navigate(`/projects/${newProject.id}/progress`)
       } else {
-        console.log('📍 Navigating to dashboard')
         navigate('/dashboard')
       }
     } catch (err) {
       console.error('❌ Error creating project:', err)
       const message = err instanceof Error ? err.message : 'Failed to create project'
       setSubmitError(message)
-      setUploading(false)
-      setShowConfirmation(true) // Show modal again so user can retry
+      setShowConfirmation(true)
     }
   }
 
@@ -387,13 +248,11 @@ export const CreateProject = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
-      {/* Header */}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 flex flex-col">
       <Header logo="GenAds" title="Create Project" />
 
-      {/* Main Content */}
       <div className="flex-1">
-        <Container size="md" className="py-12">
+        <Container size="lg" className="py-12">
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -401,371 +260,91 @@ export const CreateProject = () => {
             className="space-y-8"
           >
             {/* Title */}
-            <motion.div variants={itemVariants}>
-              <h2 className="text-3xl font-bold text-slate-100">New Project</h2>
-              <p className="text-slate-400 mt-2">
-                Create a new video project. Fill in the details below and we'll generate
-                your ads.
+            <motion.div variants={itemVariants} className="text-center">
+              <h2 className="text-3xl font-bold text-gray-900">Create New Project</h2>
+              <p className="text-gray-600 mt-2">
+                Follow the steps below to create your AI-generated ad video
               </p>
             </motion.div>
 
-            {/* Form Card */}
+            {/* Tab Wizard */}
             <motion.div variants={itemVariants}>
-              <Card variant="glass">
-                <CardHeader>
-                  <CardTitle>Project Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Error Message */}
-                    {(error || submitError) && (
-                      <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                        {error || submitError}
-                      </div>
-                    )}
+              <Card>
+                <CardContent className="p-8">
+                  <TabWizard
+                    tabs={TABS}
+                    currentTab={currentTab}
+                    onTabChange={handleTabChange}
+                    completedTabs={completedTabs}
+                  />
 
-                    {/* Project Title */}
-                    <Input
-                      label="Project Title"
-                      placeholder="e.g., Premium Skincare - Summer Campaign"
-                      value={formData.title}
-                      onChange={(e) =>
-                        setFormData({ ...formData, title: e.target.value })
-                      }
-                      required
-                    />
-
-                    {/* Brand Name */}
-                    <Input
-                      label="Brand Name"
-                      placeholder="Your brand name"
-                      value={formData.brand_name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, brand_name: e.target.value })
-                      }
-                      required
-                    />
-
-                    {/* Brand Description (Optional) */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Brand Description <span className="text-slate-500">(Optional)</span>
-                      </label>
-                      <textarea
-                        placeholder="Tell us about your brand's story, values, and personality. Example: Premium skincare for conscious consumers who value sustainability and natural ingredients."
-                        value={formData.brand_description}
-                        onChange={(e) =>
-                          setFormData({ ...formData, brand_description: e.target.value })
+                  {/* Tab Content */}
+                  <div className="mt-8">
+                    <TabPanel isActive={currentTab === 0} tabId="brand-info">
+                      <BrandInfoTab
+                        data={{
+                          title: formData.title,
+                          brand_name: formData.brand_name,
+                          brand_description: formData.brand_description,
+                        }}
+                        onChange={(data) =>
+                          setFormData((prev) => ({ ...prev, ...data }))
                         }
-                        rows={2}
-                        className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
                       />
-                    </div>
+                    </TabPanel>
 
-                    {/* Creative Prompt */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Creative Vision <span className="text-red-400">*</span>
-                      </label>
-                      <textarea
-                        placeholder="Describe your vision for the video. How should it look and feel? What story should it tell? Example: Create an energetic video that starts with a problem (tired skin), showcases our serum transforming skin in 7 days, and ends with confident customers. Use bright, clean aesthetics with dynamic camera movements."
-                        value={formData.creative_prompt}
-                        onChange={(e) =>
-                          setFormData({ ...formData, creative_prompt: e.target.value })
+                    <TabPanel isActive={currentTab === 1} tabId="creative-vision">
+                      <CreativeVisionTab
+                        data={{
+                          creative_prompt: formData.creative_prompt,
+                          target_audience: formData.target_audience,
+                          target_duration: formData.target_duration,
+                          aspect_ratios: formData.aspect_ratios,
+                        }}
+                        onChange={(data) =>
+                          setFormData((prev) => ({ ...prev, ...data }))
                         }
-                        rows={5}
-                        className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
-                        required
                       />
-                      <p className="text-xs text-slate-500 mt-1">
-                        💡 Be specific about mood, pacing, and key moments. The AI will bring your vision to life.
-                      </p>
-                    </div>
+                    </TabPanel>
 
-                    {/* Target Audience (Optional) */}
-                    <Input
-                      label="Target Audience (Optional)"
-                      placeholder="e.g., Women 30-55 interested in natural beauty"
-                      value={formData.target_audience}
-                      onChange={(e) =>
-                        setFormData({ ...formData, target_audience: e.target.value })
-                      }
-                    />
-
-                    {/* Duration */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Target Video Duration (seconds)
-                      </label>
-                      <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        min="15"
-                        max="120"
-                        step="5"
-                        value={String(formData.target_duration)}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            target_duration: parseInt(e.target.value),
-                          })
+                    <TabPanel isActive={currentTab === 2} tabId="assets">
+                      <AssetsTab
+                        data={{
+                          product_images: formData.product_images,
+                          logo_images: formData.logo_images,
+                          guidelines_file: formData.guidelines_file,
+                        }}
+                        onChange={(data) =>
+                          setFormData((prev) => ({ ...prev, ...data }))
                         }
-                          className="flex-1 h-2 bg-slate-800 rounded-lg accent-indigo-600 cursor-pointer"
-                        />
-                        <div className="w-20 text-center">
-                          <span className="text-2xl font-bold text-indigo-400">
-                            {formData.target_duration}s
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        ⏱️ The AI will pace scenes naturally around this target (±20% is OK)
-                      </p>
-                    </div>
-
-                    {/* Aspect Ratio Selection - New Component */}
-                    <AspectRatioSelector
-                      selectedRatios={selectedAspectRatios}
-                      onChange={setSelectedAspectRatios}
-                      required={true}
-                    />
-
-                    {/* Asset Uploads Section */}
-                    <div className="space-y-6 p-6 bg-slate-800/30 rounded-lg border border-slate-700">
-                      <h3 className="text-lg font-semibold text-slate-200">
-                        Assets <span className="text-slate-500 text-sm font-normal">(All Optional)</span>
-                      </h3>
-
-                      {/* Multi Product Image Upload - New Component */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-3">
-                          Product Images
-                        </label>
-                        <MultiImageUpload
-                          onImagesChange={setProductImages}
-                          maxFiles={10}
-                          maxSize={10}
-                          currentImages={productImages}
-                        />
-                        <p className="text-xs text-slate-500 mt-2">
-                          💡 Upload multiple product images to give the AI better understanding
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                        {/* Brand Logo Upload */}
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">
-                            Brand Logo
-                          </label>
-                          {logoPreview ? (
-                            <div className="relative w-full">
-                              <img
-                                src={logoPreview}
-                                alt="Logo preview"
-                                className="w-full h-40 object-contain bg-slate-900/50 rounded-lg border border-slate-700 p-4"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleRemoveLogo}
-                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <X className="w-4 h-4 text-white" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                              <div className="flex flex-col items-center justify-center">
-                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                                <span className="text-sm text-slate-400">
-                                  Upload logo
-                                </span>
-                                <span className="text-xs text-slate-500 mt-1">
-                                  PNG, SVG (Max 5MB)
-                                </span>
-                              </div>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleLogoChange}
-                                className="hidden"
-                              />
-                            </label>
-                          )}
-                          <p className="text-xs text-slate-500 mt-2">
-                            AI will place logo strategically (usually final scene)
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Brand Guidelines Upload */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                          Brand Guidelines
-                        </label>
-                        {guidelinesFile ? (
-                          <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-indigo-500/20 rounded-lg">
-                                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-200 font-medium">{guidelinesFile.name}</p>
-                                <p className="text-xs text-slate-500">
-                                  {(guidelinesFile.size / 1024 / 1024).toFixed(2)} MB
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveGuidelines}
-                              className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                            >
-                              <X className="w-4 h-4 text-white" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                            <div className="flex flex-col items-center justify-center">
-                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                              <span className="text-sm text-slate-400">
-                                Upload brand guidelines
-                              </span>
-                              <span className="text-xs text-slate-500 mt-1">
-                                PDF, TXT (Max 10MB)
-                              </span>
-                            </div>
-                            <input
-                              type="file"
-                              accept=".pdf,.txt,text/plain,application/pdf"
-                              onChange={handleGuidelinesChange}
-                              className="hidden"
-                            />
-                          </label>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">
-                          💡 AI will follow your brand guidelines for tone and style
-                        </p>
-                      </div>
-
-                      {/* Reference Image Upload (NEW) */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-slate-300">
-                            Reference Image (Optional - Visual Style)
-                          </label>
-                          {referenceImageUploaded && (
-                            <Badge variant="success" className="flex items-center gap-1">
-                              <Check className="w-3 h-3" />
-                              Added
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 mb-3">
-                          Upload a mood board or reference image to guide the visual style (colors, lighting, mood). 
-                          Style will be extracted and applied to all scenes.
-                        </p>
-                        {referenceImage ? (
-                          <div className="relative w-full">
-                            <img
-                              src={URL.createObjectURL(referenceImage)}
-                              alt="Reference preview"
-                              className="w-full h-40 object-cover bg-slate-900/50 rounded-lg border border-indigo-500/50 p-2"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleRemoveReferenceImage}
-                              className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                            >
-                              <X className="w-4 h-4 text-white" />
-                            </button>
-                            <div className="mt-2 p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-                              <p className="text-xs text-indigo-400">
-                                ✓ {referenceImage.name} selected ({(referenceImage.size / 1024 / 1024).toFixed(2)} MB)
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                            <div className="flex flex-col items-center justify-center">
-                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                              <span className="text-sm text-slate-400">
-                                Upload reference image
-                              </span>
-                              <span className="text-xs text-slate-500 mt-1">
-                                JPG, PNG (Max 5MB)
-                              </span>
-                            </div>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/*"
-                              onChange={handleReferenceImageChange}
-                              className="hidden"
-                              disabled={isUploadingReference}
-                            />
-                          </label>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">
-                          🎨 AI will extract colors, lighting, mood, and camera style from your reference
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* PHASE 7: Video Style Selection */}
-                    <div className="p-6 bg-slate-800/30 rounded-lg border border-slate-700">
-                      <StyleSelector
-                        styles={styles}
-                        selectedStyle={selectedStyle}
-                        onSelectStyle={setSelectedStyle}
-                        onClearStyle={clearSelection}
-                        isLoading={isLoadingStyles}
                       />
-                    </div>
+                    </TabPanel>
+                  </div>
 
-                    {/* Submit Buttons */}
-                    <div className="flex gap-4 pt-6 border-t border-slate-700">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        fullWidth
-                        onClick={() => navigate('/dashboard')}
-                        disabled={loading}
-                      >
-                        Cancel
-                      </Button>
-                  <Button
-                    type="submit"
-                    variant="gradient"
-                    fullWidth
-                  >
-                    {loading ? 'Creating...' : 'Create Project'}
-                  </Button>
-                    </div>
-                  </form>
+                  {/* Navigation */}
+                  <FormNavigation
+                    onBack={currentTab > 0 ? handleBack : undefined}
+                    onNext={handleNext}
+                    onSaveDraft={handleSaveDraft}
+                    canProceed={canProceedToNext()}
+                    backLabel={currentTab > 0 ? '← Back' : undefined}
+                    nextLabel={
+                      currentTab === TABS.length - 1 ? 'Review & Create →' : 'Continue →'
+                    }
+                    isLoading={loading}
+                  />
                 </CardContent>
               </Card>
             </motion.div>
 
-            {/* Info Boxes */}
-            <motion.div variants={itemVariants} className="space-y-4">
-              <div className="p-4 bg-indigo-500/10 border border-indigo-500/50 rounded-lg">
-                <p className="text-indigo-400 text-sm">
-                  💡 <strong>Pro Tip:</strong> Be specific in your creative vision! Describe the mood, pacing, key moments, and visual style you want. The AI director will bring your vision to life with professional camera work and scene pacing.
+            {/* Info Box */}
+            <motion.div variants={itemVariants}>
+              <div className="p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
+                <p className="text-primary-600 text-sm">
+                  💡 <strong>Pro Tip:</strong> Your progress is automatically saved. You can come
+                  back anytime to continue where you left off.
                 </p>
               </div>
-              
-              {(productImages.length > 0 || productImage || logoImage || guidelinesFile) && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
-                  <p className="text-emerald-400 text-sm">
-                    ✅ <strong>Ready to upload:</strong> {productImages.length > 0 && `${productImages.length} product image(s)`}{(productImages.length > 0 && (logoImage || guidelinesFile)) && ', '}
-                    {logoImage && 'logo'}{(logoImage && guidelinesFile) && ', '}{guidelinesFile && 'brand guidelines'}
-                    {' will be uploaded before creating the project.'}
-                  </p>
-                </div>
-              )}
             </motion.div>
           </motion.div>
         </Container>
@@ -780,90 +359,76 @@ export const CreateProject = () => {
         size="lg"
       >
         <div className="space-y-6">
-          {/* Project Details Review */}
-          <div className="space-y-4 bg-slate-900/50 p-4 rounded-lg">
+          {/* Error Message */}
+          {submitError && (
+            <div className="p-4 bg-error-500/10 border border-error-500/50 rounded-lg text-error-600 text-sm">
+              {submitError}
+            </div>
+          )}
+
+          {/* Project Details */}
+          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
+                <label className="text-xs font-semibold text-gray-500 uppercase">
                   Project Title
                 </label>
-                <p className="text-slate-100 mt-1">{formData.title}</p>
+                <p className="text-gray-900 mt-1">{formData.title}</p>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Brand Name
-                </label>
-                <p className="text-slate-100 mt-1">{formData.brand_name}</p>
+                <label className="text-xs font-semibold text-gray-500 uppercase">Brand Name</label>
+                <p className="text-gray-900 mt-1">{formData.brand_name}</p>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">
+              <label className="text-xs font-semibold text-gray-500 uppercase">
                 Creative Vision
               </label>
-              <p className="text-slate-100 mt-1 text-sm">{formData.creative_prompt}</p>
+              <p className="text-gray-900 mt-1 text-sm">{formData.creative_prompt}</p>
             </div>
 
-            {formData.brand_description && (
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Brand Description
-                </label>
-                <p className="text-slate-100 mt-1 text-sm">{formData.brand_description}</p>
-              </div>
-            )}
-
             <div className="grid grid-cols-3 gap-4">
-              {formData.target_audience && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase">
-                    Target Audience
-                  </label>
-                  <p className="text-slate-100 mt-1 text-sm">{formData.target_audience}</p>
-                </div>
-              )}
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Target Duration
-                </label>
-                <p className="text-slate-100 mt-1">{formData.target_duration}s</p>
+                <label className="text-xs font-semibold text-gray-500 uppercase">Duration</label>
+                <p className="text-gray-900 mt-1">{formData.target_duration}s</p>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
+                <label className="text-xs font-semibold text-gray-500 uppercase">
                   Output Formats
                 </label>
-                <p className="text-slate-100 mt-1 text-sm">
-                  {selectedAspectRatios.map(ar =>
-                    ar === '9:16' ? '📱 9:16' : ar === '1:1' ? '⬜ 1:1' : '🖥️ 16:9'
-                  ).join(', ')}
+                <p className="text-gray-900 mt-1 text-sm">
+                  {formData.aspect_ratios
+                    .map((ar) =>
+                      ar === '9:16' ? '📱 Vertical' : ar === '1:1' ? '⬜ Square' : '🖥️ Horizontal'
+                    )
+                    .join(', ')}
                 </p>
               </div>
             </div>
 
-            {/* Assets Section */}
-            {(productImages.length > 0 || productImage || logoImage || guidelinesFile) && (
+            {/* Assets */}
+            {(formData.product_images.length > 0 ||
+              formData.logo_images.length > 0 ||
+              formData.guidelines_file) && (
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">
                   Uploaded Assets
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {productImages.length > 0 && (
-                    <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
-                      ✓ {productImages.length} Product Image{productImages.length > 1 ? 's' : ''}
+                  {formData.product_images.length > 0 && (
+                    <span className="px-3 py-1 bg-primary-500/10 text-primary-600 rounded-full text-xs">
+                      ✓ {formData.product_images.length} Product Image
+                      {formData.product_images.length > 1 ? 's' : ''}
                     </span>
                   )}
-                  {productImage && (
-                    <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
-                      ✓ Product Image
+                  {formData.logo_images.length > 0 && (
+                    <span className="px-3 py-1 bg-secondary-500/10 text-secondary-600 rounded-full text-xs">
+                      ✓ {formData.logo_images.length} Logo{formData.logo_images.length > 1 ? 's' : ''}
                     </span>
                   )}
-                  {logoImage && (
-                    <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
-                      ✓ Brand Logo
-                    </span>
-                  )}
-                  {guidelinesFile && (
-                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs">
+                  {formData.guidelines_file && (
+                    <span className="px-3 py-1 bg-success-500/10 text-success-600 rounded-full text-xs">
                       ✓ Brand Guidelines
                     </span>
                   )}
@@ -873,33 +438,29 @@ export const CreateProject = () => {
           </div>
 
           {/* Cost Estimate */}
-          <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-4">
+          <div className="bg-success-500/10 border border-success-500/20 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-semibold text-emerald-400 uppercase">
+              <Zap className="w-4 h-4 text-success-600" />
+              <span className="text-xs font-semibold text-success-600 uppercase">
                 Estimated Cost
               </span>
             </div>
-            <p className="text-2xl font-bold text-emerald-400">$0.19 - $0.43</p>
-            <p className="text-xs text-emerald-300 mt-1">
-              Final cost may vary based on complexity
-            </p>
+            <p className="text-2xl font-bold text-success-600">$0.19 - $0.43</p>
+            <p className="text-xs text-success-700 mt-1">Final cost may vary based on complexity</p>
           </div>
 
-          {/* Auto-Generate Option */}
-          <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+          {/* Auto-Generate Toggle */}
+          <div className="flex items-center gap-3 p-3 bg-primary-500/10 border border-primary-500/20 rounded-lg">
             <input
               type="checkbox"
               id="autoGenerate"
               checked={autoGenerate}
               onChange={(e) => setAutoGenerate(e.target.checked)}
-              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+              className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
             />
             <label htmlFor="autoGenerate" className="flex-1 cursor-pointer">
-              <p className="text-sm font-medium text-slate-100">
-                Start generation immediately
-              </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm font-medium text-gray-900">Start generation immediately</p>
+              <p className="text-xs text-gray-600">
                 {autoGenerate
                   ? 'You will be taken to the progress page'
                   : 'Project will be saved as draft'}
@@ -908,7 +469,7 @@ export const CreateProject = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-slate-700">
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
             <Button
               type="button"
               variant="outline"
@@ -920,10 +481,11 @@ export const CreateProject = () => {
             </Button>
             <Button
               type="button"
-              variant="gradient"
+              variant="default"
               fullWidth
               onClick={handleConfirmCreate}
               disabled={loading}
+              isLoading={loading}
             >
               {loading ? 'Creating...' : 'Create Project'}
             </Button>
@@ -933,4 +495,3 @@ export const CreateProject = () => {
     </div>
   )
 }
-

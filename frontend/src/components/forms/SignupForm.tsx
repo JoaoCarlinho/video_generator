@@ -96,19 +96,19 @@ export const SignupForm: React.FC = () => {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* API Error Alert */}
       {apiError && (
-        <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-300">{apiError}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{apiError}</p>
         </div>
       )}
 
       {/* Email Field */}
       <div className="space-y-2">
-        <label htmlFor="email" className="block text-sm font-medium text-white">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
           Email Address
         </label>
         <div className="relative">
-          <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+          <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input
             id="email"
             name="email"
@@ -116,22 +116,22 @@ export const SignupForm: React.FC = () => {
             placeholder="you@example.com"
             value={formData.email}
             onChange={handleChange}
-            className={`w-full pl-10 pr-4 py-2.5 bg-slate-800 border rounded-lg text-white placeholder-slate-500 transition-all focus:outline-none ${
-              errors.email ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-700 focus:border-transparent focus:ring-2 focus:ring-cyan-500'
+            className={`w-full pl-10 pr-4 py-2.5 bg-white border rounded-lg text-gray-900 placeholder-gray-400 transition-all focus:outline-none ${
+              errors.email ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-300 focus:border-transparent focus:ring-2 focus:ring-blue-500'
             }`}
             disabled={isLoading}
           />
         </div>
-        {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
+        {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
       </div>
 
       {/* Password Field */}
       <div className="space-y-2">
-        <label htmlFor="password" className="block text-sm font-medium text-white">
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
           Password
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+          <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input
             id="password"
             name="password"
@@ -139,33 +139,33 @@ export const SignupForm: React.FC = () => {
             placeholder="••••••••"
             value={formData.password}
             onChange={handleChange}
-            className={`w-full pl-10 pr-12 py-2.5 bg-slate-800 border rounded-lg text-white placeholder-slate-500 transition-all focus:outline-none ${
-              errors.password ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-700 focus:border-transparent focus:ring-2 focus:ring-cyan-500'
+            className={`w-full pl-10 pr-12 py-2.5 bg-white border rounded-lg text-gray-900 placeholder-gray-400 transition-all focus:outline-none ${
+              errors.password ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-300 focus:border-transparent focus:ring-2 focus:ring-blue-500'
             }`}
             disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 transition-colors"
+            className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
             tabIndex={-1}
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
-        {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
-        <p className="text-xs text-slate-500">
+        {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
+        <p className="text-xs text-gray-600">
           Must contain: 8+ characters, uppercase, lowercase, and a number
         </p>
       </div>
 
       {/* Confirm Password Field */}
       <div className="space-y-2">
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white">
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
           Confirm Password
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+          <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input
             id="confirmPassword"
             name="confirmPassword"
@@ -173,48 +173,48 @@ export const SignupForm: React.FC = () => {
             placeholder="••••••••"
             value={formData.confirmPassword}
             onChange={handleChange}
-            className={`w-full pl-10 pr-12 py-2.5 bg-slate-800 border rounded-lg text-white placeholder-slate-500 transition-all focus:outline-none ${
+            className={`w-full pl-10 pr-12 py-2.5 bg-white border rounded-lg text-gray-900 placeholder-gray-400 transition-all focus:outline-none ${
               errors.confirmPassword
                 ? 'border-red-500 ring-2 ring-red-500/20'
-                : 'border-slate-700 focus:border-transparent focus:ring-2 focus:ring-cyan-500'
+                : 'border-gray-300 focus:border-transparent focus:ring-2 focus:ring-blue-500'
             }`}
             disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 transition-colors"
+            className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
             tabIndex={-1}
           >
             {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
-        {errors.confirmPassword && <p className="text-sm text-red-400">{errors.confirmPassword}</p>}
+        {errors.confirmPassword && <p className="text-sm text-red-600">{errors.confirmPassword}</p>}
       </div>
 
       {/* Terms Agreement */}
-      <div className="flex items-start gap-3 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+      <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
         <input
           id="agreeToTerms"
           name="agreeToTerms"
           type="checkbox"
           checked={formData.agreeToTerms}
           onChange={handleChange}
-          className="w-5 h-5 mt-0.5 bg-slate-700 border border-slate-600 rounded cursor-pointer accent-cyan-500"
+          className="w-5 h-5 mt-0.5 bg-white border border-gray-300 rounded cursor-pointer accent-blue-500"
           disabled={isLoading}
         />
-        <label htmlFor="agreeToTerms" className="text-sm text-slate-300 cursor-pointer">
+        <label htmlFor="agreeToTerms" className="text-sm text-gray-700 cursor-pointer">
           I agree to the{' '}
-          <a href="#" className="text-cyan-500 hover:text-cyan-400 transition-colors">
+          <a href="#" className="text-blue-600 hover:text-blue-700 transition-colors">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="#" className="text-cyan-500 hover:text-cyan-400 transition-colors">
+          <a href="#" className="text-blue-600 hover:text-blue-700 transition-colors">
             Privacy Policy
           </a>
         </label>
       </div>
-      {errors.agreeToTerms && <p className="text-sm text-red-400">{errors.agreeToTerms}</p>}
+      {errors.agreeToTerms && <p className="text-sm text-red-600">{errors.agreeToTerms}</p>}
 
       {/* Submit Button */}
       <button
@@ -222,13 +222,13 @@ export const SignupForm: React.FC = () => {
         disabled={isLoading}
         className={`w-full py-2.5 px-4 rounded-lg font-semibold transition-all ${
           isLoading
-            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg hover:shadow-indigo-600/50 active:scale-95'
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : 'bg-gradient-to-r from-blue-600 to-blue-700 text-gray-50 hover:shadow-lg hover:shadow-blue-600/50 active:scale-95'
         }`}
       >
         {isLoading ? (
           <span className="flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-slate-300 border-t-white rounded-full animate-spin"></div>
+            <div className="w-4 h-4 border-2 border-gray-400 border-t-gray-600 rounded-full animate-spin"></div>
             Creating account...
           </span>
         ) : (
@@ -237,9 +237,9 @@ export const SignupForm: React.FC = () => {
       </button>
 
       {/* Login Link */}
-      <p className="text-center text-sm text-slate-400">
+      <p className="text-center text-sm text-gray-600">
         Already have an account?{' '}
-        <Link to="/login" className="text-cyan-500 hover:text-cyan-400 transition-colors font-medium">
+        <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">
           Sign in
         </Link>
       </p>

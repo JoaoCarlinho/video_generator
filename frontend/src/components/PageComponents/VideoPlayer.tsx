@@ -2,11 +2,12 @@ import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Pause, Volume2, VolumeX, Download } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
 
 interface VideoPlayerProps {
   videoUrl?: string
   title?: string
-  aspect: '16:9'
+  aspect: AspectRatio
   onDownload?: () => void
   isLoading?: boolean
 }
@@ -100,14 +101,14 @@ export const VideoPlayer = ({
                 whileHover={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
               >
                 <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-700 transition-colors">
-                  <Play className="w-8 h-8 text-white fill-white" />
+                  <Play className="w-8 h-8 text-gray-50 fill-gray-50" />
                 </div>
               </motion.button>
             )}
 
             {/* Top Controls */}
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="px-3 py-1 bg-black/50 backdrop-blur rounded text-sm text-white font-medium">
+              <div className="px-3 py-1 bg-black/50 backdrop-blur rounded text-sm text-gray-50 font-medium">
                 Horizontal
               </div>
             </div>
@@ -131,7 +132,7 @@ export const VideoPlayer = ({
                     size="sm"
                     variant="ghost"
                     onClick={togglePlay}
-                    className="text-white hover:bg-white/10 p-1"
+                    className="text-gray-50 hover:bg-white/10 p-1"
                   >
                     {isPlaying ? (
                       <Pause className="w-4 h-4" />
@@ -144,7 +145,7 @@ export const VideoPlayer = ({
                     size="sm"
                     variant="ghost"
                     onClick={toggleMute}
-                    className="text-white hover:bg-white/10 p-1"
+                    className="text-gray-50 hover:bg-white/10 p-1"
                   >
                     {isMuted ? (
                       <VolumeX className="w-4 h-4" />
@@ -153,7 +154,7 @@ export const VideoPlayer = ({
                     )}
                   </Button>
 
-                  <span className="text-xs text-white font-medium">
+                  <span className="text-xs text-gray-50 font-medium">
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
@@ -163,7 +164,7 @@ export const VideoPlayer = ({
                     size="sm"
                     variant="ghost"
                     onClick={onDownload}
-                    className="text-white hover:bg-white/10 p-1"
+                    className="text-gray-50 hover:bg-white/10 p-1"
                   >
                     <Download className="w-4 h-4" />
                   </Button>

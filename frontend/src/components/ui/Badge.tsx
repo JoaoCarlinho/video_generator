@@ -14,7 +14,7 @@ const badgeVariants = cva(
         warning: 'bg-amber-600/20 text-amber-400 border border-amber-600/30',
         info: 'bg-blue-600/20 text-blue-400 border border-blue-600/30',
         outline: 'bg-transparent border border-slate-600 text-slate-300',
-        gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white',
+        gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-gray-50',
       },
       size: {
         sm: 'text-xs px-2 py-0.5',

@@ -112,7 +112,7 @@ export const SceneBackgroundUpload = ({
             className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-lg"
             aria-label="Remove background image"
           >
-            <X className="w-4 h-4 text-white" />
+            <X className="w-4 h-4 text-gray-50" />
           </button>
         </div>
       ) : (

@@ -26,11 +26,11 @@ const Header = React.forwardRef<HTMLElement, HeaderProps>(
       <header
         ref={ref}
         className={cn(
-          'border-b transition-all duration-200',
+          'border-b shadow-sm transition-all duration-200',
           sticky && 'sticky top-0 z-40',
           transparent
-            ? 'border-slate-700/20 bg-slate-900/50 backdrop-blur'
-            : 'border-slate-700 bg-slate-900',
+            ? 'border-gray-200/50 bg-white/95 backdrop-blur'
+            : 'border-gray-200 bg-white',
           className
         )}
         {...props}
@@ -42,7 +42,7 @@ const Header = React.forwardRef<HTMLElement, HeaderProps>(
               {logo && (
                 <div className="flex-shrink-0">
                   {typeof logo === 'string' ? (
-                    <Link to="/" className="text-xl font-bold text-indigo-600">
+                    <Link to="/" className="text-xl font-bold text-primary-500 hover:text-primary-600 transition-colors">
                       {logo}
                     </Link>
                   ) : (
@@ -52,8 +52,8 @@ const Header = React.forwardRef<HTMLElement, HeaderProps>(
               )}
               {title && (
                 <div className="hidden sm:block">
-                  <h1 className="text-sm font-semibold text-slate-100">{title}</h1>
-                  {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+                  <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
+                  {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
                 </div>
               )}
             </div>
