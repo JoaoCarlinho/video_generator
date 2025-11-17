@@ -69,6 +69,9 @@ class AdProjectPlan(BaseModel):
     total_duration: int  # Actual total duration (sum of scenes)
     style_spec: StyleSpec
     scenes: List[Scene]
+    # Phase 7: Style selection fields
+    chosen_style: str  # "cinematic", "dark_premium", "minimal_studio", "lifestyle", "2d_animated"
+    style_source: str  # "user_selected" or "llm_inferred"
 
 
 # ============================================================================
@@ -114,7 +117,7 @@ class ScenePlanner:
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
 
         Returns:
-            Dictionary with scenes, style_spec, chosenStyle, styleSource
+            AdProjectPlan instance with scenes, style_spec, and Phase 7 style info
         """
         logger.info(f"Planning video for '{brand_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
@@ -187,37 +190,27 @@ class ScenePlanner:
             )
             scenes.append(scene)
 
-        # PHASE 7: CRITICAL - All scenes MUST use the same style
-        # Enforce this by adding style to each scene
-        scenes_dict = []
-        for scene in scenes:
-            scene_data = scene.model_dump()
-            scene_data['style'] = chosen_style  # Force same style on all scenes
-            scenes_dict.append(scene_data)
-        
-        # Validate: all scenes have same style
-        for i, scene_data in enumerate(scenes_dict):
-            if scene_data.get('style') != chosen_style:
-                logger.warning(f"Scene {i} tried different style: {scene_data.get('style')} → forcing {chosen_style}")
-                scene_data['style'] = chosen_style
-        
-        assert all(s.get('style') == chosen_style for s in scenes_dict), \
-            f"Style consistency violated! All scenes must use {chosen_style}"
-        
-        logger.info(f"✅ Generated plan with {len(scenes)} scenes (total: {total_duration}s, style: {chosen_style})")
-        logger.info(f"✅ CRITICAL: All {len(scenes)} scenes enforced to use SAME style: {chosen_style}")
+        # PHASE 7: Log style consistency
+        logger.info(
+            f"✅ Generated plan with {len(scenes)} scenes "
+            f"(total: {total_duration}s, style: {chosen_style})"
+        )
+        logger.info(
+            f"✅ CRITICAL: All {len(scenes)} scenes will use "
+            f"SAME style: {chosen_style}"
+        )
 
-        # PHASE 7: Return dict with style information
-        return {
-            "scenes": scenes_dict,
-            "style_spec": style_spec.model_dump(),
-            "chosenStyle": chosen_style,  # The ONE style used for entire video
-            "styleSource": style_source,  # "user_selected" or "llm_inferred"
-            "creative_prompt": creative_prompt,
-            "brand_name": brand_name,
-            "target_audience": target_audience or "general consumers",
-            "total_duration": total_duration,
-        }
+        # Return AdProjectPlan instance
+        return AdProjectPlan(
+            creative_prompt=creative_prompt,
+            brand_name=brand_name,
+            target_audience=target_audience or "general consumers",
+            total_duration=total_duration,
+            style_spec=style_spec,
+            scenes=scenes,
+            chosen_style=chosen_style,
+            style_source=style_source,
+        )
 
     async def _generate_scenes_via_llm(
         self,
