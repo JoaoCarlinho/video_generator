@@ -702,36 +702,54 @@ BRAND GUIDELINES (extracted from guidelines document):
             raise
 
     async def _save_videos_locally(self, video_urls: List[str], project_id: str) -> List[str]:
-        """Download videos from Replicate and save to local storage."""
+        """Download videos from Replicate and save to local storage in parallel."""
         try:
             import aiohttp
             from app.utils.local_storage import LocalStorageManager
             
-            local_paths = []
-            for i, replicate_url in enumerate(video_urls):
+            async def download_and_save_video(session: aiohttp.ClientSession, index: int, url: str) -> str:
+                """Download a single video and save it to local storage."""
                 try:
                     # Download from Replicate
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(replicate_url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
-                            if resp.status == 200:
-                                video_data = await resp.read()
-                            else:
-                                logger.warning(f"Failed to download video {i}: HTTP {resp.status}")
-                                raise Exception(f"Failed to download video {i}: HTTP {resp.status}")
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                        if resp.status == 200:
+                            video_data = await resp.read()
+                        else:
+                            logger.warning(f"Failed to download video {index}: HTTP {resp.status}")
+                            raise Exception(f"Failed to download video {index}: HTTP {resp.status}")
                     
                     # Save to local storage in drafts folder
                     local_path = LocalStorageManager.save_draft_file(
                         UUID(project_id),
-                        f"scene_{i:02d}.mp4",
+                        f"scene_{index:02d}.mp4",
                         video_data
                     )
-                    local_paths.append(local_path)
-                    logger.debug(f"Saved scene {i} locally: {local_path}")
+                    logger.debug(f"Saved scene {index} locally: {local_path}")
+                    return local_path
                     
                 except Exception as e:
-                    logger.error(f"Failed to save video {i} locally: {e}")
+                    logger.error(f"Failed to save video {index} locally: {e}")
                     raise
             
+            # Download all videos in parallel using a single session
+            async with aiohttp.ClientSession() as session:
+                tasks = [
+                    download_and_save_video(session, i, url)
+                    for i, url in enumerate(video_urls)
+                ]
+                local_paths = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Check for errors with scene context
+            for i, result in enumerate(local_paths):
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"Failed to download/save video {i}:\n"
+                        f"   URL: {video_urls[i][:100]}...\n"
+                        f"   Error: {result}"
+                    )
+                    raise RuntimeError(f"Video {i} download/save failed: {result}")
+            
+            logger.info(f"Downloaded and saved {len(local_paths)} videos in parallel")
             return local_paths
             
         except Exception as e:
