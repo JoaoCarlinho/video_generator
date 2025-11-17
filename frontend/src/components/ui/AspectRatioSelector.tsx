@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 
 export type AspectRatio = '9:16' | '16:9' | '1:1'
@@ -46,41 +45,26 @@ export const AspectRatioSelector = ({
   onChange,
   required = true,
 }: AspectRatioSelectorProps) => {
-  const [error, setError] = useState<string>('')
-
-  useEffect(() => {
-    // Validate that at least one is selected if required
-    if (required && selectedRatios.length === 0) {
-      setError('Please select at least one aspect ratio')
-    } else {
-      setError('')
-    }
-  }, [selectedRatios, required])
-
   const handleToggle = (ratio: AspectRatio) => {
     const isSelected = selectedRatios.includes(ratio)
 
-    if (isSelected) {
-      // Prevent deselecting if it's the last one and required
-      if (required && selectedRatios.length === 1) {
-        setError('Please select at least one aspect ratio')
-        return
-      }
-      onChange(selectedRatios.filter((r) => r !== ratio))
-    } else {
-      onChange([...selectedRatios, ratio])
+    if (!isSelected) {
+      // SINGLE SELECTION MODE: Replace existing selection with new one
+      // To restore multi-select: change to `onChange([...selectedRatios, ratio])`
+      onChange([ratio])
     }
+    // Don't allow deselecting when in single-selection mode with required=true
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="block text-sm font-medium text-slate-300">
-          Output Formats {required && <span className="text-red-400">*</span>}
+          Output Format {required && <span className="text-red-400">*</span>}
         </label>
         {selectedRatios.length > 0 && (
           <span className="text-xs text-slate-500">
-            {selectedRatios.length} selected
+            {selectedRatios[0]} selected
           </span>
         )}
       </div>
@@ -162,20 +146,9 @@ export const AspectRatioSelector = ({
         })}
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm"
-        >
-          {error}
-        </motion.div>
-      )}
-
       {/* Helper Text */}
       <p className="text-xs text-slate-500">
-        💡 Select all formats you need - videos will be generated for each aspect ratio
+        💡 Select your desired aspect ratio - one video will be generated in this format
       </p>
     </div>
   )
