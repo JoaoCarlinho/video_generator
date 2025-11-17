@@ -41,6 +41,7 @@ from app.services.compositor import Compositor
 from app.services.text_overlay import TextOverlayRenderer
 from app.services.audio_engine import AudioEngine
 from app.services.renderer import Renderer
+from app.services.reference_image_extractor import ReferenceImageStyleExtractor
 from app.utils.s3_utils import (
     create_project_folder_structure,
     delete_project_folder,
@@ -51,6 +52,7 @@ from app.utils.local_storage import LocalStorageManager, format_storage_size
 logger = logging.getLogger(__name__)
 
 # Cost constants (in USD, based on API documentation)
+COST_REFERENCE_EXTRACTION = Decimal("0.025")  # GPT-4 Vision extraction
 COST_SCENE_PLANNING = Decimal("0.01")  # GPT-4o-mini cheap
 COST_PRODUCT_EXTRACTION = Decimal("0.00")  # rembg local, free
 COST_VIDEO_GENERATION = Decimal("0.08")  # SeedAnce-1-lite per scene
@@ -130,6 +132,60 @@ class GenerationPipeline:
             # Parse AdProject JSON
             ad_project = AdProject(**project.ad_project_json)
 
+            # ===== STEP 0: Extract Reference Image Style (Optional, NEW) =====
+            logger.info("🎨 Step 0: Checking for reference image...")
+            has_reference = False
+            if project.ad_project_json:
+                reference_local_path = project.ad_project_json.get("referenceImage", {}).get("localPath")
+                
+                if reference_local_path:
+                    import os
+                    if os.path.exists(reference_local_path):
+                        has_reference = True
+                        logger.info(f"🎨 Extracting visual style from reference image...")
+                        self.update_progress(self.project_id, 5, "Extracting reference image style...")
+                        
+                        try:
+                            # Initialize OpenAI client for vision extraction
+                            from openai import AsyncOpenAI
+                            from app.config import settings
+                            
+                            openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+                            extractor = ReferenceImageStyleExtractor(openai_client)
+                            
+                            # Extract style
+                            extracted_style = await extractor.extract_style(
+                                image_path=reference_local_path,
+                                brand_name=project.brand.get("name", "Brand")
+                            )
+                            
+                            # Save to database
+                            project.ad_project_json["referenceImage"]["extractedStyle"] = extracted_style.to_dict()
+                            project.ad_project_json["referenceImage"]["extractedAt"] = datetime.now().isoformat()
+                            self.db.commit()
+                            
+                            # Reload project to get updated JSON
+                            project = get_project(self.db, self.project_id)
+                            ad_project = AdProject(**project.ad_project_json)
+                            
+                            # Delete temp file
+                            os.unlink(reference_local_path)
+                            logger.info(f"✅ Reference style extracted and temp file deleted")
+                            
+                            # Track cost
+                            self.step_costs["reference_extraction"] = COST_REFERENCE_EXTRACTION
+                            self.total_cost += COST_REFERENCE_EXTRACTION
+                            
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to extract reference style: {e}")
+                            has_reference = False
+                    else:
+                        logger.info(f"ℹ️ Reference image file not found: {reference_local_path}")
+                else:
+                    logger.info(f"ℹ️ No reference image provided")
+            else:
+                logger.info(f"ℹ️ No ad_project_json available")
+
             # ===== STEP 1: Extract Product (Optional) =====
             product_url = None
             has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
@@ -153,8 +209,15 @@ class GenerationPipeline:
             # Update project with new ad_project data
             ad_project = AdProject(**updated_project.ad_project_json)
 
-            # ===== STEP 3: Generate Videos (Parallel) =====
-            logger.info("🎥 Step 3: Generating videos for all scenes...")
+            # ===== STEP 3A: Spawn Music Generation (PARALLEL with video) =====
+            logger.info("🎵 Step 3A: Spawning background music generation (running in parallel)...")
+            music_task = asyncio.create_task(
+                self._generate_audio(project, ad_project, progress_start=30)
+            )
+            logger.info("🎵 Music generation task spawned - running in background")
+
+            # ===== STEP 3B: Generate Videos (Parallel with Music) =====
+            logger.info("🎥 Step 3B: Generating videos for all scenes...")
             video_start = 25 if has_product else 20
             replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
             video_cost = COST_VIDEO_GENERATION * len(ad_project.scenes)
@@ -167,8 +230,9 @@ class GenerationPipeline:
             logger.info(f"✅ Saved {len(scene_videos)} videos to local storage")
 
             # ===== STEP 4: Composite Product (Optional) =====
+            # Note: Music is still generating in background
             if product_url:
-                logger.info("🎨 Step 4: Compositing product onto scenes...")
+                logger.info("🎨 Step 4: Compositing product onto scenes (music still generating)...")
                 composited_videos = await self._composite_products(
                     scene_videos, product_url, ad_project, progress_start=40
                 )
@@ -179,7 +243,8 @@ class GenerationPipeline:
                 composited_videos = scene_videos  # Use background videos as-is
 
             # ===== STEP 5: Add Text Overlays =====
-            logger.info("📝 Step 5: Rendering text overlays...")
+            # Note: Music is still generating in background
+            logger.info("📝 Step 5: Rendering text overlays (music still generating)...")
             overlay_start = 60 if has_product else 50
             text_rendered_videos = await self._add_text_overlays(
                 composited_videos, ad_project, progress_start=overlay_start
@@ -187,12 +252,19 @@ class GenerationPipeline:
             self.step_costs["text_overlay"] = COST_TEXT_OVERLAY
             self.total_cost += COST_TEXT_OVERLAY
 
-            # ===== STEP 6: Generate Audio =====
-            logger.info("🎵 Step 6: Generating background music...")
-            audio_start = 75 if has_product else 70
-            audio_url = await self._generate_audio(project, ad_project, progress_start=audio_start)
-            self.step_costs["audio"] = COST_MUSIC_GENERATION
-            self.total_cost += COST_MUSIC_GENERATION
+            # ===== STEP 6: Synchronize - Wait for Music Generation =====
+            logger.info("⏳ Step 6: Waiting for background music generation to complete...")
+            try:
+                audio_url = await music_task
+                logger.info(f"✅ Background music generation complete: {audio_url}")
+                self.step_costs["audio"] = COST_MUSIC_GENERATION
+                self.total_cost += COST_MUSIC_GENERATION
+            except asyncio.CancelledError:
+                logger.error("❌ Music generation was cancelled")
+                raise
+            except Exception as e:
+                logger.error(f"❌ Music generation failed: {e}")
+                raise
 
             # ===== STEP 7: Render Multi-Aspect =====
             logger.info("📺 Step 7: Rendering final videos (multi-aspect)...")
@@ -245,6 +317,15 @@ class GenerationPipeline:
 
         except Exception as e:
             logger.error(f"❌ Pipeline failed: {e}", exc_info=True)
+
+            # Cancel music task if it's still running (from parallel execution)
+            if 'music_task' in locals() and not music_task.done():
+                logger.info("🚫 Cancelling background music generation task...")
+                music_task.cancel()
+                try:
+                    await music_task
+                except asyncio.CancelledError:
+                    logger.info("✅ Music task cancelled successfully")
 
             # Mark project as failed
             error_msg = str(e)[:500]  # Truncate long errors
@@ -308,9 +389,16 @@ class GenerationPipeline:
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Brand colors are now determined by LLM during scene planning
-            # based on creative prompt and brand guidelines
+            # Brand colors from LLM or reference image if available
             brand_colors = []
+            
+            # Check if reference image style was extracted
+            extracted_style = None
+            if project.ad_project_json:
+                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+                if extracted_style:
+                    brand_colors = extracted_style.get("colors", [])
+                    logger.info(f"🎨 Using colors from reference image: {brand_colors}")
             
             # Check if product/logo are available
             has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
@@ -323,8 +411,24 @@ class GenerationPipeline:
                 # In production, you'd download and parse the file from S3
                 logger.info(f"Brand guidelines URL provided: {ad_project.brand.guidelines_url}")
             
+            # Build creative prompt with reference style if available
+            creative_prompt = ad_project.creative_prompt
+            if extracted_style:
+                creative_prompt += f"""
+
+REFERENCE VISUAL STYLE (from uploaded mood board):
+- Colors: {', '.join(extracted_style.get('colors', []))}
+- Mood: {extracted_style.get('mood', 'professional')}
+- Lighting: {extracted_style.get('lighting', 'professional')}
+- Camera: {extracted_style.get('camera', 'professional')}
+- Atmosphere: {extracted_style.get('atmosphere', 'professional')}
+- Texture: {extracted_style.get('texture', 'professional')}
+
+Incorporate this visual style consistently throughout all scenes."""
+            
+            # PHASE 7: Pass selected_style to ScenePlanner
             plan = await planner.plan_scenes(
-                creative_prompt=ad_project.creative_prompt,
+                creative_prompt=creative_prompt,
                 brand_name=ad_project.brand.name,
                 brand_description=ad_project.brand.description,
                 brand_colors=brand_colors,
@@ -334,42 +438,60 @@ class GenerationPipeline:
                 has_product=has_product,
                 has_logo=has_logo,
                 aspect_ratio=ad_project.video_settings.aspect_ratio,
+                selected_style=project.selected_style,  # PHASE 7: Pass user-selected style if any
             )
+
+            # PHASE 7: plan_scenes now returns dict with chosenStyle, styleSource
+            chosen_style = plan.get('chosenStyle')  # The ONE style for entire video
+            style_source = plan.get('styleSource')  # 'user_selected' or 'llm_inferred'
+            plan_scenes_list = plan.get('scenes', [])
+            plan_style_spec = plan.get('style_spec', {})
+            
+            logger.info(f"✅ ScenePlanner chose style: {chosen_style} ({style_source})")
 
             # Update ad_project with scenes and style spec from plan
             # Convert plan scenes to AdProject scenes format
             from app.models.schemas import Overlay, Scene as AdProjectScene
             ad_project.scenes = [
                 AdProjectScene(
-                    id=str(scene.scene_id),
-                    role=scene.role,
-                    duration=scene.duration,
-                    description=scene.background_prompt,
-                    background_prompt=scene.background_prompt,
-                    background_type=scene.background_type,
-                    use_product=scene.use_product,
-                    use_logo=scene.use_logo,
-                    product_usage="static_insert" if scene.use_product else "none",
-                    camera_movement=scene.camera_movement,
-                    transition_to_next=scene.transition_to_next,
+                    id=str(scene.get('scene_id', i)),
+                    role=scene.get('role', 'showcase'),
+                    duration=scene.get('duration', 5),
+                    description=scene.get('background_prompt', ''),
+                    background_prompt=scene.get('background_prompt', ''),
+                    background_type=scene.get('background_type', 'cinematic'),
+                    use_product=scene.get('use_product', False),
+                    use_logo=scene.get('use_logo', False),
+                    product_usage="static_insert" if scene.get('use_product') else "none",
+                    camera_movement=scene.get('camera_movement', 'static'),
+                    transition_to_next=scene.get('transition_to_next', 'cut'),
                     overlay=Overlay(
-                        text=scene.overlay.text,
-                        position=scene.overlay.position,
-                        font_size=scene.overlay.font_size,
-                        duration=scene.overlay.duration,
-                    ) if scene.overlay else None,
+                        text=scene.get('overlay', {}).get('text', ''),
+                        position=scene.get('overlay', {}).get('position', 'bottom'),
+                        font_size=scene.get('overlay', {}).get('font_size', 48),
+                        duration=scene.get('overlay', {}).get('duration', 2.0),
+                    ) if scene.get('overlay') else None,
                 )
-                for scene in plan.scenes
+                for i, scene in enumerate(plan_scenes_list)
             ]
             # Convert StyleSpec from plan to AdProject StyleSpec format
             ad_project.style_spec = StyleSpec(
-                lighting=plan.style_spec.lighting_direction,
-                camera_style=plan.style_spec.camera_style,
-                mood=plan.style_spec.mood_atmosphere,
-                color_palette=plan.style_spec.color_palette,
-                texture=plan.style_spec.texture_materials,
-                grade=plan.style_spec.grade_postprocessing,
+                lighting=plan_style_spec.get('lighting_direction', ''),
+                camera_style=plan_style_spec.get('camera_style', ''),
+                mood=plan_style_spec.get('mood_atmosphere', ''),
+                color_palette=plan_style_spec.get('color_palette', []),
+                texture=plan_style_spec.get('texture_materials', ''),
+                grade=plan_style_spec.get('grade_postprocessing', ''),
             )
+
+            # PHASE 7: Store chosen style in ad_project_json
+            if not ad_project.video_metadata:
+                ad_project.video_metadata = {}
+            ad_project.video_metadata['selectedStyle'] = {
+                'style': chosen_style,
+                'source': style_source,
+                'appliedAt': datetime.utcnow().isoformat()
+            }
 
             # Save back to database
             project.ad_project_json = ad_project.dict()
@@ -394,12 +516,27 @@ class GenerationPipeline:
             from app.config import settings
             generator = VideoGenerator(api_token=settings.replicate_api_token)
 
+            # Check if reference style was extracted
+            extracted_style = None
+            if project.ad_project_json:
+                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+            
+            # PHASE 7: Get the chosen style for all scenes
+            chosen_style = None
+            if project.ad_project_json and "video_metadata" in project.ad_project_json:
+                video_metadata = project.ad_project_json.get("video_metadata", {})
+                style_info = video_metadata.get("selectedStyle", {})
+                chosen_style = style_info.get("style")
+                logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
+
             # Create tasks for all scenes
             tasks = [
                 generator.generate_scene_background(
                     prompt=scene.background_prompt,
                     style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
                     duration=scene.duration,
+                    extracted_style=extracted_style,  # Pass extracted style to generator
+                    style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
                 )
                 for scene in ad_project.scenes
             ]
