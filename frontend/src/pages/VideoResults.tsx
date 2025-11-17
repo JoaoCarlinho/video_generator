@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { VideoPlayer } from '@/components/PageComponents'
 import { useProjects } from '@/hooks/useProjects'
 import { api } from '@/services/api'
-import { ArrowLeft, Download, Copy, Check, Trash2, Cloud, HardDrive, Lock } from 'lucide-react'
+import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play } from 'lucide-react'
 import {
   getVideoURL,
   getVideo,
@@ -25,18 +24,15 @@ export const VideoResults = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('16:9')
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloadingAspect, setDownloadingAspect] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   
-  // Local storage state
   const [videoUrl, setVideoUrl] = useState<string>('')
   const [storageUsage, setStorageUsage] = useState<number>(0)
   const [isFinalized, setIsFinalized] = useState(false)
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
 
-  // Load project and videos from local storage
   useEffect(() => {
     const loadProjectAndVideos = async () => {
       try {
@@ -44,23 +40,18 @@ export const VideoResults = () => {
         const data = await getProject(projectId)
         setProject(data)
         
-        // Get project's aspect ratio and set it as default
         const projectAspectRatio = (data.aspect_ratio || '16:9') as '9:16' | '1:1' | '16:9'
         setAspect(projectAspectRatio)
         
-        // Try to load video from local storage with the project's aspect ratio
         const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
-          console.log(`✅ Loaded video from local storage for ${projectAspectRatio}`)
         } else {
-          // Fallback to S3 URL if local storage is empty
           setVideoUrl(data.output_videos?.[projectAspectRatio] || '')
           setUseLocalStorage(false)
         }
         
-        // Get storage usage
         const usage = await getStorageUsage(projectId)
         setStorageUsage(usage)
       } catch (err) {
@@ -76,20 +67,16 @@ export const VideoResults = () => {
     }
   }, [projectId, getProject])
   
-  // Reload video when aspect changes
   useEffect(() => {
     const loadVideoForAspect = async () => {
       if (!projectId || !aspect) return
       
       try {
-        // Try to load video from local storage
         const localVideoUrl = await getVideoURL(projectId, aspect)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
-          console.log(`✅ Loaded video from local storage for ${aspect}`)
         } else {
-          // Fallback to S3 URL if local storage is empty
           const s3Url = project?.output_videos?.[aspect] || ''
           setVideoUrl(s3Url)
           setUseLocalStorage(false)
@@ -108,15 +95,12 @@ export const VideoResults = () => {
     try {
       setDownloadingAspect(aspectRatio)
       
-      // Try to get video from local storage first
       const videoBlob = await getVideo(projectId, aspectRatio)
       let videoUrlToDownload: string
       
       if (videoBlob) {
-        // Create blob URL from local storage
         videoUrlToDownload = URL.createObjectURL(videoBlob)
       } else {
-        // Fallback to S3 URL
         videoUrlToDownload = project.output_videos?.[aspectRatio] || ''
         if (!videoUrlToDownload) {
           setError('Video URL not available')
@@ -125,11 +109,9 @@ export const VideoResults = () => {
         }
       }
       
-      // Create a temporary anchor element for download
       const link = document.createElement('a')
       link.href = videoUrlToDownload
       
-      // Generate filename based on aspect ratio
       const aspectNames: Record<string, string> = {
         '9:16': 'vertical',
         '1:1': 'square',
@@ -152,12 +134,10 @@ export const VideoResults = () => {
       link.click()
       document.body.removeChild(link)
       
-      // Clean up blob URL if we created one
       if (videoBlob && videoUrlToDownload.startsWith('blob:')) {
         URL.revokeObjectURL(videoUrlToDownload)
       }
       
-      // Clear the downloading state after a short delay
       setTimeout(() => setDownloadingAspect(null), 1000)
     } catch (err) {
       console.error('Download failed:', err)
@@ -166,13 +146,6 @@ export const VideoResults = () => {
     }
   }
 
-  const handleCopyUrl = (url: string) => {
-    navigator.clipboard.writeText(url)
-    setCopiedUrl(url)
-    setTimeout(() => setCopiedUrl(null), 2000)
-  }
-
-  // Finalize video: upload to S3 and cleanup local storage
   const handleFinalizeVideo = async () => {
     if (!confirm('Finalize this video? This will upload the final videos to S3 and delete all local files. This action cannot be undone.')) {
       return
@@ -182,42 +155,28 @@ export const VideoResults = () => {
       setIsFinalizing(true)
       setError(null)
       
-      console.log('🚀 Finalizing video - uploading to S3...')
-      
-      // Call backend finalize endpoint
       const response = await api.post(`/api/projects/${projectId}/finalize`)
       
-      console.log('✅ Video finalized and uploaded to S3!')
-      console.log('📊 S3 URLs:', response.data.output_videos)
-      
-      // Update local state
       setIsFinalized(true)
       
-      // Reload project to get S3 URLs
       const updatedProject = await getProject(projectId)
       setProject(updatedProject)
       
-      // Mark as finalized and cleanup IndexedDB
       await markAsFinalized(projectId)
       
-      // Delete local storage after 2 seconds
       setTimeout(async () => {
         await deleteProjectVideos(projectId)
         setStorageUsage(0)
-        console.log('✅ Local storage cleaned up')
       }, 2000)
       
-      // Show success message
       setError(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to finalize video'
       setError(message)
-      console.error('❌ Finalization error:', err)
       setIsFinalizing(false)
     }
   }
 
-  // S3 RESTRUCTURING: Delete project and S3 folder
   const handleDeleteProject = async () => {
     if (!confirm('Delete this project? This will remove all videos and project files from storage. This action cannot be undone.')) {
       return
@@ -226,7 +185,6 @@ export const VideoResults = () => {
     try {
       setDeleting(true)
       await api.delete(`/api/projects/${projectId}/`)
-      // Redirect to dashboard after successful deletion
       navigate('/dashboard', { replace: true })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete project'
@@ -235,46 +193,13 @@ export const VideoResults = () => {
     }
   }
 
-  const aspectInfo = {
-    '9:16': {
-      label: 'Vertical',
-      description: 'TikTok, Instagram Reels, Shorts',
-      icon: '📱',
-    },
-    '1:1': {
-      label: 'Square',
-      description: 'Instagram Feed, Facebook, Pinterest',
-      icon: '⬜',
-    },
-    '16:9': {
-      label: 'Horizontal',
-      description: 'YouTube, Web, Presentations',
-      icon: '🖥️',
-    },
-  }
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-3 border-slate-600 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Loading your video...</p>
+          <div className="w-12 h-12 border-3 border-olive-600 border-t-gold rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-gray">Loading your video...</p>
         </div>
       </div>
     )
@@ -282,216 +207,219 @@ export const VideoResults = () => {
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
-        <Header logo="GenAds" title="Video Results" />
-        <div className="flex-1 flex items-center justify-center">
-          <Container size="md" className="py-12">
-            <div className="text-center">
-              <p className="text-red-400 font-medium mb-4">{error || 'Project not found'}</p>
-              <Button variant="gradient" onClick={() => navigate('/dashboard')}>
-                Back to Dashboard
-              </Button>
+      <div className="min-h-screen bg-gradient-hero flex flex-col">
+        <nav className="border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
+              </button>
+              <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </div>
-          </Container>
+          </div>
+        </nav>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-400 font-medium mb-4">{error || 'Project not found'}</p>
+            <Button variant="hero" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  const cost = project?.cost_estimate || 0
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
-      {/* Header */}
-      <Header
-        logo="GenAds"
-        title="Video Complete"
-        actions={
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-        }
-      />
+    <div className="min-h-screen bg-gradient-hero">
+      {/* Background decoration */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
+      </div>
+
+      {/* Navigation Header */}
+      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-gold rounded-lg shadow-gold">
+                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                </div>
+                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-4">
+              <h1 className="text-sm font-semibold text-off-white">{project.title}</h1>
+            </div>
+          </div>
+        </div>
+      </nav>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <Container size="lg" className="py-4 sm:py-6 md:py-8">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-4 sm:space-y-6"
-          >
-            {/* Success Message */}
+      <div className="relative z-10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-5xl">
+          <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]">
+            {/* Main Video Card */}
             <motion.div
-              variants={itemVariants}
-              className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-center"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="w-full bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
             >
-              <p className="text-emerald-400 font-medium">
-                ✓ Your video is ready!
-              </p>
-            </motion.div>
-
-            {/* Video Player */}
-            <motion.div variants={itemVariants}>
-              <Card variant="glass">
-                <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-lg">Preview - {aspectInfo[aspect].label}</CardTitle>
-                    {useLocalStorage && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-300">
-                        <HardDrive className="w-3 h-3" />
-                        Local
-                      </div>
-                    )}
-                    {!useLocalStorage && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-400">
-                        <Cloud className="w-3 h-3" />
-                        S3
-                      </div>
-                    )}
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gold/10 rounded-lg border border-gold/20">
+                    <CheckCircle2 className="w-5 h-5 text-gold" />
                   </div>
-                  {isFinalized && (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded text-xs text-emerald-400">
-                      <Lock className="w-3 h-3" />
-                      Finalized
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-bold text-off-white">{project.title}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      {useLocalStorage && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-olive-700/30 rounded text-xs text-muted-gray border border-olive-600">
+                          <HardDrive className="w-3 h-3" />
+                          Local
+                        </div>
+                      )}
+                      {!useLocalStorage && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-olive-700/30 rounded text-xs text-muted-gray border border-olive-600">
+                          <Cloud className="w-3 h-3" />
+                          S3
+                        </div>
+                      )}
+                      {isFinalized && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 rounded text-xs text-emerald-400 border border-emerald-500/30">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Finalized
+                        </div>
+                      )}
                     </div>
-                  )}
-                </CardHeader>
-                <CardContent className="px-4 sm:px-6">
-                  {videoUrl ? (
-                    <div className="flex justify-center">
-                      <VideoPlayer
-                        videoUrl={videoUrl}
-                        title={project.title}
-                        aspect={aspect}
-                        onDownload={() => handleDownload(aspect)}
-                      />
-                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Player */}
+              <div className="mb-4">
+                {videoUrl ? (
+                  <VideoPlayer
+                    videoUrl={videoUrl}
+                    title={project.title}
+                    aspect={aspect}
+                    onDownload={() => handleDownload(aspect)}
+                  />
+                ) : (
+                  <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
+                    <p className="text-muted-gray">No video available</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="flex items-center gap-3 pt-4 border-t border-olive-600/50">
+                <Button
+                  variant="hero"
+                  onClick={() => handleDownload(aspect)}
+                  disabled={!!downloadingAspect}
+                  className="gap-2 transition-transform duration-200 hover:scale-105"
+                >
+                  {downloadingAspect === aspect ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-gold-foreground/30 border-t-gold-foreground rounded-full animate-spin" />
+                      Downloading...
+                    </>
                   ) : (
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 text-center">
-                      <p className="text-slate-400">No video available</p>
-                    </div>
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download
+                    </>
                   )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Local Storage Information */}
-            {storageUsage > 0 && (
-                <>
-                    {!isFinalized && (
-                      <Button
-                        variant="gradient"
-                        onClick={handleFinalizeVideo}
-                        disabled={isFinalizing}
-                        className="w-full gap-2"
-                      >
-                        {isFinalizing ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-slate-300 border-t-white rounded-full animate-spin" />
-                            Finalizing...
-                          </>
-                        ) : (
-                          <>
-                            <Cloud className="w-4 h-4" />
-                            Finalize
-                          </>
-                        )}
-                      </Button>
+                </Button>
+                
+                {storageUsage > 0 && !isFinalized && (
+                  <Button
+                    variant="outline"
+                    onClick={handleFinalizeVideo}
+                    disabled={isFinalizing}
+                    className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold transition-transform duration-200 hover:scale-105"
+                  >
+                    {isFinalizing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full animate-spin mr-2" />
+                        Finalizing...
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="w-4 h-4 mr-2" />
+                        Finalize
+                      </>
                     )}
-                    
-                    {isFinalized && (
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
-                        <p className="text-emerald-400 text-sm font-medium">
-                          ✓ Video finalized and uploaded to S3
-                        </p>
-                      </div>
-                    )}
-                </>
-            )}
+                  </Button>
+                )}
+              </div>
 
-            {/* Share Section */}
-            <motion.div variants={itemVariants}>
-              <Card variant="glass">
-                <CardHeader>
-                  <CardTitle>Share Videos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(() => {
-                    const url = project.output_videos?.['16:9'] || ''
-                    if (!url) return null
-                    return (
-                      <div className="flex items-center gap-2 p-3 bg-slate-800/30 border border-slate-700 rounded-lg">
-                        <input
-                          type="text"
-                          value={url}
-                          readOnly
-                          className="flex-1 bg-transparent text-slate-400 text-xs font-mono outline-none"
-                        />
-                        <button
-                          onClick={() => handleCopyUrl(url)}
-                          className="p-2 hover:bg-slate-700 rounded transition-colors"
-                        >
-                          {copiedUrl === url ? (
-                            <Check className="w-4 h-4 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-4 h-4 text-slate-400" />
-                          )}
-                        </button>
-                      </div>
-                    )
-                  })()}
-                </CardContent>
-              </Card>
+              {isFinalized && (
+                <div className="pt-4 border-t border-olive-600/50">
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                    <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Video finalized and uploaded to S3
+                    </p>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             {/* Action Buttons */}
-            <motion.div
-              variants={itemVariants}
-              className="flex gap-4 justify-center pt-4 flex-wrap"
-            >
+            <div className="flex items-center gap-3 mt-6 flex-wrap justify-center">
               <Button
                 variant="outline"
                 onClick={() => navigate('/dashboard')}
+                className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
               >
                 Back to Projects
               </Button>
               <Button
-                variant="gradient"
+                variant="hero"
                 onClick={() => navigate('/create')}
-                className="gap-2"
+                className="gap-2 transition-transform duration-200 hover:scale-105"
               >
+                <Play className="w-4 h-4" />
                 Create Another
               </Button>
-              {/* S3 RESTRUCTURING: Delete project button */}
               <Button
                 variant="outline"
                 onClick={handleDeleteProject}
                 disabled={deleting}
-                className="gap-2 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 transition-transform duration-200 hover:scale-105"
               >
                 {deleting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin mr-2" />
                     Deleting...
                   </>
                 ) : (
                   <>
-                    <Trash2 className="w-4 h-4" />
-                    Delete Project
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
                   </>
                 )}
               </Button>
-            </motion.div>
-          </motion.div>
-        </Container>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
-
