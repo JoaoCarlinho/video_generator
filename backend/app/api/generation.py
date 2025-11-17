@@ -9,17 +9,17 @@ import boto3
 from app.database.connection import get_db, init_db
 from app.database.crud import get_project_by_user, update_project_status
 from app.models.schemas import GenerationProgressResponse
-from app.jobs.sqs_worker import create_sqs_worker
 from app.api.auth import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize SQS worker config
+# Initialize SQS worker config (only available in worker Lambda with full dependencies)
 try:
+    from app.jobs.sqs_worker import create_sqs_worker
     worker_config = create_sqs_worker()
-except Exception as e:
+except (ImportError, AttributeError, Exception) as e:
     logger.warning(f"⚠️ Failed to initialize SQS worker config: {e}")
     worker_config = None
 

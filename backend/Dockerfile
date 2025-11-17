@@ -38,12 +38,14 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY app/ ${LAMBDA_TASK_ROOT}/app/
 
-# Copy Lambda handler
+# Copy Lambda handlers
 COPY lambda_handler.py ${LAMBDA_TASK_ROOT}/
+COPY api_handler.py ${LAMBDA_TASK_ROOT}/
 
-# Set Lambda handler
+# Set Lambda handler (API Gateway/Function URL handler)
+# For SQS worker, use lambda_handler.handler instead
 # Format: filename.function_name
-CMD ["lambda_handler.handler"]
+CMD ["api_handler.handler"]
 
 # Environment variables will be set in Lambda function configuration
 # Required env vars:
