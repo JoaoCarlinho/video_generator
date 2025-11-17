@@ -119,7 +119,14 @@ class ScenePlanner:
         logger.info(f"Planning video for '{brand_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
         
-        # PHASE 7: Determine the ONE style for entire video
+        # STEP 1: Derive tone from target audience (Task 2)
+        tone = await self._derive_tone_from_audience(
+            target_audience=target_audience or "general consumers",
+            brand_description=brand_description
+        )
+        logger.info(f"📊 Derived tone: '{tone}' from audience '{target_audience or 'general consumers'}'")
+        
+        # STEP 2: PHASE 7 - Determine the ONE style for entire video
         if selected_style:
             # User provided style
             chosen_style = selected_style
@@ -135,7 +142,7 @@ class ScenePlanner:
                 target_audience=target_audience or "general consumers"
             )
 
-        # Generate scene plan via LLM
+        # STEP 3: Generate scene plan via LLM (with tone context)
         scenes_json = await self._generate_scenes_via_llm(
             creative_prompt=creative_prompt,
             brand_name=brand_name,
@@ -149,13 +156,14 @@ class ScenePlanner:
             aspect_ratio=aspect_ratio,
         )
 
-        # Generate style specification
+        # STEP 4: Generate style specification (with derived tone)
         style_spec = await self._generate_style_spec(
             creative_prompt=creative_prompt,
             brand_name=brand_name,
             brand_description=brand_description,
             brand_colors=brand_colors,
             brand_guidelines=brand_guidelines,
+            derived_tone=tone,
         )
 
         # Parse scenes
@@ -207,12 +215,13 @@ class ScenePlanner:
         logger.info(f"✅ Generated plan with {len(scenes)} scenes (total: {total_duration}s, style: {chosen_style})")
         logger.info(f"✅ CRITICAL: All {len(scenes)} scenes enforced to use SAME style: {chosen_style}")
 
-        # PHASE 7: Return dict with style information
+        # PHASE 7 + Task 2: Return dict with style information and derived tone
         return {
             "scenes": scenes_dict,
             "style_spec": style_spec.model_dump(),
             "chosenStyle": chosen_style,  # The ONE style used for entire video
             "styleSource": style_source,  # "user_selected" or "llm_inferred"
+            "derivedTone": tone,  # Task 2: Derived tone from audience
             "creative_prompt": creative_prompt,
             "brand_name": brand_name,
             "target_audience": target_audience or "general consumers",
@@ -263,6 +272,11 @@ class ScenePlanner:
 {brand_context}
 Brand Colors: {', '.join(brand_colors)}
 Target Audience: {target_audience}
+
+**CRITICAL BRAND NAME RULE:**
+- The FIRST scene (hook/intro) should mention or reference "{brand_name}"
+- The FINAL scene (CTA) MUST include "{brand_name}" in the text overlay
+- Example final overlay: "Try {brand_name} Today" or "Shop {brand_name} Now" or "Get {brand_name}"
 
 === PRODUCTION CONSTRAINTS ===
 Target Duration: {target_duration}s (flexible ±20%)
@@ -323,7 +337,11 @@ Return ONLY valid JSON array. Example structure:
     "background_prompt": "Dynamic fast-paced urban environment at golden hour, young professionals walking confidently, modern architecture, shallow depth of field, cinematic look with warm tones and high contrast",
     "background_type": "lifestyle",
     "use_product": false,
-    "use_logo": false,
+    "product_position": null,
+    "product_scale": null,
+    "use_logo": true,
+    "logo_position": "top_right",
+    "logo_scale": 0.10,
     "camera_movement": "slow_zoom_in",
     "transition_to_next": "cut",
     "overlay": {{
@@ -342,7 +360,11 @@ Return ONLY valid JSON array. Example structure:
     "background_prompt": "Minimal clean white studio background with subtle gradient, soft diffused lighting from top-left, modern aesthetic, product-focused environment with gentle shadows",
     "background_type": "product_stage",
     "use_product": true,
+    "product_position": "center",
+    "product_scale": 0.45,
     "use_logo": false,
+    "logo_position": null,
+    "logo_scale": null,
     "camera_movement": "static",
     "transition_to_next": "fade",
     "overlay": {{
@@ -361,7 +383,11 @@ Return ONLY valid JSON array. Example structure:
     "background_prompt": "Abstract flowing gradient background with brand colors, smooth motion, modern and energetic feel, professional commercial aesthetic",
     "background_type": "abstract",
     "use_product": false,
+    "product_position": null,
+    "product_scale": null,
     "use_logo": true,
+    "logo_position": "bottom_center",
+    "logo_scale": 0.15,
     "camera_movement": "slow_zoom_out",
     "transition_to_next": "fade",
     "overlay": {{
@@ -374,6 +400,28 @@ Return ONLY valid JSON array. Example structure:
     }}
   }}
 ]
+
+=== PRODUCT & LOGO POSITIONING GUIDELINES ===
+1. **Product Positioning** (when use_product=true):
+   - "center": Hero shots, product-focused scenes (product_scale: 0.4-0.6)
+   - "bottom_right": Lifestyle scenes, with text top/center (product_scale: 0.25-0.35)
+   - "left" or "right": Side placement when text needs opposite side (product_scale: 0.3-0.4)
+   - Set product_position and product_scale explicitly in JSON
+   - If use_product=false, set product_position=null and product_scale=null
+
+2. **Logo Positioning** (when use_logo=true):
+   - First scene (intro): "top_left" or "top_right" subtle branding (logo_scale: 0.08-0.12)
+   - Final scene (CTA): "bottom_center" or near CTA text (logo_scale: 0.12-0.18)
+   - Don't use logo in EVERY scene - strategic placement only (intro + final typically)
+   - Set logo_position and logo_scale explicitly in JSON
+   - If use_logo=false, set logo_position=null and logo_scale=null
+
+3. **Avoid Conflicts**:
+   - If product in "bottom_right", put logo in "top_left" or "top_right"
+   - If text overlay at "bottom", avoid product/logo at "bottom_center"
+   - Product and logo should not overlap each other
+
+**CRITICAL**: Output product_position, product_scale, logo_position, logo_scale fields explicitly for EVERY scene!
 
 === IMPORTANT NOTES ===
 - background_prompt should be 2-3 detailed sentences for AI video generation
@@ -504,6 +552,61 @@ Choose wisely. Return ONLY the style ID."""
             logger.error(f"Error in LLM style selection: {e}, using 'cinematic' as fallback")
             return "cinematic", "llm_inferred"
 
+    async def _derive_tone_from_audience(
+        self,
+        target_audience: str,
+        brand_description: Optional[str] = None,
+    ) -> str:
+        """
+        Derive emotional tone from target audience using LLM.
+        
+        This tone influences:
+        - Scene pacing and messaging
+        - StyleSpec mood
+        - Music mood selection
+        
+        Args:
+            target_audience: Target audience description
+            brand_description: Brand personality (optional)
+            
+        Returns:
+            Tone descriptor (e.g., "warm and reassuring", "energetic and youthful")
+        """
+        prompt = f"""You are a brand strategist.
+
+Target Audience: {target_audience}
+{f'Brand Personality: {brand_description}' if brand_description else ''}
+
+Based on the target audience, what emotional TONE should the video have?
+
+Return ONLY a 2-4 word tone descriptor.
+
+Examples:
+- "mature skin consumers" → "warm and reassuring"
+- "Gen Z tech enthusiasts" → "energetic and playful"
+- "busy professionals" → "confident and efficient"
+- "luxury shoppers" → "sophisticated and exclusive"
+- "fitness enthusiasts" → "motivating and energetic"
+- "parents with young children" → "caring and supportive"
+
+Respond with ONLY the tone descriptor, nothing else."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=20,
+            )
+            
+            tone = response.choices[0].message.content.strip().lower()
+            logger.info(f"✅ Derived tone from audience '{target_audience}': {tone}")
+            return tone
+            
+        except Exception as e:
+            logger.warning(f"Failed to derive tone: {e}, using default")
+            return "professional and engaging"
+
     async def _generate_style_spec(
         self,
         creative_prompt: str,
@@ -511,6 +614,7 @@ Choose wisely. Return ONLY the style ID."""
         brand_description: Optional[str],
         brand_colors: List[str],
         brand_guidelines: Optional[str],
+        derived_tone: Optional[str] = None,
     ) -> StyleSpec:
         """Generate global style specification using GPT-4o-mini."""
 
@@ -521,6 +625,8 @@ Choose wisely. Return ONLY the style ID."""
         if brand_guidelines:
             guidelines_preview = brand_guidelines[:500] + ("..." if len(brand_guidelines) > 500 else "")
             brand_context += f"\nGuidelines: {guidelines_preview}"
+        if derived_tone:
+            brand_context += f"\nDerived Tone: {derived_tone}"
 
         prompt = f"""You are an expert cinematographer and color grader creating a consistent visual style.
 
@@ -530,6 +636,7 @@ Choose wisely. Return ONLY the style ID."""
 === BRAND CONTEXT ===
 {brand_context}
 Brand Colors: {', '.join(brand_colors)}
+{f"Target Emotional Tone: {derived_tone}" if derived_tone else ""}
 
 === YOUR TASK ===
 Create a visual style specification that ensures all scenes look cohesive and professional.

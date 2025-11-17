@@ -385,3 +385,93 @@ class Compositor:
             logger.error(f"Local save error: {e}")
             raise
 
+    async def composite_logo(
+        self,
+        video_url: str,
+        logo_image_url: str,
+        project_id: str,
+        position: str = "top_right",
+        scale: float = 0.1,
+        opacity: float = 0.9,
+        scene_index: int = 0,
+    ) -> str:
+        """
+        Composite logo onto video (similar to product compositing).
+        
+        Task 4: New method to actually overlay logo images onto video scenes.
+        
+        Args:
+            video_url: Video to overlay logo onto (local path)
+            logo_image_url: Logo image URL (S3)
+            project_id: Project UUID
+            position: Logo position (top_left, top_right, bottom_left, bottom_right, bottom_center)
+            scale: Logo size as fraction of frame height (0.05-0.2)
+            opacity: Logo opacity (0.0-1.0)
+            scene_index: Scene index for filename
+            
+        Returns:
+            Local path to video with logo
+        """
+        if not CV2_AVAILABLE:
+            logger.warning("OpenCV not available - skipping logo compositing")
+            return video_url
+        
+        logger.info(f"🏷️  Compositing logo onto video: {position} at {scale*100:.0f}% scale, opacity={opacity:.2f}")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                # Download logo
+                logo_path = Path(tmpdir) / "logo.png"
+                await self._download_file(logo_image_url, logo_path)
+                
+                # Load logo
+                logo_image = cv2.imread(str(logo_path), cv2.IMREAD_UNCHANGED)
+                if logo_image is None:
+                    logger.warning("Could not load logo image, skipping")
+                    return video_url
+                
+                # Get video properties
+                video_props = await self._get_video_properties(video_url)
+                
+                # Composite logo frame by frame (reuse product compositing logic)
+                output_path = Path(tmpdir) / "with_logo.mp4"
+                await self._composite_video_frames(
+                    input_video_path=video_url,
+                    product_image=logo_image,  # Reuse product compositing logic
+                    output_path=output_path,
+                    frame_width=video_props["width"],
+                    frame_height=video_props["height"],
+                    position=position,
+                    scale=scale,
+                    opacity=opacity,
+                )
+                
+                # Save locally
+                local_path = await self._save_logo_video_locally(output_path, project_id, scene_index)
+                
+                logger.info(f"✅ Logo composited: {local_path}")
+                return local_path
+                
+            except Exception as e:
+                logger.error(f"Error compositing logo: {e}")
+                # Non-critical failure - return original video
+                return video_url
+
+    async def _save_logo_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
+        """Save video with logo to local filesystem."""
+        try:
+            import shutil
+            
+            save_dir = Path(f"/tmp/genads/{project_id}/draft/logo")
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            local_path = save_dir / f"scene_{scene_index:02d}_logo.mp4"
+            shutil.copy2(video_path, local_path)
+            
+            logger.info(f"✅ Saved locally: {local_path}")
+            return str(local_path)
+            
+        except Exception as e:
+            logger.error(f"Local save error: {e}")
+            raise
+

@@ -19,11 +19,13 @@ LOCAL-FIRST ARCHITECTURE:
 
 import asyncio
 import logging
+import time
 import boto3
 from uuid import UUID
 from typing import Dict, Any, Optional, List, Tuple
 from decimal import Decimal
 from datetime import datetime
+from functools import wraps
 
 from app.database import connection as db_connection
 from app.database.connection import init_db
@@ -62,6 +64,57 @@ COST_MUSIC_GENERATION = Decimal("0.10")  # MusicGen per track
 COST_RENDERING = Decimal("0.00")  # Local FFmpeg, free
 
 
+# ============================================================================
+# Task 7: Timing Decorator for Pipeline Steps
+# ============================================================================
+
+def timed_step(step_name: str):
+    """Decorator to time pipeline steps.
+    
+    Task 7: Adds timing tracking to each pipeline step for observability.
+    
+    Args:
+        step_name: Human-readable name of the step
+        
+    Returns:
+        Decorator function
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            start_time = time.time()
+            logger.info(f"⏱️  Starting step: {step_name}")
+            
+            try:
+                result = await func(self, *args, **kwargs)
+                elapsed = time.time() - start_time
+                
+                # Store timing in pipeline instance
+                if hasattr(self, 'step_timings'):
+                    self.step_timings[step_name] = elapsed
+                
+                logger.info(f"✅ Step complete: {step_name} ({elapsed:.1f}s)")
+                return result
+            except Exception as e:
+                elapsed = time.time() - start_time
+                logger.error(f"❌ Step failed: {step_name} ({elapsed:.1f}s) - {str(e)}")
+                raise
+        
+        return wrapper
+    return decorator
+
+
+# Cost constants (in USD, based on API documentation)
+COST_REFERENCE_EXTRACTION = Decimal("0.025")  # GPT-4 Vision extraction
+COST_SCENE_PLANNING = Decimal("0.01")  # GPT-4o-mini cheap
+COST_PRODUCT_EXTRACTION = Decimal("0.00")  # rembg local, free
+COST_VIDEO_GENERATION = Decimal("0.08")  # SeedAnce-1-lite per scene
+COST_COMPOSITING = Decimal("0.00")  # Local OpenCV, free
+COST_TEXT_OVERLAY = Decimal("0.00")  # Local FFmpeg, free
+COST_MUSIC_GENERATION = Decimal("0.10")  # MusicGen per track
+COST_RENDERING = Decimal("0.00")  # Local FFmpeg, free
+
+
 class GenerationPipeline:
     """Main pipeline orchestrator for video generation."""
 
@@ -83,16 +136,22 @@ class GenerationPipeline:
         self.db = db_connection.SessionLocal()
         self.total_cost = Decimal("0.00")
         self.step_costs: Dict[str, Decimal] = {}
+        self.step_timings: Dict[str, float] = {}  # Task 7: Track step timings
 
     async def run(self) -> Dict[str, Any]:
         """Execute the full generation pipeline.
         
+        Task 7: Enhanced with timing tracking, cost breakdown logging, and cleanup on failure.
+        
         Returns:
-            Dict with pipeline results including final video URLs and cost breakdown
+            Dict with pipeline results including final video URLs, cost breakdown, and timings
             
         Raises:
             Exception: If any critical step fails (caught and logged)
         """
+        pipeline_start = time.time()
+        music_task = None
+        
         try:
             logger.info(f"🚀 Starting generation pipeline for project {self.project_id}")
 
@@ -242,12 +301,28 @@ class GenerationPipeline:
                 logger.info("🎨 Step 4: Skipping compositing (no product image)")
                 composited_videos = scene_videos  # Use background videos as-is
 
+            # ===== STEP 4B: Composite Logo (Optional, NEW - Task 4) =====
+            # Note: Music is still generating in background
+            if ad_project.brand.logo_url:
+                logger.info("🏷️  Step 4B: Compositing logo onto scenes (music still generating)...")
+                logo_composited_videos = await self._composite_logos(
+                    composited_videos,
+                    ad_project.brand.logo_url,
+                    ad_project,
+                    progress_start=55 if product_url else 50
+                )
+                self.step_costs["logo_compositing"] = Decimal("0.00")  # Local, free
+                self.total_cost += Decimal("0.00")
+            else:
+                logger.info("🏷️  Step 4B: Skipping logo compositing (no logo provided)")
+                logo_composited_videos = composited_videos
+
             # ===== STEP 5: Add Text Overlays =====
             # Note: Music is still generating in background
             logger.info("📝 Step 5: Rendering text overlays (music still generating)...")
-            overlay_start = 60 if has_product else 50
+            overlay_start = 65 if (product_url or ad_project.brand.logo_url) else 50
             text_rendered_videos = await self._add_text_overlays(
-                composited_videos, ad_project, progress_start=overlay_start
+                logo_composited_videos, ad_project, progress_start=overlay_start
             )
             self.step_costs["text_overlay"] = COST_TEXT_OVERLAY
             self.total_cost += COST_TEXT_OVERLAY
@@ -275,8 +350,11 @@ class GenerationPipeline:
             self.step_costs["rendering"] = COST_RENDERING
             self.total_cost += COST_RENDERING
 
-            logger.info(f"✅ Pipeline complete! Total cost: ${self.total_cost:.2f}")
-            logger.info(f"💰 Cost breakdown: {self.step_costs}")
+            # Task 7: Log cost breakdown and timing summary
+            total_elapsed = time.time() - pipeline_start
+            self._log_cost_breakdown()
+            logger.info(f"🎬 PIPELINE COMPLETE in {total_elapsed:.1f}s")
+            logger.info(f"⏱️  Step timings: {self.step_timings}")
 
             # ===== LOCAL-FIRST: Final videos already saved locally by renderer =====
             logger.info("✅ Final videos already saved to local storage by renderer")
@@ -313,19 +391,37 @@ class GenerationPipeline:
                 "message": "Videos ready for preview. Videos stored in local storage.",
                 "total_cost": float(self.total_cost),
                 "cost_breakdown": {k: float(v) for k, v in self.step_costs.items()},
+                "timing_seconds": total_elapsed,  # Task 7: Total pipeline time
+                "step_timings": self.step_timings,  # Task 7: Per-step timings
             }
 
         except Exception as e:
-            logger.error(f"❌ Pipeline failed: {e}", exc_info=True)
+            # Task 7: Enhanced error handling with cleanup
+            total_elapsed = time.time() - pipeline_start
+            logger.error(f"❌ Pipeline failed after {total_elapsed:.1f}s: {e}", exc_info=True)
 
-            # Cancel music task if it's still running (from parallel execution)
-            if 'music_task' in locals() and not music_task.done():
+            # Cancel background music task if still running
+            if music_task is not None and not music_task.done():
                 logger.info("🚫 Cancelling background music generation task...")
                 music_task.cancel()
                 try:
                     await music_task
                 except asyncio.CancelledError:
                     logger.info("✅ Music task cancelled successfully")
+                except Exception as cancel_error:
+                    logger.warning(f"⚠️  Error cancelling music task: {cancel_error}")
+
+            # Task 7: Cleanup partial files (optional, non-critical)
+            try:
+                logger.info("🧹 Attempting to cleanup partial files...")
+                LocalStorageManager.cleanup_project_storage(self.project_id)
+                logger.info("✅ Cleanup completed")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️  Failed to cleanup storage: {cleanup_error}")
+
+            # Log cost breakdown even on failure
+            if self.step_costs:
+                self._log_cost_breakdown()
 
             # Mark project as failed
             error_msg = str(e)[:500]  # Truncate long errors
@@ -345,8 +441,33 @@ class GenerationPipeline:
                 "error": error_msg,
                 "total_cost": float(self.total_cost),
                 "cost_breakdown": {k: float(v) for k, v in self.step_costs.items()},
+                "timing_seconds": total_elapsed,  # Task 7: Time before failure
+                "step_timings": self.step_timings,  # Task 7: Partial timings
             }
 
+    def _log_cost_breakdown(self):
+        """Log detailed cost breakdown table.
+        
+        Task 7: Enhanced cost logging with percentage breakdown.
+        """
+        logger.info("=" * 60)
+        logger.info("💰 COST BREAKDOWN")
+        logger.info("=" * 60)
+        
+        if self.total_cost == 0:
+            logger.info("  No costs incurred (all steps were free)")
+            logger.info("=" * 60)
+            return
+        
+        for step_name, cost in sorted(self.step_costs.items(), key=lambda x: float(x[1]), reverse=True):
+            percentage = (float(cost) / float(self.total_cost) * 100) if self.total_cost > 0 else 0
+            logger.info(f"  {step_name:30s} ${float(cost):7.4f} ({percentage:5.1f}%)")
+        
+        logger.info("-" * 60)
+        logger.info(f"  {'TOTAL':30s} ${float(self.total_cost):7.4f} (100.0%)")
+        logger.info("=" * 60)
+
+    @timed_step("Product Extraction")
     async def _extract_product(
         self, project: Any, ad_project: AdProject
     ) -> str:
@@ -379,6 +500,7 @@ class GenerationPipeline:
             logger.error(f"❌ Product extraction failed: {e}")
             raise
 
+    @timed_step("Scene Planning")
     async def _plan_scenes(self, project: Any, ad_project: AdProject, progress_start: int = 15) -> Any:
         """Plan scenes using LLM and generate style spec."""
         try:
@@ -404,12 +526,56 @@ class GenerationPipeline:
             has_product = ad_project.product_asset is not None and ad_project.product_asset.original_url
             has_logo = ad_project.brand.logo_url is not None
             
-            # TODO: Load brand guidelines from S3 if guidelines_url is present
-            brand_guidelines = None
+            # ===== STEP 1B: Extract Brand Guidelines (Optional, NEW - Task 5) =====
+            extracted_guidelines = None
             if ad_project.brand.guidelines_url:
-                # For now, we'll skip loading the guidelines text
-                # In production, you'd download and parse the file from S3
-                logger.info(f"Brand guidelines URL provided: {ad_project.brand.guidelines_url}")
+                logger.info(f"📄 Step 1B: Extracting brand guidelines from document...")
+                try:
+                    from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
+                    from openai import AsyncOpenAI
+                    
+                    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+                    extractor = BrandGuidelineExtractor(
+                        openai_client=openai_client,
+                        aws_access_key_id=settings.aws_access_key_id,
+                        aws_secret_access_key=settings.aws_secret_access_key,
+                        s3_bucket_name=settings.s3_bucket_name,
+                        aws_region=settings.aws_region,
+                    )
+                    
+                    extracted_guidelines = await extractor.extract_guidelines(
+                        guidelines_url=ad_project.brand.guidelines_url,
+                        brand_name=ad_project.brand.name
+                    )
+                    
+                    if extracted_guidelines:
+                        logger.info(
+                            f"✅ Extracted guidelines: {len(extracted_guidelines.color_palette)} colors, "
+                            f"tone='{extracted_guidelines.tone_of_voice}'"
+                        )
+                        # Store in video_metadata for reference
+                        if not ad_project.video_metadata:
+                            ad_project.video_metadata = {}
+                        ad_project.video_metadata['extractedGuidelines'] = extracted_guidelines.to_dict()
+                    else:
+                        logger.warning("⚠️  Guidelines extraction returned None, continuing without")
+                    
+                    # Cost: ~$0.01 for LLM extraction
+                    self.step_costs["guidelines_extraction"] = Decimal("0.01")
+                    self.total_cost += Decimal("0.01")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Guidelines extraction failed: {e}")
+                    logger.warning("Continuing pipeline without brand guidelines")
+                    extracted_guidelines = None
+            else:
+                logger.info("📄 Step 1B: No brand guidelines URL provided, skipping")
+            
+            # Task 5: Merge colors from guidelines into brand_colors
+            if extracted_guidelines and extracted_guidelines.color_palette:
+                brand_colors.extend(extracted_guidelines.color_palette)
+                brand_colors = list(set(brand_colors))  # Remove duplicates
+                logger.info(f"🎨 Merged brand colors from guidelines: {brand_colors}")
             
             # Build creative prompt with reference style if available
             creative_prompt = ad_project.creative_prompt
@@ -426,13 +592,29 @@ REFERENCE VISUAL STYLE (from uploaded mood board):
 
 Incorporate this visual style consistently throughout all scenes."""
             
+            # Task 5: Add brand guidelines context to creative prompt
+            if extracted_guidelines:
+                guideline_text = f"""
+
+BRAND GUIDELINES (extracted from guidelines document):
+- Tone of Voice: {extracted_guidelines.tone_of_voice}
+- Color Palette: {', '.join(extracted_guidelines.color_palette) if extracted_guidelines.color_palette else 'Not specified'}"""
+                
+                if extracted_guidelines.dos_and_donts.get('dos'):
+                    guideline_text += f"\n- DO: {'; '.join(extracted_guidelines.dos_and_donts['dos'][:3])}"
+                if extracted_guidelines.dos_and_donts.get('donts'):
+                    guideline_text += f"\n- DON'T: {'; '.join(extracted_guidelines.dos_and_donts['donts'][:3])}"
+                
+                guideline_text += "\n\nEnsure all scenes follow these brand guidelines."
+                creative_prompt += guideline_text
+            
             # PHASE 7: Pass selected_style to ScenePlanner
             plan = await planner.plan_scenes(
                 creative_prompt=creative_prompt,
                 brand_name=ad_project.brand.name,
                 brand_description=ad_project.brand.description,
                 brand_colors=brand_colors,
-                brand_guidelines=brand_guidelines,
+                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
                 target_audience=ad_project.target_audience or "general consumers",
                 target_duration=ad_project.target_duration,
                 has_product=has_product,
@@ -460,11 +642,27 @@ Incorporate this visual style consistently throughout all scenes."""
                     description=scene.get('background_prompt', ''),
                     background_prompt=scene.get('background_prompt', ''),
                     background_type=scene.get('background_type', 'cinematic'),
+                    
+                    # Product fields (Task 1: Schema Enhancements)
                     use_product=scene.get('use_product', False),
+                    product_usage=scene.get('product_usage', 'static_insert'),
+                    product_position=scene.get('product_position', 'center'),  # NEW
+                    product_scale=scene.get('product_scale', 0.3),              # NEW
+                    product_opacity=scene.get('product_opacity', 1.0),          # NEW
+                    
+                    # Logo fields (Task 1: Schema Enhancements)
                     use_logo=scene.get('use_logo', False),
-                    product_usage="static_insert" if scene.get('use_product') else "none",
+                    logo_position=scene.get('logo_position', 'top_right'),      # NEW
+                    logo_scale=scene.get('logo_scale', 0.1),                    # NEW
+                    logo_opacity=scene.get('logo_opacity', 0.9),                # NEW
+                    
+                    # Layout fields (Task 1: Schema Enhancements)
                     camera_movement=scene.get('camera_movement', 'static'),
                     transition_to_next=scene.get('transition_to_next', 'cut'),
+                    safe_zone=scene.get('safe_zone'),                           # NEW
+                    overlay_preference=scene.get('overlay_preference'),         # NEW
+                    
+                    # Text overlay
                     overlay=Overlay(
                         text=scene.get('overlay', {}).get('text', ''),
                         position=scene.get('overlay', {}).get('position', 'bottom'),
@@ -474,6 +672,14 @@ Incorporate this visual style consistently throughout all scenes."""
                 )
                 for i, scene in enumerate(plan_scenes_list)
             ]
+            
+            # Task 3: Normalize scene durations to match target duration
+            ad_project.scenes = self._normalize_scene_durations(
+                ad_project.scenes,
+                ad_project.target_duration,
+                tolerance=0.10
+            )
+            
             # Convert StyleSpec from plan to AdProject StyleSpec format
             ad_project.style_spec = StyleSpec(
                 lighting=plan_style_spec.get('lighting_direction', ''),
@@ -484,7 +690,7 @@ Incorporate this visual style consistently throughout all scenes."""
                 grade=plan_style_spec.get('grade_postprocessing', ''),
             )
 
-            # PHASE 7: Store chosen style in ad_project_json
+            # PHASE 7 + Task 2: Store chosen style and derived tone in ad_project_json
             if not ad_project.video_metadata:
                 ad_project.video_metadata = {}
             ad_project.video_metadata['selectedStyle'] = {
@@ -492,6 +698,10 @@ Incorporate this visual style consistently throughout all scenes."""
                 'source': style_source,
                 'appliedAt': datetime.utcnow().isoformat()
             }
+            # Task 2: Store derived tone for music mood generation
+            if 'derivedTone' in plan:
+                ad_project.video_metadata['derivedTone'] = plan['derivedTone']
+                logger.info(f"📊 Stored derived tone in metadata: {plan['derivedTone']}")
 
             # Save back to database
             project.ad_project_json = ad_project.dict()
@@ -504,6 +714,7 @@ Incorporate this visual style consistently throughout all scenes."""
             logger.error(f"❌ Scene planning failed: {e}")
             raise
 
+    @timed_step("Video Generation")
     async def _generate_scene_videos(
         self, project: Any, ad_project: AdProject, progress_start: int = 25
     ) -> List[str]:
@@ -528,21 +739,47 @@ Incorporate this visual style consistently throughout all scenes."""
                 style_info = video_metadata.get("selectedStyle", {})
                 chosen_style = style_info.get("style")
                 logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
+            
+            # Task 3: Get aspect ratio from video settings
+            aspect_ratio = ad_project.video_settings.aspect_ratio if ad_project.video_settings else "16:9"
+            logger.info(f"📐 Generating videos with aspect ratio: {aspect_ratio}")
 
-            # Create tasks for all scenes
-            tasks = [
-                generator.generate_scene_background(
-                    prompt=scene.background_prompt,
-                    style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
-                    duration=scene.duration,
-                    extracted_style=extracted_style,  # Pass extracted style to generator
-                    style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
-                )
-                for scene in ad_project.scenes
-            ]
+            # Task 7: Create tasks with better error tracking
+            tasks = []
+            for i, scene in enumerate(ad_project.scenes):
+                try:
+                    task = generator.generate_scene_background(
+                        prompt=scene.background_prompt,
+                        style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else ad_project.style_spec,
+                        duration=scene.duration,
+                        aspect_ratio=aspect_ratio,  # Task 3: Pass aspect ratio
+                        extracted_style=extracted_style,  # Pass extracted style to generator
+                        style_override=chosen_style,  # PHASE 7: Pass chosen style to all scenes
+                    )
+                    tasks.append(task)
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to create task for scene {i} (role: {scene.role}): {e}"
+                    )
+                    raise
 
-            # Run all tasks concurrently
-            scene_videos = await asyncio.gather(*tasks)
+            # Run all tasks concurrently with return_exceptions to catch individual failures
+            scene_videos = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Task 7: Check for errors with scene context
+            for i, result in enumerate(scene_videos):
+                if isinstance(result, Exception):
+                    scene = ad_project.scenes[i]
+                    logger.error(
+                        f"❌ Scene {i} generation failed:\n"
+                        f"   Role: {scene.role}\n"
+                        f"   Prompt: {scene.background_prompt[:100]}...\n"
+                        f"   Duration: {scene.duration}s\n"
+                        f"   Error: {result}"
+                    )
+                    raise RuntimeError(
+                        f"Scene {i} ({scene.role}) generation failed: {result}"
+                    )
 
             logger.info(f"✅ Generated {len(scene_videos)} videos")
             return scene_videos
@@ -588,6 +825,7 @@ Incorporate this visual style consistently throughout all scenes."""
             logger.error(f"Error saving videos locally: {e}")
             raise
 
+    @timed_step("Product Compositing")
     async def _composite_products(
         self,
         scene_videos: List[str],
@@ -595,7 +833,11 @@ Incorporate this visual style consistently throughout all scenes."""
         ad_project: AdProject,
         progress_start: int = 40,
     ) -> List[str]:
-        """Composite product onto each scene video."""
+        """
+        Composite product onto each scene video using scene-specific positioning.
+        
+        Task 4: Now uses product_position, product_scale, product_opacity from each Scene.
+        """
         try:
             update_project_status(
                 self.db, self.project_id, "COMPOSITING", progress=progress_start
@@ -609,29 +851,118 @@ Incorporate this visual style consistently throughout all scenes."""
                 aws_region=settings.aws_region,
             )
 
-            # Composite for each scene
+            # Composite for each scene that has use_product=True
             composited = []
             for i, (video_url, scene) in enumerate(zip(scene_videos, ad_project.scenes)):
-                composited_url = await compositor.composite_product(
-                    background_video_url=video_url,
-                    product_image_url=product_url,
-                    project_id=str(self.project_id),
-                    position=getattr(scene, 'position', 'center'),
-                    scale=getattr(scene, 'scale', 0.3),
-                    scene_index=i,  # Pass scene index for unique filenames
-                )
-                composited.append(composited_url)
+                # Task 4: Check if scene should have product, use scene-specific positioning
+                if scene.use_product:
+                    position = scene.product_position or "center"
+                    scale = scene.product_scale or 0.3
+                    opacity = scene.product_opacity or 1.0
+                    
+                    logger.info(
+                        f"Compositing scene {i}/{len(scene_videos)}: "
+                        f"position={position}, scale={scale:.2f}, opacity={opacity:.2f}"
+                    )
+                    
+                    composited_url = await compositor.composite_product(
+                        background_video_url=video_url,
+                        product_image_url=product_url,
+                        project_id=str(self.project_id),
+                        position=position,   # Scene-specific (from Task 1 fields)
+                        scale=scale,         # Scene-specific
+                        opacity=opacity,     # Scene-specific
+                        scene_index=i,
+                    )
+                    composited.append(composited_url)
+                else:
+                    # Skip compositing for this scene
+                    composited.append(video_url)
+                    logger.debug(f"Skipping scene {i} (use_product=False)")
                 progress = progress_start + (i / len(ad_project.scenes)) * 15
                 update_project_status(
                     self.db, self.project_id, "COMPOSITING", progress=int(progress)
                 )
 
-            logger.info(f"✅ Composited {len(composited)} videos")
+            product_scenes_count = sum(1 for s in ad_project.scenes if s.use_product)
+            logger.info(
+                f"✅ Composited {len(composited)} videos "
+                f"({product_scenes_count} scenes with product, {len(composited) - product_scenes_count} skipped)"
+            )
             return composited
 
         except Exception as e:
             logger.error(f"❌ Compositing failed: {e}")
             raise
+
+    @timed_step("Logo Compositing")
+    async def _composite_logos(
+        self,
+        scene_videos: List[str],
+        logo_url: str,
+        ad_project: AdProject,
+        progress_start: int = 50,
+    ) -> List[str]:
+        """
+        Composite logo onto scenes that have use_logo=True.
+        
+        Task 4: New method to handle logo compositing per scene.
+        """
+        try:
+            update_project_status(
+                self.db, self.project_id, "COMPOSITING_LOGO", progress=progress_start
+            )
+            
+            from app.config import settings
+            compositor = Compositor(
+                aws_access_key_id=settings.aws_access_key_id,
+                aws_secret_access_key=settings.aws_secret_access_key,
+                s3_bucket_name=settings.s3_bucket_name,
+                aws_region=settings.aws_region,
+            )
+            
+            # Composite logo only for scenes with use_logo=True
+            result = []
+            for i, (video_url, scene) in enumerate(zip(scene_videos, ad_project.scenes)):
+                if scene.use_logo:
+                    position = scene.logo_position or "top_right"
+                    scale = scene.logo_scale or 0.1
+                    opacity = scene.logo_opacity or 0.9
+                    
+                    logger.info(f"🏷️  Compositing logo on scene {i}: {position} at {scale*100:.0f}% scale")
+                    
+                    logo_url_result = await compositor.composite_logo(
+                        video_url=video_url,
+                        logo_image_url=logo_url,
+                        project_id=str(self.project_id),
+                        position=position,
+                        scale=scale,
+                        opacity=opacity,
+                        scene_index=i,
+                    )
+                    result.append(logo_url_result)
+                else:
+                    # No logo for this scene
+                    result.append(video_url)
+                    logger.debug(f"Skipping logo for scene {i} (use_logo=False)")
+                
+                progress = progress_start + (i / len(ad_project.scenes)) * 10
+                update_project_status(
+                    self.db, self.project_id, "COMPOSITING_LOGO", progress=int(progress)
+                )
+            
+            logo_scenes_count = sum(1 for s in ad_project.scenes if s.use_logo)
+            logger.info(
+                f"✅ Logo composited on {logo_scenes_count} scenes, "
+                f"{len(result) - logo_scenes_count} scenes without logo"
+            )
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Logo compositing failed: {e}")
+            # Non-critical - return videos without logo
+            logger.warning("Continuing pipeline without logo compositing")
+            return scene_videos
 
     async def _add_text_overlays(
         self, video_urls: List[str], ad_project: AdProject, progress_start: int = 60
@@ -649,6 +980,10 @@ Incorporate this visual style consistently throughout all scenes."""
                 s3_bucket_name=settings.s3_bucket_name,
                 aws_region=settings.aws_region,
             )
+            
+            # Task 3: Get aspect ratio for proper text positioning
+            aspect_ratio = ad_project.video_settings.aspect_ratio if ad_project.video_settings else "16:9"
+            logger.info(f"📐 Adding text overlays for {aspect_ratio} aspect ratio")
 
             # Add overlays to each scene
             overlaid = []
@@ -669,6 +1004,7 @@ Incorporate this visual style consistently throughout all scenes."""
                         animation="fade_in",  # Default animation
                         project_id=str(self.project_id),
                         scene_index=i,  # Pass scene index for unique filenames
+                        aspect_ratio=aspect_ratio,  # Task 3: Pass aspect ratio for positioning
                     )
                 else:
                     # No overlay, just pass through
@@ -686,6 +1022,7 @@ Incorporate this visual style consistently throughout all scenes."""
             logger.error(f"❌ Text overlay rendering failed: {e}")
             raise
 
+    @timed_step("Audio Generation")
     async def _generate_audio(self, project: Any, ad_project: AdProject, progress_start: int = 75) -> str:
         """Generate background music using MusicGen."""
         try:
@@ -707,6 +1044,14 @@ Incorporate this visual style consistently throughout all scenes."""
             if hasattr(ad_project.style_spec, 'music_mood'):
                 music_mood = ad_project.style_spec.music_mood
             
+            # Task 2: Use derived tone to influence music mood if available
+            if ad_project.video_metadata and 'derivedTone' in ad_project.video_metadata:
+                tone = ad_project.video_metadata['derivedTone']
+                music_mood = self._map_tone_to_music_mood(tone, music_mood)
+                logger.info(f"🎵 Using tone-derived music mood: {music_mood} (from tone: {tone})")
+            else:
+                logger.info(f"🎵 Using default music mood: {music_mood}")
+            
             # Calculate total duration from scenes
             total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else ad_project.target_duration
             
@@ -723,6 +1068,86 @@ Incorporate this visual style consistently throughout all scenes."""
             logger.error(f"❌ Audio generation failed: {e}")
             raise
 
+    def _normalize_scene_durations(
+        self,
+        scenes: List[Scene],
+        target_duration: int,
+        tolerance: float = 0.10
+    ) -> List[Scene]:
+        """
+        Normalize scene durations to match target duration within tolerance.
+        
+        Task 3: Ensures total video duration matches user's target duration request.
+        
+        Args:
+            scenes: List of scenes with durations
+            target_duration: Target total duration in seconds
+            tolerance: Acceptable deviation (0.10 = ±10%)
+            
+        Returns:
+            List of scenes with normalized durations
+        """
+        total_duration = sum(scene.duration for scene in scenes)
+        
+        # Check if within tolerance
+        deviation = abs(total_duration - target_duration) / target_duration if target_duration > 0 else 0
+        
+        if deviation <= tolerance:
+            logger.info(f"✅ Duration within tolerance: {total_duration}s vs {target_duration}s target ({deviation*100:.1f}% deviation)")
+            return scenes
+        
+        # Normalize durations proportionally
+        scale_factor = target_duration / total_duration if total_duration > 0 else 1.0
+        logger.warning(f"⚠️  Duration outside tolerance: {total_duration}s vs {target_duration}s target ({deviation*100:.1f}% deviation)")
+        logger.info(f"📏 Normalizing with scale factor: {scale_factor:.3f}")
+        
+        normalized_scenes = []
+        for scene in scenes:
+            new_duration = max(3, min(15, int(scene.duration * scale_factor)))  # Clamp to 3-15s
+            
+            # Create new scene with updated duration
+            scene_dict = scene.model_dump() if hasattr(scene, 'model_dump') else scene.dict()
+            scene_dict['duration'] = new_duration
+            
+            normalized_scenes.append(Scene(**scene_dict))
+            logger.debug(f"  Scene {scene.id} ({scene.role}): {scene.duration}s → {new_duration}s")
+        
+        new_total = sum(s.duration for s in normalized_scenes)
+        logger.info(f"✅ Normalized duration: {new_total}s (target: {target_duration}s, {abs(new_total-target_duration)}s diff)")
+        
+        return normalized_scenes
+
+    def _map_tone_to_music_mood(self, tone: str, default_mood: str) -> str:
+        """
+        Map derived tone to appropriate music mood for MusicGen.
+        
+        Args:
+            tone: Derived tone from audience (e.g., "warm and reassuring")
+            default_mood: Default mood from style_spec
+            
+        Returns:
+            Music mood suitable for MusicGen
+        """
+        tone_lower = tone.lower()
+        
+        # Map tone keywords to music moods
+        if any(word in tone_lower for word in ['energetic', 'youthful', 'playful', 'vibrant']):
+            return 'upbeat'
+        elif any(word in tone_lower for word in ['sophisticated', 'luxury', 'exclusive', 'elegant', 'premium']):
+            return 'elegant'
+        elif any(word in tone_lower for word in ['warm', 'reassuring', 'caring', 'supportive', 'calm']):
+            return 'calm'
+        elif any(word in tone_lower for word in ['confident', 'powerful', 'bold', 'strong', 'commanding']):
+            return 'dramatic'
+        elif any(word in tone_lower for word in ['motivating', 'inspiring', 'uplifting', 'positive']):
+            return 'uplifting'
+        elif any(word in tone_lower for word in ['modern', 'tech', 'innovative', 'futuristic']):
+            return 'electronic'
+        else:
+            logger.info(f"No tone mapping found for '{tone}', using default mood: {default_mood}")
+            return default_mood
+
+    @timed_step("Final Rendering")
     async def _render_final(
         self,
         scene_videos: List[str],

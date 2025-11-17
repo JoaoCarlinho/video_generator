@@ -52,9 +52,10 @@ class TextOverlayRenderer:
         animation: str = "fade_in",
         project_id: str = "",
         scene_index: int = 0,
+        aspect_ratio: str = "16:9",  # Task 3: New parameter for aspect-aware positioning
     ) -> str:
         """
-        Add text overlay to video.
+        Add text overlay to video with aspect-ratio aware positioning.
 
         Args:
             video_url: S3 URL of video to overlay
@@ -66,11 +67,13 @@ class TextOverlayRenderer:
             color: Text color (hex or named color)
             animation: Animation type ("fade_in", "slide", "none")
             project_id: Project UUID for S3 path
+            scene_index: Scene index for unique filenames
+            aspect_ratio: Video aspect ratio for positioning (16:9, 9:16, 1:1)
 
         Returns:
             S3 URL of video with text overlay
         """
-        logger.info(f"Adding text overlay: '{text}' at {position}")
+        logger.info(f"Adding text overlay ({aspect_ratio}): '{text}' at {position}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -78,7 +81,7 @@ class TextOverlayRenderer:
                 video_path = Path(tmpdir) / "video.mp4"
                 await self._download_file(video_url, video_path)
 
-                # Add text overlay using FFmpeg
+                # Add text overlay using FFmpeg (Task 3: Pass aspect ratio)
                 output_path = Path(tmpdir) / "with_text.mp4"
                 await self._render_text_overlay(
                     input_video=video_path,
@@ -90,6 +93,7 @@ class TextOverlayRenderer:
                     font_size=font_size,
                     color=color,
                     animation=animation,
+                    aspect_ratio=aspect_ratio,  # Task 3: Pass aspect ratio
                 )
 
                 # Save locally
@@ -195,14 +199,15 @@ class TextOverlayRenderer:
         font_size: int,
         color: str,
         animation: str,
+        aspect_ratio: str = "16:9",  # Task 3: Aspect-aware positioning
     ):
-        """Render text overlay using FFmpeg."""
+        """Render text overlay using FFmpeg with aspect-ratio aware positioning."""
         try:
             # Convert color name to hex if needed
             color_hex = self._normalize_color(color)
 
-            # Calculate position
-            x_expr, y_expr = self._get_position_expr(position)
+            # Calculate position (Task 3: Pass aspect ratio)
+            x_expr, y_expr = self._get_position_expr(position, aspect_ratio)
 
             # Build FFmpeg filter
             filter_complex = self._build_filter_complex(
@@ -271,18 +276,51 @@ class TextOverlayRenderer:
 
         return "0xFFFFFF"  # Default to white
 
-    def _get_position_expr(self, position: str):
-        """Get FFmpeg position expressions."""
-        positions = {
-            "top": ("(w-text_w)/2", "h*0.1"),
-            "bottom": ("(w-text_w)/2", "h*0.85"),
-            "center": ("(w-text_w)/2", "(h-text_h)/2"),
-            "top-left": ("10", "10"),
-            "top-right": ("w-text_w-10", "10"),
-            "bottom-left": ("10", "h-text_h-10"),
-            "bottom-right": ("w-text_w-10", "h-text_h-10"),
-        }
-
+    def _get_position_expr(self, position: str, aspect_ratio: str = "16:9"):
+        """
+        Get FFmpeg position expressions based on aspect ratio.
+        
+        Task 3: Aspect-aware positioning adjusts text placement for different video formats.
+        
+        Args:
+            position: Logical position ("top", "bottom", "center", etc.)
+            aspect_ratio: Video aspect ratio ("16:9", "9:16", "1:1")
+            
+        Returns:
+            Tuple of (x_expr, y_expr) for FFmpeg
+        """
+        # Adjust positions based on aspect ratio
+        if aspect_ratio == "9:16":  # Vertical (TikTok, Reels, Shorts)
+            positions = {
+                "top": ("(w-text_w)/2", "h*0.15"),  # More space for UI
+                "bottom": ("(w-text_w)/2", "h*0.75"),  # Higher up for CTAs
+                "center": ("(w-text_w)/2", "(h-text_h)/2"),
+                "top-left": ("20", "20"),
+                "top-right": ("w-text_w-20", "20"),
+                "bottom-left": ("20", "h-text_h-40"),
+                "bottom-right": ("w-text_w-20", "h-text_h-40"),
+            }
+        elif aspect_ratio == "1:1":  # Square (Instagram, Facebook)
+            positions = {
+                "top": ("(w-text_w)/2", "h*0.12"),
+                "bottom": ("(w-text_w)/2", "h*0.82"),
+                "center": ("(w-text_w)/2", "(h-text_h)/2"),
+                "top-left": ("15", "15"),
+                "top-right": ("w-text_w-15", "15"),
+                "bottom-left": ("15", "h-text_h-30"),
+                "bottom-right": ("w-text_w-15", "h-text_h-30"),
+            }
+        else:  # 16:9 (horizontal - YouTube, Web, default)
+            positions = {
+                "top": ("(w-text_w)/2", "h*0.1"),
+                "bottom": ("(w-text_w)/2", "h*0.85"),
+                "center": ("(w-text_w)/2", "(h-text_h)/2"),
+                "top-left": ("10", "10"),
+                "top-right": ("w-text_w-10", "10"),
+                "bottom-left": ("10", "h-text_h-10"),
+                "bottom-right": ("w-text_w-10", "h-text_h-10"),
+            }
+        
         return positions.get(position, positions["bottom"])
 
     def _build_filter_complex(
