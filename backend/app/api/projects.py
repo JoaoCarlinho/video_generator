@@ -115,6 +115,23 @@ async def create_new_project(
                 "extracted_at": None
             }
         
+        # STORY 3: Handle multiple product images (backward compatible)
+        product_images_list = request.product_images or []
+        if not product_images_list and request.product_image_url:
+            # Backward compatibility: convert single image to array
+            product_images_list = [request.product_image_url]
+
+        # STORY 3: Handle scene backgrounds
+        scene_backgrounds_list = []
+        if request.scene_backgrounds:
+            scene_backgrounds_list = [
+                {"scene_id": sb.scene_id, "background_url": sb.background_url}
+                for sb in request.scene_backgrounds
+            ]
+
+        # STORY 3: Handle output formats (multiple aspect ratios)
+        output_formats_list = request.output_formats or ["16:9"]
+
         # PHASE 7: Add style configuration if provided
         selected_style_config = None
         if request.selected_style:
@@ -133,11 +150,16 @@ async def create_new_project(
             "target_audience": request.target_audience,
             "brand": brand_config,
             "product_asset": product_asset,
+            # STORY 3: New fields
+            "product_images": product_images_list,
+            "scene_backgrounds": scene_backgrounds_list,
+            "output_formats": output_formats_list,
+            # Continue with existing fields
             "selectedStyle": selected_style_config,  # PHASE 7: User-selected or LLM-inferred style
             "style_spec": None,
             "scenes": [],
             "video_settings": {
-                "aspect_ratio": request.aspect_ratio,
+                "aspect_ratio": request.aspect_ratio,  # Kept for backward compat
                 "resolution": "1080p",
                 "fps": 30,
                 "codec": "h264"
@@ -159,7 +181,11 @@ async def create_new_project(
             ad_project_json=ad_project_json,
             mood="",  # Deprecated, keeping for DB schema compatibility
             duration=request.target_duration,
-            aspect_ratio=request.aspect_ratio,
+            aspect_ratio=request.aspect_ratio,  # Deprecated but kept for backward compat
+            # STORY 3: Pass new multi-format fields
+            product_images=product_images_list,
+            scene_backgrounds=scene_backgrounds_list,
+            output_formats=output_formats_list
             selected_style=request.selected_style  # PHASE 7: Store selected style
         )
         

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from '@/components/ui'
-import { Play, Trash2, Edit3, Clock } from 'lucide-react'
+import { Trash2, Edit3, Clock } from 'lucide-react'
 
 interface ProjectCardProps {
   id?: string

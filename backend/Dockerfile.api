@@ -1,43 +1,50 @@
-# Dockerfile for FastAPI Backend
-FROM python:3.12-slim
+# AWS Lambda Docker image for FastAPI backend API
+# Based on official AWS Lambda Python runtime
+FROM public.ecr.aws/lambda/python:3.11
 
-# Set working directory
-WORKDIR /app
+# Copy requirements file
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 
-# Set Python environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-ENV OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    ffmpeg \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    build-essential \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies including mangum for Lambda integration
+# Use --no-cache-dir to reduce image size
+# Upgrade pip first for better dependency resolution
+# Set CXX environment variable for soxr compilation
+# Note: soxr==0.3.7 is pinned in requirements.txt for nanobind compatibility
+ENV CXX=g++
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt && \
+    pip install --no-cache-dir mangum
 
 # Copy application code
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY app/ ${LAMBDA_TASK_ROOT}/app/
 
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Copy API Lambda handler
+COPY api_handler.py ${LAMBDA_TASK_ROOT}/
 
-# Run the API server
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set Lambda handler
+# Format: filename.function_name
+CMD ["api_handler.handler"]
+
+# Environment variables will be set in Lambda function configuration
+# Required env vars:
+# - DATABASE_URL
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_ROLE_KEY
+# - SUPABASE_ANON_KEY
+# - S3_BUCKET_NAME
+# - AWS_REGION
+# - SQS_QUEUE_URL
+# - REPLICATE_API_TOKEN
+# - OPENAI_API_KEY
+
+# Lambda runtime will provide:
+# - AWS_ACCESS_KEY_ID
+# - AWS_SECRET_ACCESS_KEY
+# - AWS_SESSION_TOKEN
+# - AWS_REGION (also set by us for consistency)
+
+# Labels for documentation
+LABEL maintainer="AI Ad Video Generator"
+LABEL description="AWS Lambda API for FastAPI backend via Function URL"
+LABEL version="1.0.0"
 
