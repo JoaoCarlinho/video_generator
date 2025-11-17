@@ -3,17 +3,19 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../utils/cn'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-charcoal-950 disabled:opacity-50 disabled:cursor-not-allowed',
   {
     variants: {
       variant: {
-        default: 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 shadow-md hover:shadow-lg',
-        secondary: 'bg-slate-800 text-white hover:bg-slate-700 active:bg-slate-600 border border-slate-700',
-        outline: 'border border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white',
-        ghost: 'text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700',
-        danger: 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700 shadow-md hover:shadow-lg',
-        success: 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 shadow-md hover:shadow-lg',
-        gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-glow hover:shadow-glow-lg',
+        default: 'bg-gold text-gold-foreground hover:bg-gold-dark shadow-gold hover:shadow-gold-lg',
+        secondary: 'bg-slate-800 text-off-white hover:bg-slate-700 border border-neutral-dim',
+        outline: 'border border-gold text-gold hover:bg-gold hover:text-gold-foreground',
+        ghost: 'text-muted-gray hover:text-off-white hover:bg-slate-800',
+        danger: 'bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg',
+        success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg',
+        gradient: 'bg-gradient-gold text-gold-foreground hover:opacity-90 shadow-gold hover:shadow-gold-lg',
+        hero: 'bg-gold text-gold-foreground hover:bg-gold-dark shadow-gold hover:shadow-gold-lg font-semibold',
+        gold: 'bg-gradient-gold text-gold-foreground hover:opacity-90 shadow-gold hover:shadow-gold-lg',
       },
       size: {
         sm: 'h-8 px-3 text-xs',
@@ -68,4 +70,5 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button'
 
 export { Button, buttonVariants }
+export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'gradient' | 'hero' | 'gold'
 
