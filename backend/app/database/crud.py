@@ -32,6 +32,7 @@ def create_project(
     product_images: Optional[List[str]] = None,
     scene_backgrounds: Optional[List[Dict[str, str]]] = None,
     output_formats: Optional[List[str]] = None
+    selected_style: Optional[str] = None  # PHASE 7: User-selected style
 ) -> Project:
     """
     Create a new project in the database.
@@ -48,6 +49,7 @@ def create_project(
         product_images: STORY 3 - Array of product image URLs (max 10)
         scene_backgrounds: STORY 3 - Array of scene background mappings
         output_formats: STORY 3 - Array of desired aspect ratios
+        selected_style: (PHASE 7) User-selected video style or None
 
     Returns:
         Project: Created project object
@@ -65,6 +67,7 @@ def create_project(
             title=title,
             ad_project_json=ad_project_json,
             status="PENDING",
+            selected_style=selected_style,  # PHASE 7: Store selected style
             progress=0,
             cost=0.0,
             aspect_ratio=aspect_ratio,  # Kept for backward compatibility

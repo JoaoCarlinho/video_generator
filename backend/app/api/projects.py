@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from uuid import UUID
+from datetime import datetime
 import logging
 
 from app.database.connection import get_db, init_db
@@ -26,6 +27,7 @@ from app.models.schemas import (
 )
 from app.api.auth import get_current_user_id
 from app.utils.s3_utils import create_project_folder_structure, delete_project_folder
+from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,16 @@ async def create_new_project(
         # STORY 3: Handle output formats (multiple aspect ratios)
         output_formats_list = request.output_formats or ["16:9"]
 
+        # PHASE 7: Add style configuration if provided
+        selected_style_config = None
+        if request.selected_style:
+            selected_style_config = {
+                "style": request.selected_style,
+                "display_name": StyleManager.get_style_display_name(request.selected_style),
+                "applied_at": datetime.utcnow().isoformat(),
+                "source": "user_selected"
+            }
+        
         # Create initial ad_project_json
         ad_project_json = {
             "version": "1.0",
@@ -143,6 +155,7 @@ async def create_new_project(
             "scene_backgrounds": scene_backgrounds_list,
             "output_formats": output_formats_list,
             # Continue with existing fields
+            "selectedStyle": selected_style_config,  # PHASE 7: User-selected or LLM-inferred style
             "style_spec": None,
             "scenes": [],
             "video_settings": {
@@ -173,6 +186,7 @@ async def create_new_project(
             product_images=product_images_list,
             scene_backgrounds=scene_backgrounds_list,
             output_formats=output_formats_list
+            selected_style=request.selected_style  # PHASE 7: Store selected style
         )
         
         # S3 RESTRUCTURING: Initialize S3 folder structure for new project
@@ -365,6 +379,44 @@ async def get_user_stats(
     except Exception as e:
         logger.error(f"❌ Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+# ============================================================================
+# STYLE Endpoints (Phase 7)
+# ============================================================================
+
+@router.get("/styles/available", response_model=dict)
+async def get_available_styles():
+    """
+    Get all available video styles for UI selection.
+    
+    **Response:**
+    ```json
+    {
+      "styles": [
+        {
+          "id": "cinematic",
+          "name": "Cinematic",
+          "description": "High-quality camera feel, dramatic lighting, depth of field...",
+          "short_description": "Professional, dramatic",
+          "examples": ["Nike", "Apple", "Samsung"],
+          "keywords": ["professional", "dramatic", "premium"],
+          "best_for": ["Luxury brands", "Premium products"]
+        },
+        ...
+      ]
+    }
+    ```
+    
+    **Errors:**
+    - 500: Server error
+    """
+    try:
+        styles = StyleManager.get_all_styles()
+        return {"styles": styles}
+    except Exception as e:
+        logger.error(f"❌ Failed to get available styles: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get styles: {str(e)}")
 
 
 # ============================================================================
