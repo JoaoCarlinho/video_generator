@@ -15,6 +15,9 @@ import {
   markAsFinalized,
 } from '@/services/videoStorage'
 
+// Get API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 export const VideoResults = () => {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -61,6 +64,28 @@ export const VideoResults = () => {
     return null
   }
 
+  /**
+   * Helper to convert a local path to a valid API URL if needed.
+   */
+  const getPlayableVideoUrl = (path: string, projectId: string, variationIndex?: number): string => {
+    if (!path) return ''
+    
+    // If it's already a URL, return as is
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+      return path
+    }
+    
+    // If it's a local file path (starts with /), convert to API endpoint
+    if (path.startsWith('/')) {
+      // Use the preview endpoint
+      // If variationIndex is provided, append it
+      const variationParam = variationIndex !== undefined ? `?variation=${variationIndex}` : ''
+      return `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview${variationParam}`
+    }
+    
+    return path
+  }
+
   useEffect(() => {
     const loadProjectAndVideos = async () => {
       try {
@@ -81,8 +106,13 @@ export const VideoResults = () => {
           setUseLocalStorage(true)
         } else if (displayVideoPath) {
           // If no IndexedDB video, use the path from project data
-          // This could be a local file path or S3 URL
-          setVideoUrl(displayVideoPath)
+          // Convert local path to API URL if necessary
+          const playableUrl = getPlayableVideoUrl(
+            displayVideoPath, 
+            projectId, 
+            data.selected_variation_index ?? undefined
+          )
+          setVideoUrl(playableUrl)
           setUseLocalStorage(false)
         } else {
           // Fallback to output_videos (S3 URLs)
@@ -121,7 +151,12 @@ export const VideoResults = () => {
           
           if (displayVideoPath) {
             // Use the path from project data (could be local file path or S3 URL)
-            setVideoUrl(displayVideoPath)
+            const playableUrl = getPlayableVideoUrl(
+              displayVideoPath, 
+              projectId, 
+              project.selected_variation_index ?? undefined
+            )
+            setVideoUrl(playableUrl)
             setUseLocalStorage(false)
           } else {
             // Fallback to output_videos (S3 URLs)

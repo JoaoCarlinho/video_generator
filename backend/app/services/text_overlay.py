@@ -110,6 +110,7 @@ class TextOverlayRenderer:
         project_id: str = "",
         scene_index: int = 0,
         font_preset: Optional[Dict[str, Any]] = None,
+        variation_index: Optional[int] = None,
     ) -> str:
         """
         Add text overlay to TikTok vertical video (9:16 positioning).
@@ -154,7 +155,7 @@ class TextOverlayRenderer:
                 )
 
                 # Save locally
-                local_path = await self._save_video_locally(output_path, project_id, scene_index)
+                local_path = await self._save_video_locally(output_path, project_id, scene_index, variation_index)
 
                 logger.info(f"✅ Text overlay added: {local_path}")
                 return local_path
@@ -230,6 +231,7 @@ class TextOverlayRenderer:
         start_time: float = 0.0,
         project_id: str = "",
         scene_index: int = 0,
+        variation_index: Optional[int] = None,
     ) -> str:
         """
         Add luxury typography text overlay for perfume ads.
@@ -286,6 +288,7 @@ class TextOverlayRenderer:
             project_id=project_id,
             scene_index=scene_index,
             font_preset=font_preset,  # Pass preset for font file
+            variation_index=variation_index,  # Pass variation index
         )
 
     async def _download_file(self, url: str, output_path: Path):
@@ -519,7 +522,7 @@ class TextOverlayRenderer:
 
         return drawtext_filter
 
-    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
+    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
         """Save video to local filesystem."""
         try:
             import shutil
@@ -528,8 +531,11 @@ class TextOverlayRenderer:
             save_dir = Path(f"/tmp/genads/{project_id}/draft/text_overlays")
             save_dir.mkdir(parents=True, exist_ok=True)
             
-            # Copy to permanent location with descriptive name
-            local_path = save_dir / f"scene_{scene_index:02d}_text.mp4"
+            # Copy to permanent location with descriptive name (include variation index if provided)
+            if variation_index is not None:
+                local_path = save_dir / f"scene_{variation_index}_{scene_index:02d}_text.mp4"
+            else:
+                local_path = save_dir / f"scene_{scene_index:02d}_text.mp4"
             shutil.copy2(video_path, local_path)
             
             logger.info(f"✅ Saved locally: {local_path}")

@@ -801,7 +801,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"Video generation failed: {e}")
             raise
 
-    async def _save_videos_locally(self, video_urls: List[str], project_id: str) -> List[str]:
+    async def _save_videos_locally(self, video_urls: List[str], project_id: str, variation_index: Optional[int] = None) -> List[str]:
         """Download videos from Replicate and save to local storage in parallel."""
         try:
             import aiohttp
@@ -818,10 +818,15 @@ BRAND GUIDELINES (extracted from guidelines document):
                             logger.warning(f"Failed to download video {index}: HTTP {resp.status}")
                             raise Exception(f"Failed to download video {index}: HTTP {resp.status}")
                     
-                    # Save to local storage in drafts folder
+                    # Save to local storage in drafts folder with variation index if provided
+                    if variation_index is not None:
+                        filename = f"scene_{variation_index}_{index:02d}.mp4"
+                    else:
+                        filename = f"scene_{index:02d}.mp4"
+                    
                     local_path = LocalStorageManager.save_draft_file(
                         UUID(project_id),
-                        f"scene_{index:02d}.mp4",
+                        filename,
                         video_data
                     )
                     logger.debug(f"Saved scene {index} locally: {local_path}")
@@ -863,6 +868,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         product_url: str,
         ad_project: AdProject,
         progress_start: int = 40,
+        variation_index: Optional[int] = None,
     ) -> List[str]:
         """Composite product onto each scene video using scene-specific positioning."""
         try:
@@ -903,6 +909,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         opacity=opacity,
                         scene_index=i,
                         scene_role=scene_role,  # Pass role for perfume scaling
+                        variation_index=variation_index,  # Pass variation index
                     )
                     composited.append(composited_url)
                 else:
@@ -931,6 +938,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         logo_url: str,
         ad_project: AdProject,
         progress_start: int = 50,
+        variation_index: Optional[int] = None,
     ) -> List[str]:
         """Composite logo onto scenes that have use_logo=True."""
         try:
@@ -964,6 +972,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         scale=scale,
                         opacity=opacity,
                         scene_index=i,
+                        variation_index=variation_index,  # Pass variation index
                     )
                     result.append(logo_url_result)
                 else:
@@ -988,7 +997,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             return scene_videos
 
     async def _add_text_overlays(
-        self, video_urls: List[str], ad_project: AdProject, progress_start: int = 60
+        self, video_urls: List[str], ad_project: AdProject, progress_start: int = 60, variation_index: Optional[int] = None
     ) -> List[str]:
         """Render text overlays on videos with luxury perfume typography constraints."""
         try:
@@ -1045,6 +1054,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         start_time=0.0,  # Start at beginning of scene
                         project_id=str(self.project_id),
                         scene_index=i,
+                        variation_index=variation_index,  # Pass variation index
                     )
                     text_overlay_count += 1
                 else:
@@ -1610,13 +1620,13 @@ BRAND GUIDELINES (extracted from guidelines document):
                 project, variation_ad_project, progress_start=video_start
             )
             
-            # Save videos locally
-            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
+            # Save videos locally with variation index
+            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id), variation_index=var_idx)
             
             # STEP 2: Composite Product (if available)
             if product_url:
                 composited_videos = await self._composite_products(
-                    scene_videos, product_url, variation_ad_project, progress_start=video_start + 10
+                    scene_videos, product_url, variation_ad_project, progress_start=video_start + 10, variation_index=var_idx
                 )
             else:
                 composited_videos = scene_videos
@@ -1628,14 +1638,15 @@ BRAND GUIDELINES (extracted from guidelines document):
                     composited_videos,
                     logo_url,
                     variation_ad_project,
-                    progress_start=video_start + 15
+                    progress_start=video_start + 15,
+                    variation_index=var_idx
                 )
             else:
                 logo_composited_videos = composited_videos
             
             # STEP 4: Add Text Overlays
             text_rendered_videos = await self._add_text_overlays(
-                logo_composited_videos, variation_ad_project, progress_start=video_start + 20
+                logo_composited_videos, variation_ad_project, progress_start=video_start + 20, variation_index=var_idx
             )
             
             # STEP 5: Generate Audio (shared across variations, but we need it per variation)

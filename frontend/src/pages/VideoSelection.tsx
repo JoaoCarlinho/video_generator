@@ -17,7 +17,7 @@ export function VideoSelection() {
   const navigate = useNavigate()
   const { getProject } = useProjects()
   const { selectVariation } = useGeneration()
-  
+
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,29 +29,29 @@ export function VideoSelection() {
   useEffect(() => {
     const loadProject = async () => {
       if (!projectId) return
-      
+
       try {
         setLoading(true)
         const data = await getProject(projectId)
         setProject(data)
-        
+
         // Check if project has multiple variations
         const numVariations = data.num_variations || 1
-        
+
         if (numVariations === 1) {
           // Single variation - redirect to results
           navigate(`/projects/${projectId}/results`)
           return
         }
-        
+
         // Load video URLs for all variations
         // Videos are stored in local_video_paths["9:16"] as array when num_variations > 1
         // OR in ad_project_json.local_video_paths["9:16"] 
         const videoPaths = data.local_video_paths?.['9:16'] || data.ad_project_json?.local_video_paths?.['9:16']
-        
+
         console.log('📹 Video paths from project:', videoPaths)
         console.log('📊 Number of variations:', numVariations)
-        
+
         if (Array.isArray(videoPaths)) {
           // Multiple variations - videos are stored as file paths
           // Convert file paths to URLs using the preview endpoint with variation query parameter
@@ -66,13 +66,15 @@ export function VideoSelection() {
                 // File path - use preview endpoint with variation query parameter
                 // Backend endpoint: /api/local-generation/projects/{id}/preview?variation={index}
                 // Use absolute URL for proper CORS and video loading
-                const previewUrl = `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview?variation=${i}`
+                // Add timestamp to prevent caching
+                const timestamp = new Date().getTime()
+                const previewUrl = `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview?variation=${i}&t=${timestamp}`
                 urls.push(previewUrl)
                 console.log(`✅ Created preview URL for variation ${i}: ${previewUrl}`)
               }
             }
           }
-          
+
           if (urls.length > 0) {
             console.log(`✅ Setting ${urls.length} video URLs:`, urls)
             setVideoUrls(urls)
@@ -102,13 +104,13 @@ export function VideoSelection() {
               console.error(`Failed to load video ${i}:`, err)
             }
           }
-          
+
           if (urls.length === 0) {
             console.warn('No videos found, redirecting to results')
             navigate(`/projects/${projectId}/results`)
             return
           }
-          
+
           setVideoUrls(urls)
         }
       } catch (err) {
@@ -119,7 +121,7 @@ export function VideoSelection() {
         setLoading(false)
       }
     }
-    
+
     loadProject()
   }, [projectId, getProject, navigate])
 
@@ -129,11 +131,11 @@ export function VideoSelection() {
 
   const handleNext = async () => {
     if (selectedIndex === null || !projectId) return
-    
+
     try {
       setSelecting(true)
       await selectVariation(projectId, selectedIndex)
-      
+
       // Navigate to results page
       navigate(`/projects/${projectId}/results`)
     } catch (err) {
@@ -234,11 +236,10 @@ export function VideoSelection() {
                 transition={{ delay: index * 0.1 }}
               >
                 <Card
-                  className={`cursor-pointer transition-all duration-200 ${
-                    selectedIndex === index
+                  className={`cursor-pointer transition-all duration-200 ${selectedIndex === index
                       ? 'ring-2 ring-gold shadow-gold-lg'
                       : 'hover:ring-2 hover:ring-accent-neutral hover:shadow-lg'
-                  }`}
+                    }`}
                   onClick={() => handleSelect(index)}
                 >
                   <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden mb-4">
@@ -248,7 +249,7 @@ export function VideoSelection() {
                       aspect="9:16"
                       title={`Option ${index + 1}`}
                     />
-                    
+
                     {/* Selection Indicator */}
                     {selectedIndex === index && (
                       <motion.div
