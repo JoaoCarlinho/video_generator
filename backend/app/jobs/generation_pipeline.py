@@ -270,33 +270,60 @@ class GenerationPipeline:
                 ]
                 final_videos = await asyncio.gather(*variation_tasks, return_exceptions=True)
                 
-                # Check for errors
-                errors = [v for v in final_videos if isinstance(v, Exception)]
-                if errors:
-                    error_msg = f"{len(errors)} variation(s) failed: {errors[0]}"
+                # Separate successful variations from errors
+                successful_videos = []
+                failed_variations = []
+                for var_idx, result in enumerate(final_videos):
+                    if isinstance(result, Exception):
+                        failed_variations.append((var_idx, result))
+                        logger.error(f"Variation {var_idx + 1} failed: {result}")
+                    else:
+                        successful_videos.append(result)
+                        logger.info(f"Variation {var_idx + 1} succeeded: {result}")
+                
+                # If all variations failed, raise error
+                if len(successful_videos) == 0:
+                    error_msg = f"All {num_variations} variation(s) failed: {failed_variations[0][1]}"
                     logger.error(error_msg)
                     raise RuntimeError(error_msg)
                 
-                # Store all variations locally
-                local_video_paths = self._save_variations_locally(final_videos, num_variations)
+                # If some variations failed, log warning but continue with successful ones
+                if failed_variations:
+                    failed_indices = [idx + 1 for idx, _ in failed_variations]
+                    logger.warning(
+                        f"⚠️ {len(failed_variations)} variation(s) failed (indices: {failed_indices}), "
+                        f"but {len(successful_videos)} variation(s) succeeded. Continuing with successful variations."
+                    )
                 
-                # Update project with variation info
-                await self._update_project_variations(num_variations, final_videos)
+                # Store successful variations locally
+                actual_num_variations = len(successful_videos)
+                local_video_paths = self._save_variations_locally(successful_videos, actual_num_variations)
+                
+                # Update project with successful variation info
+                await self._update_project_variations(actual_num_variations, successful_videos)
                 
                 total_elapsed = time.time() - pipeline_start
-                logger.info(f"Pipeline complete in {total_elapsed:.1f}s ({num_variations} variations)")
+                logger.info(f"Pipeline complete in {total_elapsed:.1f}s ({actual_num_variations}/{num_variations} variations succeeded)")
                 
                 storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
                 logger.info(f"Total local storage: {format_storage_size(storage_size)}")
+                
+                # Build message indicating partial success if applicable
+                if failed_variations:
+                    message = f"{actual_num_variations} TikTok vertical video variations ready for preview ({len(failed_variations)} variation(s) failed due to API timeout)."
+                else:
+                    message = f"{actual_num_variations} TikTok vertical video variations ready for preview."
                 
                 return {
                     "status": "COMPLETED",
                     "project_id": str(self.project_id),
                     "local_video_paths": local_video_paths,
-                    "num_variations": num_variations,
+                    "num_variations": actual_num_variations,
+                    "requested_variations": num_variations,
+                    "failed_variations": len(failed_variations) if failed_variations else 0,
                     "storage_size": storage_size,
                     "storage_size_formatted": format_storage_size(storage_size),
-                    "message": f"{num_variations} TikTok vertical video variations ready for preview.",
+                    "message": message,
                     "timing_seconds": total_elapsed,
                     "step_timings": self.step_timings,
                 }
