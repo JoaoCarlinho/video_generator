@@ -6,11 +6,257 @@
 
 ## Current Phase
 
-**Status:** MULTI-VARIATION GENERATION FEATURE - PHASE 5 COMPLETE ✅  
-**Focus:** Phase 6 - Integration & Testing (end-to-end testing)  
+**Status:** PHASE 2 B2B SAAS TRANSFORMATION - PLANNING COMPLETE ✅  
+**Focus:** Ready for Phase 2 Implementation (Database, Backend, Frontend)  
 **Date:** November 18, 2025  
-**Progress:** Phase 1 complete ✅, Phase 2 complete ✅, Phase 3 complete ✅, Phase 4 complete ✅, Phase 5 complete ✅ → Phase 6 next
-**Last Updated:** After Phase 5 Implementation + Preview Endpoint Fix (Nov 18, 2025)
+**Progress:** Phase 1 (Multi-Variation) complete ✅, Phase 2 (B2B SaaS) Planning complete ✅ → Implementation next
+**Last Updated:** After Phase 2 B2B SaaS Planning Complete (Nov 18, 2025)
+
+---
+
+## 🏢 PHASE 2: B2B SAAS TRANSFORMATION (Nov 18, 2025) - PLANNING COMPLETE ✅
+
+**Status:** ✅ PLANNING COMPLETE - Ready for Implementation  
+**Timeline:** TBD (comprehensive transformation)  
+**Documents Created:** 4 comprehensive planning docs (8,500+ lines total)
+
+### Transformation Overview
+Complete architectural shift from shared ad platform to B2B SaaS for luxury perfume brands. Each perfume brand gets their own isolated account managing their perfumes and ad campaigns.
+
+### Key Architectural Changes
+
+**1. Multi-Tenant B2B Model (1:1 User-to-Brand)**
+- One user account = one brand (1:1 relationship)
+- Brand isolation - no data sharing between brands
+- Mandatory onboarding: brand name, brand guidelines (PDF/DOCX), logo
+- 3-tier hierarchy: Brand → Perfumes → Campaigns
+
+**2. New Database Schema**
+```
+User/Brand Table:
+- user_id (auth from Supabase)
+- brand_name
+- brand_guidelines_s3_path
+- logo_s3_path
+- onboarding_completed (boolean flag)
+
+Perfume Table:
+- perfume_id
+- brand_id (FK)
+- perfume_name
+- perfume_gender (masculine, feminine, unisex)
+- images: front (required), back, top, side, left, right (optional)
+
+Campaign Table:
+- campaign_id
+- perfume_id (FK)
+- creative_prompt
+- video_style
+- target_duration
+- num_variations
+- status
+- generated_at
+```
+
+**3. New S3 Storage Structure**
+```
+brands/{brand_id}/
+├── brand-logo.png
+├── brand-guidelines.pdf
+├── perfumes/{perfume_id}/
+│   ├── images/
+│   │   ├── front.png (required)
+│   │   ├── back.png (optional)
+│   │   ├── top.png (optional)
+│   │   ├── side.png (optional)
+│   ├── campaigns/{campaign_id}/
+│   │   ├── variations/{variation_id}/
+│   │   │   ├── scenes/
+│   │   │   │   ├── scene_0.mp4
+│   │   │   │   ├── scene_1.mp4
+│   │   │   │   ├── scene_2.mp4
+│   │   │   │   └── scene_3.mp4
+│   │   │   ├── music.mp3
+│   │   │   └── final_video.mp4
+```
+
+**4. Features Removed**
+- ❌ Brand description (now extracted from brand guidelines)
+- ❌ Target audience (style cascading driven by other inputs)
+- ❌ Reference image (removed from UI and backend)
+- ❌ Aspect ratio selection (hardcoded 9:16 TikTok vertical)
+
+**5. New User Flows**
+
+**Onboarding Flow (Mandatory):**
+```
+User signs up (Supabase Auth)
+  ↓
+Onboarding page (cannot skip)
+  - Enter brand name
+  - Upload brand guidelines (PDF/DOCX)
+  - Upload logo
+  ↓
+Store in database (onboarding_completed = true)
+  ↓
+Upload assets to S3 (brands/{brand_id}/)
+  ↓
+Redirect to Main Dashboard
+```
+
+**Main Dashboard:**
+```
+Display perfumes (not ads)
+  - Show perfume cards (name, image, gender)
+  - "Add New Perfume" button
+  ↓
+Click "Add Perfume"
+  - Enter perfume name
+  - Select gender (masculine, feminine, unisex)
+  - Upload images (front required, others optional)
+  ↓
+Store in database + S3
+  ↓
+Back to Main Dashboard
+```
+
+**Campaign Dashboard:**
+```
+Click on perfume card
+  ↓
+Campaign Dashboard (for that perfume)
+  - Show all campaigns for that perfume
+  - "Create New Campaign" button
+  ↓
+Click "Create Campaign"
+  - Creative prompt
+  - Video style (3 perfume styles)
+  - Duration (15-60s)
+  - Variation count (1-3)
+  ↓
+Generate campaign
+  ↓
+Display results
+```
+
+**6. Style Cascading (Updated)**
+Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume Gender
+- All 4 inputs drive style cascading
+- Reference image removed
+- Style consistency enforced
+
+**7. Backend API Changes**
+- Keep ALL generation logic (scene planner with grammar, multi-variation, style selection)
+- Restructure data models (User/Brand, Perfume, Campaign)
+- Remove reference image extraction service
+- Update storage paths to hierarchical structure
+- Add onboarding endpoints
+- Add perfume management endpoints
+- Add campaign management endpoints
+
+**8. Frontend UI Changes**
+- New onboarding page (mandatory)
+- Main dashboard shows perfumes (not projects/ads)
+- New "Add Perfume" flow
+- Campaign dashboard (per perfume)
+- Campaign creation form (updated fields)
+- Remove reference image upload section
+
+### Planning Documents Created (4 Files)
+
+1. **AI_Docs/PHASE2_PRD.md** (1,117 lines)
+   - Product requirements document
+   - Feature specifications
+   - User flows and wireframes
+   - Success criteria
+
+2. **AI_Docs/PHASE2_ARCHITECTURE.md** (1,862 lines)
+   - Technical architecture
+   - Database schema (detailed)
+   - API specifications (30+ endpoints)
+   - S3 storage structure
+   - Authentication & authorization
+   - Migration strategy
+
+3. **AI_Docs/PHASE2_TASKLIST.md** (1,862 lines)
+   - Implementation tasks (100+ tasks)
+   - 5 phases with timelines
+   - Testing procedures
+   - Deployment checklist
+
+4. **AI_Docs/PHASE2_PLAN.md** (1,170 lines)
+   - Master implementation plan
+   - Phase-by-phase execution
+   - Risk mitigation
+   - Timeline estimates
+   - Success metrics
+
+**Total Documentation:** 6,011 lines
+
+### Key Decisions Locked
+
+1. ✅ **Authentication:** One user = one brand (1:1 relationship)
+2. ✅ **Onboarding:** Mandatory, cannot be skipped, flag in database
+3. ✅ **Perfume Images:** Front required, all others optional
+4. ✅ **Style Cascading:** Brand Guidelines + Creative Prompt + Video Style + Perfume Gender
+5. ✅ **Navigation:** Dashboard → Perfumes → Campaigns
+6. ✅ **Database:** Complete fresh start, all existing data deleted
+7. ✅ **Storage:** S3 hierarchical structure (Brand → Perfume → Campaign → Variation)
+8. ✅ **Features Removed:** Brand description, target audience, reference image
+9. ✅ **Features Kept:** Scene planner with grammar, multi-variation, style selection, brand guidelines extraction
+10. ✅ **Variation Storage:** All variations + scene videos + music saved to S3
+
+### Implementation Phases
+
+**Phase 1: Database & Models (1-2 days)**
+- Create new database schema
+- Migrate existing projects table
+- Create User/Brand, Perfume, Campaign tables
+- Setup relationships and indexes
+
+**Phase 2: Backend API (2-3 days)**
+- Onboarding endpoints
+- Perfume management CRUD
+- Campaign management CRUD
+- Update generation pipeline for new structure
+- Remove reference image service
+- Update storage service for hierarchical paths
+
+**Phase 3: Frontend UI (3-4 days)**
+- Onboarding page
+- Main dashboard (perfumes view)
+- Add perfume flow
+- Campaign dashboard
+- Campaign creation form
+- Update all existing pages
+
+**Phase 4: Testing & Deployment (1-2 days)**
+- End-to-end testing
+- Migration testing
+- Performance testing
+- Deployment
+
+**Total Estimated Timeline:** 7-11 days (1.5-2 weeks)
+
+### Next Immediate Steps
+
+1. **Database Schema Creation**
+   - Create User/Brand, Perfume, Campaign tables
+   - Setup foreign keys and indexes
+   - Migrate existing projects table data (if needed)
+
+2. **Backend API Implementation**
+   - Onboarding endpoints
+   - Perfume management CRUD
+   - Campaign management CRUD
+   - Update generation pipeline
+
+3. **Frontend UI Implementation**
+   - Onboarding page
+   - Perfumes dashboard
+   - Campaign management pages
+
+**Status:** ✅ Planning complete, all decisions locked, ready for implementation
 
 ---
 
