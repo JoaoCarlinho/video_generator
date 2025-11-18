@@ -99,6 +99,8 @@ class ScenePlanner:
         has_logo: bool = False,
         selected_style: Optional[str] = None,
         extracted_style: Optional[Dict[str, Any]] = None,
+        perfume_name: Optional[str] = None,
+        perfume_gender: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate TikTok vertical video scene plan with perfume grammar constraints.
@@ -115,12 +117,18 @@ class ScenePlanner:
             has_logo: Whether logo is available
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
             extracted_style: Optional extracted style from reference image
+            perfume_name: Perfume product name (e.g., "Noir Élégance")
+            perfume_gender: Perfume gender ('masculine', 'feminine', or 'unisex')
 
         Returns:
             Dictionary with scenes, style_spec, chosenStyle, styleSource
         """
-        logger.info(f"Planning video for '{brand_name}' (target: {target_duration}s)")
+        # Use perfume_name if provided, otherwise fallback to brand_name
+        actual_perfume_name = perfume_name or brand_name
+        logger.info(f"Planning video for '{brand_name}' / Perfume: '{actual_perfume_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
+        if perfume_gender:
+            logger.info(f"Perfume gender: {perfume_gender}")
         
         # STEP 1: Derive tone from target audience (Task 2)
         tone = await self._derive_tone_from_audience(
@@ -146,19 +154,17 @@ class ScenePlanner:
             )
 
         # STEP 3: Generate scene plan via LLM with PERFUME GRAMMAR CONSTRAINTS
-        # Extract perfume-specific info (required for Phase 2 refactor)
-        perfume_name = brand_name  # Use brand_name as perfume name for now
-        
         scenes_json = await self._generate_perfume_scenes_with_grammar(
             creative_prompt=creative_prompt,
             brand_name=brand_name,
-            perfume_name=perfume_name,
+            perfume_name=actual_perfume_name,
             brand_description=brand_description,
             brand_colors=brand_colors,
             brand_guidelines=brand_guidelines,
             target_audience=target_audience or "general consumers",
             target_duration=target_duration,
             chosen_style=chosen_style,
+            perfume_gender=perfume_gender,
         )
 
         style_to_background = {
@@ -630,6 +636,7 @@ Plan the scene now!"""
         target_audience: str,
         target_duration: int,
         chosen_style: str,
+        perfume_gender: Optional[str] = None,
         retry_count: int = 0,
     ) -> List[Dict[str, Any]]:
         """
@@ -648,6 +655,7 @@ Plan the scene now!"""
             target_audience: Target audience
             target_duration: Target duration
             chosen_style: Perfume style (gold_luxe, dark_elegance, romantic_floral)
+            perfume_gender: Perfume gender ('masculine', 'feminine', or 'unisex')
             retry_count: Current retry attempt (0-3)
             
         Returns:
@@ -681,6 +689,46 @@ Plan the scene now!"""
                 f"  ⚠️ YOU MUST USE THIS EXACT ID: '{shot_id}' (NOT '{type_key}')"
             )
         
+        # Build gender-specific visual language guidance
+        gender_guidance = ""
+        if perfume_gender:
+            if perfume_gender == "masculine":
+                gender_guidance = """
+🎯 GENDER-SPECIFIC VISUAL LANGUAGE (MASCULINE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This is a MASCULINE perfume. Apply these visual characteristics:
+- **Colors**: Darker tones (deep blacks, charcoal, navy, burgundy), bold contrasts
+- **Lighting**: Stronger, more dramatic lighting with deeper shadows
+- **Mood**: Confident, powerful, sophisticated, bold
+- **Textures**: Rugged materials, leather, metal accents, strong geometric shapes
+- **Camera**: More dynamic movements, stronger angles, bolder compositions
+- **Atmosphere**: Premium, commanding, assertive, refined strength
+"""
+            elif perfume_gender == "feminine":
+                gender_guidance = """
+🎯 GENDER-SPECIFIC VISUAL LANGUAGE (FEMININE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This is a FEMININE perfume. Apply these visual characteristics:
+- **Colors**: Softer tones (rose gold, blush, lavender, soft pastels), elegant gradients
+- **Lighting**: Softer, more diffused lighting with gentle highlights
+- **Mood**: Elegant, graceful, delicate, refined, romantic
+- **Textures**: Silk, satin, flowers, soft fabrics, flowing movements
+- **Camera**: More gentle movements, softer angles, elegant compositions
+- **Atmosphere**: Luxurious, graceful, sophisticated elegance, refined beauty
+"""
+            elif perfume_gender == "unisex":
+                gender_guidance = """
+🎯 GENDER-SPECIFIC VISUAL LANGUAGE (UNISEX)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This is a UNISEX perfume. Apply these visual characteristics:
+- **Colors**: Balanced palette (neutral tones, sophisticated grays, balanced warm/cool)
+- **Lighting**: Balanced lighting, neither too harsh nor too soft
+- **Mood**: Modern, sophisticated, versatile, inclusive, contemporary
+- **Textures**: Clean modern materials, minimalist surfaces, balanced compositions
+- **Camera**: Balanced movements, neutral angles, modern compositions
+- **Atmosphere**: Contemporary luxury, inclusive elegance, modern sophistication
+"""
+        
         # Build perfume-specific prompt with STRICT grammar
         prompt = f"""You are a LUXURY PERFUME COMMERCIAL DIRECTOR creating a TikTok vertical video (9:16).
 
@@ -691,6 +739,7 @@ Perfume Name: {perfume_name}
 Brand Description: {brand_description or 'Luxury perfume brand'}
 Target Audience: {target_audience}
 {f"Brand Guidelines: {brand_guidelines[:300]}" if brand_guidelines else ""}
+{gender_guidance}
 
 🎨 CREATIVE VISION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -703,6 +752,7 @@ Video Style: {chosen_style}
 Duration: ~{target_duration}s
 Scene Count: EXACTLY {scene_count} scenes
 Aspect Ratio: Always 9:16 (portrait mode only)
+{f"Gender: {perfume_gender.upper()}" if perfume_gender else ""}
 
 🔒 CRITICAL - PERFUME SHOT GRAMMAR (YOU MUST FOLLOW EXACTLY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -718,8 +768,10 @@ You MUST use ONLY these allowed shot types. DO NOT invent new types.
 4. Product must appear in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
 5. Total duration should be ±{int(target_duration * 0.15)}s from {target_duration}s
 6. ALL scenes must use ONLY transitions: {', '.join(flow_rules.get('transition_rules', {}).get('allowed_transitions', ['fade', 'cut']))}
-7. FINAL scene MUST include text with perfume name + brand name
+7. FINAL scene MUST include text with perfume name "{perfume_name}" + brand name "{brand_name}"
 8. ALL scenes must match style: {chosen_style}
+9. **CRITICAL**: Use the PERFUME NAME "{perfume_name}" (not brand name) in scene descriptions and text overlays when referring to the product
+10. **CRITICAL**: Apply gender-specific visual language ({perfume_gender.upper() if perfume_gender else 'UNISEX'}) to all scene descriptions - colors, lighting, mood, textures, camera movements, and atmosphere must reflect the gender aesthetic
 
 ✅ PERFUME SHOT TYPE REQUIREMENTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -862,6 +914,7 @@ Follow the grammar rules EXACTLY."""
                         target_audience=target_audience,
                         target_duration=target_duration,
                         chosen_style=chosen_style,
+                        perfume_gender=perfume_gender,
                         retry_count=retry_count + 1,
                     )
                 else:
@@ -888,6 +941,7 @@ Follow the grammar rules EXACTLY."""
                         target_audience=target_audience,
                         target_duration=target_duration,
                         chosen_style=chosen_style,
+                        perfume_gender=perfume_gender,
                         retry_count=retry_count + 1,
                     )
                 else:
@@ -911,6 +965,7 @@ Follow the grammar rules EXACTLY."""
                     target_audience=target_audience,
                     target_duration=target_duration,
                     chosen_style=chosen_style,
+                    perfume_gender=perfume_gender,
                     retry_count=retry_count + 1,
                 )
             else:

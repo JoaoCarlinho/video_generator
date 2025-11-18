@@ -561,6 +561,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 has_logo=has_logo,
                 selected_style=project.selected_style,
                 extracted_style=extracted_style,
+                perfume_name=perfume_name,
+                perfume_gender=ad_project.perfume_gender if hasattr(ad_project, 'perfume_gender') else None,
             )
 
             chosen_style = plan.get('chosenStyle')
