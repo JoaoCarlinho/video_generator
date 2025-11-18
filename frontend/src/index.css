@@ -11,19 +11,109 @@
 */
 
 @layer base {
+  :root {
+    --background: 42 51 40; /* olive-950 - lighter, more visible */
+    --foreground: 229 231 235; /* off-white */
+    --card: 63 74 61; /* olive-800 */
+    --card-foreground: 229 231 235;
+    --popover: 63 74 61;
+    --popover-foreground: 229 231 235;
+    --primary: 243 217 164; /* gold */
+    --primary-foreground: 26 26 26; /* gold-foreground */
+    --secondary: 126 138 154; /* neutral */
+    --secondary-foreground: 229 231 235;
+    --muted: 93 107 90; /* olive-600 */
+    --muted-foreground: 156 163 175; /* muted-gray */
+    --accent: 212 182 118; /* gold-dark */
+    --accent-foreground: 26 26 26;
+    --destructive: 239 68 68; /* red-500 */
+    --destructive-foreground: 255 255 255;
+    --border: 93 107 90; /* olive-600 */
+    --input: 93 107 90;
+    --ring: 243 217 164; /* gold */
+    --radius: 0.5rem;
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  * {
+    border-color: rgb(93 107 90); /* olive-600 */
+  }
+  
   html {
     scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-slate-900 text-slate-100;
+    background-color: rgb(42 51 40); /* olive-950 - lighter, more visible */
+    color: rgb(229 231 235); /* off-white */
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* 
-  Vite HMR stylesheet fix for development
-  Ensures proper CSS reloading in dev mode
-*/
-:root {
-  color-scheme: dark;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .bg-gradient-hero {
+    background: linear-gradient(135deg, #2a3328 0%, #354033 50%, #3f4a3d 100%);
+  }
+  
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%);
+  }
+  
+  .bg-gradient-gold {
+    background: linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%);
+  }
+  
+  .bg-gradient-silky-gold {
+    background: linear-gradient(135deg, #C9A86A 0%, #B8965A 50%, #A6854A 100%);
+  }
+  
+  .text-gradient-primary {
+    background: linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(243, 217, 164, 0.2);
+  }
+  
+  .shadow-gold {
+    box-shadow: 0 0 20px rgba(243, 217, 164, 0.3);
+  }
+  
+  .shadow-gold-lg {
+    box-shadow: 0 0 40px rgba(243, 217, 164, 0.5);
+  }
+  
+  .backdrop-blur-md {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
 }

@@ -28,16 +28,21 @@ class Project(Base):
     s3_project_folder_url = Column(String, nullable=True)    # https://bucket.s3.../projects/{id}/
     
     # VIDEO GENERATION SETTINGS
-    aspect_ratio = Column(String, default='16:9')  # '9:16', '1:1', or '16:9'
+    aspect_ratio = Column(String, default='9:16')  # TikTok vertical (hardcoded)
+    
+    # PERFUME-SPECIFIC FIELDS (Phase 9)
+    perfume_name = Column(String(200), nullable=True)         # Perfume product name (e.g., "Noir Élégance")
+    perfume_gender = Column(String(20), nullable=True)         # 'masculine', 'feminine', 'unisex'
     
     # LOCAL STORAGE: Local-first generation paths
     local_project_path = Column(String(500), nullable=True)    # /tmp/genads/{project_id}
-    local_video_paths = Column(JSON, nullable=True)          # {"16:9": "/path/to/video.mp4"}
+    local_video_paths = Column(JSON, nullable=True)          # {"9:16": "/path/to/video.mp4"} (backward compat, deprecated)
+    local_video_path = Column(String(500), nullable=True)     # Single TikTok vertical video path (Phase 9)
     local_input_files = Column(JSON, nullable=True)          # {"product_image": "/path/to/image.png", ...}
     local_draft_files = Column(JSON, nullable=True)          # {"scene_1_bg": "/path/to/video.mp4", ...}
     
-    # PHASE 7: Style Selection
-    selected_style = Column(String(50), nullable=True)       # 'cinematic', 'dark_premium', 'minimal_studio', 'lifestyle', '2d_animated', or NULL
+    # PHASE 7: Style Selection (Updated for Phase 4 - Perfume Styles)
+    selected_style = Column(String(50), nullable=True)       # 'gold_luxe', 'dark_elegance', 'romantic_floral', or NULL
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

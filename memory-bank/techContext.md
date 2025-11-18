@@ -180,12 +180,37 @@ CREATE TABLE projects (
   progress INTEGER DEFAULT 0,
   cost DECIMAL(10,2) DEFAULT 0,
   error_message TEXT,
+  
+  -- S3 paths (Phase 1)
+  s3_project_folder TEXT,
+  s3_project_folder_url TEXT,
+  
+  -- Video settings (Phase 3)
+  aspect_ratio TEXT DEFAULT '9:16',  -- TikTok vertical (hardcoded)
+  
+  -- Perfume-specific fields (Phase 9)
+  perfume_name VARCHAR(200),
+  perfume_gender VARCHAR(20),  -- 'masculine', 'feminine', 'unisex'
+  
+  -- Local storage paths
+  local_project_path VARCHAR(500),
+  local_video_paths JSONB,  -- Backward compat (deprecated)
+  local_video_path VARCHAR(500),  -- Single TikTok vertical video (Phase 9)
+  local_input_files JSONB,
+  local_draft_files JSONB,
+  
+  -- Style selection (Phase 7, updated Phase 4)
+  selected_style VARCHAR(50),  -- 'gold_luxe', 'dark_elegance', 'romantic_floral'
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_projects_selected_style ON projects(selected_style);
+CREATE INDEX idx_projects_perfume_name ON projects(perfume_name);  -- Phase 9
+CREATE INDEX idx_projects_perfume_gender ON projects(perfume_gender);  -- Phase 9
 ```
 
 **Why JSONB:**
@@ -202,20 +227,18 @@ CREATE INDEX idx_projects_status ON projects(status);
 s3://adgen-videos-xxx/
 ├── projects/{project_id}/
 │   ├── product/
-│   │   ├── original.jpg          # User upload
+│   │   ├── original.jpg          # User upload (perfume bottle)
 │   │   ├── masked.png             # Background removed
 │   │   └── mask.png               # Alpha mask
 │   ├── scenes/
-│   │   ├── scene_1_bg.mp4         # Generated background
-│   │   ├── scene_1_comp.mp4       # With product
-│   │   ├── scene_1_overlay.mp4    # With text
+│   │   ├── scene_1_bg.mp4         # Generated background (9:16 TikTok vertical)
+│   │   ├── scene_1_comp.mp4       # With product composited
+│   │   ├── scene_1_overlay.mp4    # With text overlay
 │   │   └── ...
 │   ├── audio/
-│   │   └── background_music.mp3
+│   │   └── background_music.mp3   # Luxury ambient cinematic
 │   └── outputs/
-│       ├── final_9x16.mp4         # Master (vertical)
-│       ├── final_1x1.mp4          # Square
-│       └── final_16x9.mp4         # Horizontal
+│       └── final_9x16.mp4         # Final TikTok vertical (1080x1920) - ONLY format
 ```
 
 **Lifecycle Policy:**
@@ -255,9 +278,11 @@ cost_per_scene = ~$0.20
 ```python
 model = "meta/musicgen"
 input = {
-    "prompt": f"{mood} background music, instrumental",
+    "prompt": f"Luxury ambient cinematic background music for perfume commercial. Mood: {gender_descriptor}. Style: elegant, sophisticated, premium, ambient.",
     "duration": video_duration
 }
+# Gender descriptors: masculine (deep/confident), feminine (elegant/delicate), unisex (sophisticated/modern)
+# Method: generate_perfume_background_music() (perfume-specific)
 cost = ~$0.20
 ```
 
@@ -273,7 +298,7 @@ cost = ~$0.01 per request
 
 ## Performance Characteristics
 
-### Generation Time (30s video)
+### Generation Time (30s TikTok vertical video)
 ```
 Scene Planning:       10-20 seconds
 Product Extraction:   5-10 seconds
@@ -281,8 +306,7 @@ Background Generation: 8-12 minutes (4 scenes × 2-3 min, parallel)
 Compositing:          30-60 seconds per scene
 Text Overlays:        10-20 seconds total
 Music Generation:     60-90 seconds
-Final Rendering:      60-90 seconds
-Multi-Aspect Export:  30-60 seconds
+Final Rendering:      60-90 seconds (TikTok vertical 9:16 only)
 
 Total: ~8-10 minutes
 ```
@@ -463,5 +487,5 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 17, 2025 (Phase 10 Complete)
 

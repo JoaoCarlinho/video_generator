@@ -1,7 +1,8 @@
-"""Compositor Service - Product compositing onto background videos.
+"""Compositor Service - Perfume bottle compositing onto TikTok vertical videos.
 
-This service overlays extracted product images onto background videos,
-positioning them with proper scaling and opacity for product showcase.
+This service overlays extracted perfume bottle images onto background videos,
+positioning them with TikTok vertical safe zones (15-75% vertical space)
+and perfume-specific scaling based on scene role.
 """
 
 import logging
@@ -34,7 +35,7 @@ except (ImportError, OSError) as e:
 # ============================================================================
 
 class Compositor:
-    """Composites product images onto background videos."""
+    """Composites perfume bottle images onto TikTok vertical background videos."""
 
     def __init__(
         self,
@@ -59,29 +60,41 @@ class Compositor:
         product_image_url: str,
         project_id: str,
         position: str = "center",
-        scale: float = 0.3,
+        scale: Optional[float] = None,
         opacity: float = 1.0,
         scene_index: int = 0,
+        scene_role: Optional[str] = None,
     ) -> str:
         """
-        Composite product image onto background video.
+        Composite perfume bottle image onto TikTok vertical background video.
 
         Args:
-            background_video_url: S3 URL of background video
-            product_image_url: S3 URL of extracted product PNG
-            project_id: Project UUID for S3 path organization
-            position: Position on screen ("center", "bottom-right", "top-left", etc.)
-            scale: Product size as fraction of frame (0.1 to 1.0)
+            background_video_url: S3 URL or local path of background video
+            product_image_url: S3 URL or local path of extracted perfume bottle PNG
+            project_id: Project UUID for local path organization
+            position: Position preset ("center", "center_upper", "center_lower")
+            scale: Optional scale override (0.1 to 1.0). If None, uses scene_role-based scaling
             opacity: Product opacity (0.0 to 1.0)
+            scene_index: Scene index for filename
+            scene_role: Scene role ("hook", "showcase", "cta") for automatic scaling
 
         Returns:
-            S3 URL of composited video
+            Local path to composited video
         """
         if not CV2_AVAILABLE:
             logger.warning("OpenCV not available - skipping compositing, returning background video as-is")
             return background_video_url
         
-        logger.info(f"Compositing product onto video: {position} at {scale*100}% scale")
+        # Use scene role-based scaling if scale not provided
+        if scale is None:
+            if scene_role:
+                scale = self._get_perfume_scale(scene_role)
+                logger.info(f"Using scene role-based scale: {scene_role} → {scale*100:.0f}%")
+            else:
+                scale = 0.5  # Default perfume bottle scale
+                logger.info(f"Using default perfume scale: {scale*100:.0f}%")
+        
+        logger.info(f"Compositing perfume bottle onto TikTok vertical video: {position} at {scale*100:.0f}% scale")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -263,8 +276,8 @@ class Compositor:
             # Resize product
             product_resized = cv2.resize(product_image, (product_width, product_height))
 
-            # Calculate position
-            x, y = self._calculate_position(
+            # Calculate perfume-specific position (TikTok vertical optimized)
+            x, y = self._calculate_perfume_position(
                 frame_width, frame_height, product_width, product_height, position
             )
 
@@ -295,7 +308,7 @@ class Compositor:
             logger.error(f"Error compositing frames: {e}")
             raise
 
-    def _calculate_position(
+    def _calculate_perfume_position(
         self,
         frame_width: int,
         frame_height: int,
@@ -303,28 +316,63 @@ class Compositor:
         product_height: int,
         position: str,
     ) -> Tuple[int, int]:
-        """Calculate product position in frame."""
-        margin = 40  # pixels from edge
-
+        """
+        Calculate perfume bottle position (TikTok vertical optimized).
+        
+        TikTok vertical safe zones (9:16 aspect ratio):
+        - Top 15%: UI elements (avoid)
+        - Bottom 25%: captions/CTAs (avoid)
+        - Safe zone: 15-75% vertical space
+        
+        Args:
+            frame_width: Video frame width (1080 for TikTok vertical)
+            frame_height: Video frame height (1920 for TikTok vertical)
+            product_width: Product image width
+            product_height: Product image height
+            position: Position preset ("center", "center_upper", "center_lower")
+            
+        Returns:
+            Tuple of (x, y) coordinates for product placement
+        """
+        # Calculate TikTok vertical safe zones
+        safe_top = int(frame_height * 0.15)  # Top 15% - UI elements
+        safe_bottom = int(frame_height * 0.75)  # Bottom 25% - captions
+        safe_height = safe_bottom - safe_top
+        
         positions = {
             "center": (
-                (frame_width - product_width) // 2,
-                (frame_height - product_height) // 2,
+                (frame_width - product_width) // 2,  # Centered horizontally
+                safe_top + (safe_height - product_height) // 2  # Centered in safe zone
             ),
-            "top-left": (margin, margin),
-            "top-right": (frame_width - product_width - margin, margin),
-            "bottom-left": (margin, frame_height - product_height - margin),
-            "bottom-right": (
-                frame_width - product_width - margin,
-                frame_height - product_height - margin,
+            "center_upper": (
+                (frame_width - product_width) // 2,  # Centered horizontally
+                safe_top + int(safe_height * 0.3)  # Upper third of safe zone
             ),
-            "bottom-center": (
-                (frame_width - product_width) // 2,
-                frame_height - product_height - margin,
+            "center_lower": (
+                (frame_width - product_width) // 2,  # Centered horizontally
+                safe_top + int(safe_height * 0.6)  # Lower third of safe zone
             ),
         }
-
+        
         return positions.get(position, positions["center"])
+    
+    def _get_perfume_scale(self, scene_role: str) -> float:
+        """
+        Get optimal perfume bottle scale based on scene role.
+        
+        Args:
+            scene_role: Scene role ("hook", "showcase", "cta", "default")
+            
+        Returns:
+            Scale factor (0.1 to 1.0) as fraction of frame height
+        """
+        scales = {
+            "hook": 0.5,      # Medium size for hook scenes
+            "showcase": 0.6,   # Larger for product focus scenes
+            "cta": 0.5,       # Medium for final CTA moment
+            "default": 0.5
+        }
+        return scales.get(scene_role, scales["default"])
 
     def _blend_image_onto_frame(
         self,
@@ -381,6 +429,96 @@ class Compositor:
             logger.info(f"✅ Saved locally: {local_path}")
             return str(local_path)
 
+        except Exception as e:
+            logger.error(f"Local save error: {e}")
+            raise
+
+    async def composite_logo(
+        self,
+        video_url: str,
+        logo_image_url: str,
+        project_id: str,
+        position: str = "top_right",
+        scale: float = 0.1,
+        opacity: float = 0.9,
+        scene_index: int = 0,
+    ) -> str:
+        """
+        Composite logo onto video (similar to product compositing).
+        
+        Task 4: New method to actually overlay logo images onto video scenes.
+        
+        Args:
+            video_url: Video to overlay logo onto (local path)
+            logo_image_url: Logo image URL (S3)
+            project_id: Project UUID
+            position: Logo position (top_left, top_right, bottom_left, bottom_right, bottom_center)
+            scale: Logo size as fraction of frame height (0.05-0.2)
+            opacity: Logo opacity (0.0-1.0)
+            scene_index: Scene index for filename
+            
+        Returns:
+            Local path to video with logo
+        """
+        if not CV2_AVAILABLE:
+            logger.warning("OpenCV not available - skipping logo compositing")
+            return video_url
+        
+        logger.info(f"🏷️  Compositing logo onto video: {position} at {scale*100:.0f}% scale, opacity={opacity:.2f}")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                # Download logo
+                logo_path = Path(tmpdir) / "logo.png"
+                await self._download_file(logo_image_url, logo_path)
+                
+                # Load logo
+                logo_image = cv2.imread(str(logo_path), cv2.IMREAD_UNCHANGED)
+                if logo_image is None:
+                    logger.warning("Could not load logo image, skipping")
+                    return video_url
+                
+                # Get video properties
+                video_props = await self._get_video_properties(video_url)
+                
+                # Composite logo frame by frame (reuse product compositing logic)
+                output_path = Path(tmpdir) / "with_logo.mp4"
+                await self._composite_video_frames(
+                    input_video_path=video_url,
+                    product_image=logo_image,  # Reuse product compositing logic
+                    output_path=output_path,
+                    frame_width=video_props["width"],
+                    frame_height=video_props["height"],
+                    position=position,
+                    scale=scale,
+                    opacity=opacity,
+                )
+                
+                # Save locally
+                local_path = await self._save_logo_video_locally(output_path, project_id, scene_index)
+                
+                logger.info(f"✅ Logo composited: {local_path}")
+                return local_path
+                
+            except Exception as e:
+                logger.error(f"Error compositing logo: {e}")
+                # Non-critical failure - return original video
+                return video_url
+
+    async def _save_logo_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
+        """Save video with logo to local filesystem."""
+        try:
+            import shutil
+            
+            save_dir = Path(f"/tmp/genads/{project_id}/draft/logo")
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            local_path = save_dir / f"scene_{scene_index:02d}_logo.mp4"
+            shutil.copy2(video_path, local_path)
+            
+            logger.info(f"✅ Saved locally: {local_path}")
+            return str(local_path)
+            
         except Exception as e:
             logger.error(f"Local save error: {e}")
             raise

@@ -1,6 +1,6 @@
 """Video Generator Service - Scene background video generation.
 
-This service uses ByteDance SeedAnce-1-Pro-Fast model for high-quality text-to-video
+This service uses ByteDance SeedAnce-1-Pro model for high-quality text-to-video
 generation via HTTP API (no SDK dependency).
 
 Uses HTTP API directly for:
@@ -9,8 +9,8 @@ Uses HTTP API directly for:
 - Simpler error handling
 - Direct control over parameters
 
-Model: bytedance/seedance-1-pro-fast (fast, high-quality production model)
-Optimized for: Professional ad video generation with excellent quality/speed balance
+Model: bytedance/seedance-1-pro (high-quality production model)
+Optimized for: Professional ad video generation
 """
 
 import logging
@@ -29,23 +29,18 @@ load_dotenv()
 
 # Replicate API configuration
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro-fast/predictions"
+REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro/predictions"
 
-
-# ============================================================================
-# Video Generator Service
-# ============================================================================
 
 class VideoGenerator:
-    """Generates background videos using ByteDance SeedAnce-1-Pro-Fast text-to-video model.
+    """Generates background videos using ByteDance SeedAnce-1-Pro text-to-video model.
     
     Uses HTTP API directly (no SDK) for:
     - Better Python 3.14+ compatibility
     - No Pydantic v1 conflicts
     - Simpler, more direct control
     
-    This is a professional-grade model optimized for high-quality ad video generation
-    with excellent balance between quality and speed.
+    This is a professional-grade model optimized for high-quality ad video generation.
     """
 
     def __init__(self, api_token: Optional[str] = None):
@@ -66,41 +61,36 @@ class VideoGenerator:
         prompt: str,
         style_spec_dict: dict,
         duration: float = 5.0,
-        aspect_ratio: str = "16:9",
         seed: Optional[int] = None,
         extracted_style: Optional[dict] = None,
-        style_override: Optional[str] = None,  # PHASE 7: Override style (cinematic, dark_premium, etc.)
+        style_override: Optional[str] = None,
     ) -> str:
         """
-        Generate background video for a scene via HTTP API.
+        Generate background video for a scene via HTTP API (TikTok vertical 9:16).
 
         Args:
             prompt: Scene description prompt
             style_spec_dict: Style specification dict with visual guidelines
             duration: Video duration in seconds (typical: 2-5 seconds)
-            aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
             seed: Random seed for reproducibility (optional, not used by SeedAnce)
             extracted_style: Optional extracted style from reference image
-            style_override: (PHASE 7) Override style selection (one of the 5 predefined styles)
+            style_override: Override style selection (one of the 3 perfume styles)
 
         Returns:
             URL of generated video from Replicate
         """
-        logger.info(f"Generating background video: {prompt[:60]}...")
+        logger.info(f"Generating TikTok vertical background video: {prompt[:60]}...")
 
         try:
-            # PHASE 7: Apply chosen style to prompt if style_override provided
+            # Apply chosen style to prompt if style_override provided
             if style_override:
-                logger.info(f"✅ Applying PHASE 7 style override: {style_override}")
-                style_keywords = StyleManager.get_style_spec(style_override)
-                # Enhance prompt with selected style
+                logger.info(f"Applying style override: {style_override}")
                 enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style, style_override)
             else:
-                # Standard enhancement with style spec
                 enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
 
-            # Create prediction via HTTP API (with "Prefer: wait" - returns completed result)
-            prediction_data = await self._create_prediction(enhanced_prompt, int(duration))
+            # Create prediction via HTTP API (hardcoded 9:16 for TikTok vertical)
+            prediction_data = await self._create_prediction(enhanced_prompt, int(duration), "9:16")
             
             # With "Prefer: wait", the prediction should already be complete
             status = prediction_data.get("status")
@@ -125,7 +115,7 @@ class VideoGenerator:
             else:
                 video_url = str(output)
 
-            logger.info(f"✅ Generated video: {video_url}")
+            logger.info(f"Generated video: {video_url}")
             return video_url
 
         except Exception as e:
@@ -133,12 +123,12 @@ class VideoGenerator:
             raise
 
     def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict, extracted_style: Optional[dict] = None, style_override: Optional[str] = None) -> str:
-        """Enhance prompt with global style specifications, optional reference style, and PHASE 7 style override."""
+        """Enhance prompt with global style specifications, optional reference style, and style override."""
         style_parts = []
 
-        # PHASE 7: If style_override provided, use PHASE 7 style keywords
+        # If style_override provided, use style keywords
         if style_override:
-            logger.info(f"PHASE 7: Adding style override '{style_override}' to prompt")
+            logger.info(f"Adding style override '{style_override}' to prompt")
             try:
                 style_config = StyleManager.get_style_config(style_override)
                 if style_config and "keywords" in style_config:
@@ -163,7 +153,7 @@ class VideoGenerator:
 
         # Add reference style if available (overrides/enhances base style)
         if extracted_style:
-            logger.debug(f"🎨 Applying extracted reference style to video prompt")
+            logger.debug("Applying extracted reference style to video prompt")
             
             colors = extracted_style.get("colors", [])
             if colors:
@@ -187,14 +177,14 @@ class VideoGenerator:
 
         # Combine original prompt with style
         style_string = ". ".join(style_parts)
-        enhanced = f"{prompt}. {style_string}. Professional product video."
+        enhanced = f"{prompt}. {style_string}. Modern cinematic product commercial."
 
-        logger.debug(f"Enhanced prompt: {enhanced}")
+        logger.info(f"📝 Enhanced script sent to video generator: {enhanced}")
         return enhanced
 
 
-    async def _create_prediction(self, prompt: str, duration: int) -> dict:
-        """Create a prediction via HTTP API using seedance-1-pro-fast model."""
+    async def _create_prediction(self, prompt: str, duration: int, aspect_ratio: str = "9:16") -> dict:
+        """Create a prediction via HTTP API using seedance-1-pro model (TikTok vertical)."""
         headers = {
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
@@ -207,7 +197,7 @@ class VideoGenerator:
                 "prompt": prompt,
                 "duration": min(duration, 10),  # Cap at 10s
                 "resolution": "480p",  # 480p for faster generation, good quality
-                "aspect_ratio": "16:9",
+                "aspect_ratio": "9:16",  # Hardcoded TikTok vertical
                 "camera_fixed": False
             }
         }
@@ -254,9 +244,9 @@ class VideoGenerator:
                 
                 if status == "processing":
                     logger.debug(f"  [{check_count}] Processing ({elapsed:.0f}s)")
-                    await asyncio.sleep(5)  # Check every 5 seconds
+                    await asyncio.sleep(5)
                 elif status == "succeeded":
-                    logger.debug(f"  ✅ Succeeded ({elapsed:.0f}s)")
+                    logger.debug(f"  Succeeded ({elapsed:.0f}s)")
                     return prediction
                 elif status == "failed":
                     logger.error(f"Prediction failed: {prediction.get('error')}")
@@ -273,44 +263,48 @@ class VideoGenerator:
         self,
         prompts: list,
         style_spec_dict: dict,
-        duration: float = 5.0,
+        durations: list,
+        extracted_style: Optional[dict] = None,
+        style_override: Optional[str] = None,
     ) -> list:
         """
-        Generate multiple scene videos concurrently.
+        Generate multiple scene videos concurrently (TikTok vertical 9:16).
 
         Args:
             prompts: List of scene prompts
             style_spec_dict: Global style specification
-            duration: Duration for each scene
+            durations: Duration for each scene
+            extracted_style: Optional extracted style from reference image
+            style_override: Override style selection
 
         Returns:
             List of video URLs
         """
-        logger.info(f"Generating {len(prompts)} scene videos in parallel...")
+        logger.info(f"Generating {len(prompts)} TikTok vertical scene videos in parallel...")
 
         try:
-            # Generate all scenes concurrently
+            # Generate all scenes concurrently (all 9:16)
+
             tasks = [
                 self.generate_scene_background(
-                    prompt=prompt,
-                    style_spec_dict=style_spec_dict,
-                    duration=duration,
+                prompt=prompts[i],
+                style_spec_dict=style_spec_dict,
+                duration=durations[i],
+                extracted_style=extracted_style,
+                style_override=style_override,
                 )
-                for prompt in prompts
+                for i in range(len(prompts))
             ]
-
-            # Execute concurrently
-            import asyncio
 
             videos = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Check for errors
             errors = [v for v in videos if isinstance(v, Exception)]
             if errors:
-                logger.warning(f"⚠️  {len(errors)} generation(s) failed")
+                logger.warning(f"{len(errors)} generation(s) failed")
 
             successful = [v for v in videos if not isinstance(v, Exception)]
-            logger.info(f"✅ Generated {len(successful)}/{len(prompts)} videos")
+            logger.info(f"Generated {len(successful)}/{len(prompts)} videos")
 
             return videos
 

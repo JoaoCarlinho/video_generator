@@ -1,31 +1,31 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Modal, Badge } from '@/components/ui'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui'
+import { StepIndicator } from '@/components/ui/StepIndicator'
 import { StyleSelector } from '@/components/ui/StyleSelector'
 import { useProjects } from '@/hooks/useProjects'
 import { useReferenceImage } from '@/hooks/useReferenceImage'
 import { useStyleSelector } from '@/hooks/useStyleSelector'
-import { Upload, X, Zap, Check } from 'lucide-react'
+import { Upload, X, Sparkles, ArrowRight, ArrowLeft, FileText, Image as ImageIcon, Video, Palette, UploadCloud } from 'lucide-react'
+import { Slider } from '@/components/ui/slider'
 
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
-  const { uploadReferenceImage, isLoading: isUploadingReference, error: referenceError } = useReferenceImage()
+  const { uploadReferenceImage, isLoading: isUploadingReference } = useReferenceImage()
   const { styles, selectedStyle, setSelectedStyle, clearSelection, isLoading: isLoadingStyles } = useStyleSelector()
 
+  const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState({
     title: '',
-    creative_prompt: '',
     brand_name: '',
     brand_description: '',
+    creative_prompt: '',
     target_audience: '',
     target_duration: 30,
-    aspect_ratio: '16:9' as '9:16' | '1:1' | '16:9',
-    logo_url: '',
-    product_image_url: '',
-    guidelines_url: '',
+    perfume_name: '',
+    perfume_gender: 'unisex' as 'masculine' | 'feminine' | 'unisex',
   })
 
   const [productImage, setProductImage] = useState<File | null>(null)
@@ -34,176 +34,124 @@ export const CreateProject = () => {
   const [logoPreview, setLogoPreview] = useState<string>('')
   const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
-  const [referenceImageUploaded, setReferenceImageUploaded] = useState(false)
+  const [referencePreview, setReferencePreview] = useState<string>('')
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [autoGenerate, setAutoGenerate] = useState(true)
   const [uploading, setUploading] = useState(false)
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const steps = [
+    { label: 'Project Info', description: 'Basic details' },
+    { label: 'Creative Vision', description: 'Style & settings' },
+    { label: 'Assets', description: 'Upload files' },
+  ]
+
+  // File handlers
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'logo' | 'reference') => {
     const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setSubmitError('Image must be less than 10MB')
-        return
-      }
+    if (!file) return
 
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file')
-        return
-      }
-
-      setProductImage(file)
-      setSubmitError(null)
-
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) {
+      setSubmitError(`${type === 'logo' ? 'Logo' : type === 'reference' ? 'Reference image' : 'Image'} must be less than 10MB`)
+      return
     }
-  }
 
-  const handleRemoveImage = () => {
-    setProductImage(null)
-    setImagePreview('')
-  }
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 5MB for logo)
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Logo must be less than 5MB')
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file for logo')
-        return
-      }
-
-      setLogoImage(file)
-      setSubmitError(null)
-
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file.type.startsWith('image/')) {
+      setSubmitError('Please select an image file')
+      return
     }
-  }
 
-  const handleRemoveLogo = () => {
-    setLogoImage(null)
-    setLogoPreview('')
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const preview = e.target?.result as string
+      if (type === 'product') {
+        setProductImage(file)
+        setImagePreview(preview)
+      } else if (type === 'logo') {
+        setLogoImage(file)
+        setLogoPreview(preview)
+      } else {
+        setReferenceImage(file)
+        setReferencePreview(preview)
+      }
+    }
+    reader.readAsDataURL(file)
+    setSubmitError(null)
   }
 
   const handleGuidelinesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setSubmitError('Guidelines file must be less than 10MB')
-        return
-      }
+    if (!file) return
 
-      // Validate file type (PDF or TXT)
-      if (!file.type.includes('pdf') && !file.type.includes('text')) {
-        setSubmitError('Please select a PDF or TXT file for guidelines')
-        return
-      }
-
-      setGuidelinesFile(file)
-      setSubmitError(null)
-    }
-  }
-
-  const handleRemoveGuidelines = () => {
-    setGuidelinesFile(null)
-  }
-
-  const handleReferenceImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Reference image must be less than 5MB')
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Please select an image file for reference')
-        return
-      }
-
-      setReferenceImage(file)
-      setReferenceImageUploaded(false)
-      setSubmitError(null)
-    }
-  }
-
-  const handleRemoveReferenceImage = () => {
-    setReferenceImage(null)
-    setReferenceImageUploaded(false)
-  }
-
-  const handleUploadReferenceImage = async () => {
-    if (!referenceImage) {
-      setSubmitError('No reference image selected')
+    if (file.size > 10 * 1024 * 1024) {
+      setSubmitError('Guidelines file must be less than 10MB')
       return
     }
 
-    // We need a project ID to upload, so we'll do this after creating the project
-    // For now, just mark it as ready to upload
-    console.log('Reference image ready to upload after project creation')
+    if (!file.type.includes('pdf') && !file.type.includes('text')) {
+      setSubmitError('Please select a PDF or TXT file')
+      return
+    }
+
+    setGuidelinesFile(file)
+    setSubmitError(null)
   }
 
-  const validateForm = (): boolean => {
-    if (!formData.title.trim()) {
-      setSubmitError('Project title is required')
-      return false
+  const removeFile = (type: 'product' | 'logo' | 'guidelines' | 'reference') => {
+    if (type === 'product') {
+      setProductImage(null)
+      setImagePreview('')
+    } else if (type === 'logo') {
+      setLogoImage(null)
+      setLogoPreview('')
+    } else if (type === 'guidelines') {
+      setGuidelinesFile(null)
+    } else {
+      setReferenceImage(null)
+      setReferencePreview('')
     }
+  }
 
-    if (!formData.creative_prompt.trim()) {
-      setSubmitError('Creative prompt is required')
-      return false
+  const validateStep = (step: number): boolean => {
+    setSubmitError(null)
+    
+    if (step === 1) {
+      if (!formData.title.trim()) {
+        setSubmitError('Project title is required')
+        return false
+      }
+      if (!formData.brand_name.trim()) {
+        setSubmitError('Brand name is required')
+        return false
+      }
+      return true
     }
-
-    if (formData.creative_prompt.trim().length < 20) {
-      setSubmitError('Creative prompt must be at least 20 characters')
-      return false
+    
+    if (step === 2) {
+      if (!formData.creative_prompt.trim()) {
+        setSubmitError('Creative vision is required')
+        return false
+      }
+      if (formData.creative_prompt.trim().length < 20) {
+        setSubmitError('Creative vision must be at least 20 characters')
+        return false
+      }
+      if (!formData.perfume_name.trim()) {
+        setSubmitError('Perfume name is required')
+        return false
+      }
+      return true
     }
-
-    if (!formData.brand_name.trim()) {
-      setSubmitError('Brand name is required')
-      return false
-    }
-
-    if (formData.target_duration < 15 || formData.target_duration > 120) {
-      setSubmitError('Duration must be between 15 and 120 seconds')
-      return false
-    }
-
+    
     return true
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitError(null)
-
-    if (!validateForm()) {
-      return
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(Math.min(currentStep + 1, 3))
     }
+  }
 
-    // Show confirmation modal instead of creating directly
-    setShowConfirmation(true)
+  const handleBack = () => {
+    setCurrentStep(Math.max(currentStep - 1, 1))
   }
 
   const uploadFileToBackend = async (
@@ -211,18 +159,13 @@ export const CreateProject = () => {
     assetType: 'logo' | 'product' | 'guidelines'
   ): Promise<string | null> => {
     try {
-      console.log(`📤 Uploading ${assetType}: ${file.name}`)
-      
-      // Create FormData for multipart upload
       const uploadFormData = new FormData()
       uploadFormData.append('file', file)
       uploadFormData.append('asset_type', assetType)
       
-      // Upload file to backend (local filesystem)
       const uploadResponse = await fetch('http://localhost:8000/api/upload-asset', {
         method: 'POST',
         body: uploadFormData,
-        // Don't set Content-Type header - browser will set it with boundary for multipart
       })
       
       if (!uploadResponse.ok) {
@@ -230,37 +173,25 @@ export const CreateProject = () => {
       }
       
       const { file_path } = await uploadResponse.json()
-      
-      console.log(`✅ Uploaded ${assetType} to local filesystem: ${file_path}`)
       return file_path
-      
     } catch (error) {
-      console.error(`❌ Failed to upload ${assetType}:`, error)
+      console.error(`Failed to upload ${assetType}:`, error)
       return null
     }
   }
 
-  const handleConfirmCreate = async () => {
-    setShowConfirmation(false)
+  const handleSubmit = async () => {
+    if (!validateStep(3)) return
+
     setUploading(true)
     setSubmitError(null)
     
     try {
-      console.log('🚀 Creating project with data:', {
-        title: formData.title,
-        brand_name: formData.brand_name,
-        target_duration: formData.target_duration,
-      })
-
-      // Upload files to S3 if selected
-      let uploadedProductUrl = formData.product_image_url
-      let uploadedLogoUrl = formData.logo_url
-      let uploadedGuidelinesUrl = formData.guidelines_url
+      let uploadedProductUrl = ''
+      let uploadedLogoUrl = ''
+      let uploadedGuidelinesUrl = ''
       
       if (productImage || logoImage || guidelinesFile) {
-        console.log('📦 Uploading files to S3...')
-        
-        // Upload files in parallel
         const uploadPromises = []
         
         if (productImage) {
@@ -287,12 +218,9 @@ export const CreateProject = () => {
           )
         }
         
-        // Wait for all uploads to complete
         await Promise.all(uploadPromises)
-        console.log('✅ All files uploaded successfully')
       }
 
-      // PHASE 7: Include selected style if user chose one
       const newProject = await createProject({
         title: formData.title,
         creative_prompt: formData.creative_prompt,
@@ -300,444 +228,201 @@ export const CreateProject = () => {
         brand_description: formData.brand_description || undefined,
         target_audience: formData.target_audience || undefined,
         target_duration: formData.target_duration,
-        aspect_ratio: formData.aspect_ratio,
+        perfume_name: formData.perfume_name,
+        perfume_gender: formData.perfume_gender,
         logo_url: uploadedLogoUrl || undefined,
         product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
-        selected_style: selectedStyle || undefined,  // PHASE 7: Pass selected style (optional)
+        selected_style: selectedStyle || undefined,
       } as any)
 
-      console.log('✅ Project created:', newProject)
-
-      // Upload reference image if selected
       if (referenceImage) {
-        console.log('📤 Uploading reference image for visual style...')
-        const success = await uploadReferenceImage(referenceImage, newProject.id)
-        if (success) {
-          console.log('✅ Reference image uploaded successfully')
-          setReferenceImageUploaded(true)
-        } else {
-          console.warn('⚠️ Reference image upload failed, but project created')
-          // Continue anyway - reference image is optional
-        }
+        await uploadReferenceImage(referenceImage, newProject.id)
       }
 
       setUploading(false)
-
-      // Navigate immediately or to dashboard based on autoGenerate
-      if (autoGenerate) {
-        console.log('📍 Navigating to progress page:', `/projects/${newProject.id}/progress`)
-        navigate(`/projects/${newProject.id}/progress`)
-      } else {
-        console.log('📍 Navigating to dashboard')
-        navigate('/dashboard')
-      }
+      navigate(`/projects/${newProject.id}/progress`)
     } catch (err) {
-      console.error('❌ Error creating project:', err)
       const message = err instanceof Error ? err.message : 'Failed to create project'
       setSubmitError(message)
       setUploading(false)
-      setShowConfirmation(true) // Show modal again so user can retry
     }
   }
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  const stepVariants = {
+    hidden: { opacity: 0, x: 20 },
+    visible: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 },
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
-      {/* Header */}
-      <Header logo="GenAds" title="Create Project" />
+    <div className="min-h-screen bg-gradient-hero">
+      {/* Background decoration */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
+      </div>
+
+      {/* Navigation Header */}
+      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-gold rounded-lg shadow-gold">
+                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                </div>
+                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+              </div>
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-semibold text-off-white">Create New Project</h1>
+            </div>
+          </div>
+        </div>
+      </nav>
 
       {/* Main Content */}
-      <div className="flex-1">
-        <Container size="md" className="py-12">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-8"
-          >
-            {/* Title */}
-            <motion.div variants={itemVariants}>
-              <h2 className="text-3xl font-bold text-slate-100">New Project</h2>
-              <p className="text-slate-400 mt-2">
-                Create a new video project. Fill in the details below and we'll generate
-                your ads.
-              </p>
+      <div className="relative z-10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-4xl">
+          {/* Step Indicator */}
+          <div className="mb-4">
+            <StepIndicator currentStep={currentStep} totalSteps={3} steps={steps} />
+          </div>
+
+          {/* Error Message */}
+          {(error || submitError) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm backdrop-blur-sm"
+            >
+              {error || submitError}
             </motion.div>
+          )}
 
-            {/* Form Card */}
-            <motion.div variants={itemVariants}>
-              <Card variant="glass">
-                <CardHeader>
-                  <CardTitle>Project Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Error Message */}
-                    {(error || submitError) && (
-                      <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                        {error || submitError}
-                      </div>
-                    )}
+          {/* Step Content */}
+          <AnimatePresence mode="wait">
+            {currentStep === 1 && (
+              <motion.div
+                key="step1"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Project Information</h2>
+                    <p className="text-sm text-muted-gray">Tell us about your project and brand</p>
+                  </div>
 
+                  <div className="space-y-4">
                     {/* Project Title */}
-                    <Input
-                      label="Project Title"
-                      placeholder="e.g., Premium Skincare - Summer Campaign"
-                      value={formData.title}
-                      onChange={(e) =>
-                        setFormData({ ...formData, title: e.target.value })
-                      }
-                      required
-                    />
-
-                    {/* Brand Name */}
-                    <Input
-                      label="Brand Name"
-                      placeholder="Your brand name"
-                      value={formData.brand_name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, brand_name: e.target.value })
-                      }
-                      required
-                    />
-
-                    {/* Brand Description (Optional) */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Brand Description <span className="text-slate-500">(Optional)</span>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Project Title <span className="text-red-400">*</span>
                       </label>
-                      <textarea
-                        placeholder="Tell us about your brand's story, values, and personality. Example: Premium skincare for conscious consumers who value sustainability and natural ingredients."
-                        value={formData.brand_description}
-                        onChange={(e) =>
-                          setFormData({ ...formData, brand_description: e.target.value })
-                        }
-                        rows={2}
-                        className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      <input
+                        type="text"
+                        placeholder="e.g., Chanel Noir TikTok Ad"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
                       />
                     </div>
 
+                    {/* Brand Name */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Brand Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Your brand name"
+                        value={formData.brand_name}
+                        onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
+                    </div>
+
+                    {/* Brand Description */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Brand Description <span className="text-muted-gray text-xs font-normal">(Optional)</span>
+                      </label>
+                      <textarea
+                        placeholder="Tell us about your brand's story, values, and personality..."
+                        value={formData.brand_description}
+                        onChange={(e) => setFormData({ ...formData, brand_description: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {currentStep === 2 && (
+              <motion.div
+                key="step2"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Creative Vision</h2>
+                    <p className="text-sm text-muted-gray">Define your video style and settings</p>
+                  </div>
+
+                  <div className="space-y-4">
                     {/* Creative Prompt */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
                         Creative Vision <span className="text-red-400">*</span>
                       </label>
                       <textarea
-                        placeholder="Describe your vision for the video. How should it look and feel? What story should it tell? Example: Create an energetic video that starts with a problem (tired skin), showcases our serum transforming skin in 7 days, and ends with confident customers. Use bright, clean aesthetics with dynamic camera movements."
+                        placeholder="Describe your vision for the video. How should it look and feel? What story should it tell?"
                         value={formData.creative_prompt}
-                        onChange={(e) =>
-                          setFormData({ ...formData, creative_prompt: e.target.value })
-                        }
-                        rows={5}
-                        className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                        onChange={(e) => setFormData({ ...formData, creative_prompt: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all resize-none"
                         required
                       />
-                      <p className="text-xs text-slate-500 mt-1">
-                        💡 Be specific about mood, pacing, and key moments. The AI will bring your vision to life.
-                      </p>
                     </div>
 
-                    {/* Target Audience (Optional) */}
-                    <Input
-                      label="Target Audience (Optional)"
-                      placeholder="e.g., Women 30-55 interested in natural beauty"
-                      value={formData.target_audience}
-                      onChange={(e) =>
-                        setFormData({ ...formData, target_audience: e.target.value })
-                      }
-                    />
-
-                    {/* Duration */}
+                    {/* Target Audience */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Target Video Duration (seconds)
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Target Audience <span className="text-muted-gray text-xs font-normal">(Optional)</span>
                       </label>
-                      <div className="flex items-center gap-4">
                       <input
-                        type="range"
-                        min="15"
-                        max="120"
-                        step="5"
-                        value={String(formData.target_duration)}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            target_duration: parseInt(e.target.value),
-                          })
-                        }
-                          className="flex-1 h-2 bg-slate-800 rounded-lg accent-indigo-600 cursor-pointer"
-                        />
-                        <div className="w-20 text-center">
-                          <span className="text-2xl font-bold text-indigo-400">
-                            {formData.target_duration}s
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        ⏱️ The AI will pace scenes naturally around this target (±20% is OK)
-                      </p>
+                        type="text"
+                        placeholder="e.g., Women 30-55 interested in natural beauty"
+                        value={formData.target_audience}
+                        onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                      />
                     </div>
 
-                    {/* Aspect Ratio Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Video Aspect Ratio
-                      </label>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['9:16', '1:1', '16:9'] as const).map((ar) => (
-                          <button
-                            key={ar}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, aspect_ratio: ar })}
-                            className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
-                              formData.aspect_ratio === ar
-                                ? 'border-indigo-500 bg-indigo-500/20 text-indigo-200'
-                                : 'border-slate-700 bg-slate-800/30 text-slate-300 hover:border-slate-600'
-                            }`}
-                          >
-                            <div className="font-semibold">
-                              {ar === '9:16' ? '📱 Vertical' : ar === '1:1' ? '⬜ Square' : '🖥️ Horizontal'}
-                            </div>
-                            <div className="text-xs text-slate-400 mt-1">
-                              {ar === '9:16' ? '1080×1920' : ar === '1:1' ? '1080×1080' : '1920×1080'}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        💡 Choose your video format based on your platform
-                      </p>
-                    </div>
-
-                    {/* Asset Uploads Section */}
-                    <div className="space-y-6 p-6 bg-slate-800/30 rounded-lg border border-slate-700">
-                      <h3 className="text-lg font-semibold text-slate-200">
-                        Assets <span className="text-slate-500 text-sm font-normal">(All Optional)</span>
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Product Image Upload */}
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">
-                            Product Image
-                          </label>
-                          {imagePreview ? (
-                            <div className="relative w-full">
-                              <img
-                                src={imagePreview}
-                                alt="Product preview"
-                                className="w-full h-40 object-cover rounded-lg border border-slate-700"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleRemoveImage}
-                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <X className="w-4 h-4 text-white" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                              <div className="flex flex-col items-center justify-center">
-                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                                <span className="text-sm text-slate-400">
-                                  Upload product
-                                </span>
-                                <span className="text-xs text-slate-500 mt-1">
-                                  PNG, JPG (Max 10MB)
-                                </span>
-                              </div>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                className="hidden"
-                              />
-                            </label>
-                          )}
-                          <p className="text-xs text-slate-500 mt-2">
-                            AI will composite your product into scenes
-                          </p>
-                        </div>
-
-                        {/* Brand Logo Upload */}
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">
-                            Brand Logo
-                          </label>
-                          {logoPreview ? (
-                            <div className="relative w-full">
-                              <img
-                                src={logoPreview}
-                                alt="Logo preview"
-                                className="w-full h-40 object-contain bg-slate-900/50 rounded-lg border border-slate-700 p-4"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleRemoveLogo}
-                                className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <X className="w-4 h-4 text-white" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                              <div className="flex flex-col items-center justify-center">
-                                <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                                <span className="text-sm text-slate-400">
-                                  Upload logo
-                                </span>
-                                <span className="text-xs text-slate-500 mt-1">
-                                  PNG, SVG (Max 5MB)
-                                </span>
-                              </div>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleLogoChange}
-                                className="hidden"
-                              />
-                            </label>
-                          )}
-                          <p className="text-xs text-slate-500 mt-2">
-                            AI will place logo strategically (usually final scene)
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Brand Guidelines Upload */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                          Brand Guidelines
-                        </label>
-                        {guidelinesFile ? (
-                          <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-indigo-500/20 rounded-lg">
-                                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-200 font-medium">{guidelinesFile.name}</p>
-                                <p className="text-xs text-slate-500">
-                                  {(guidelinesFile.size / 1024 / 1024).toFixed(2)} MB
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveGuidelines}
-                              className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                            >
-                              <X className="w-4 h-4 text-white" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                            <div className="flex flex-col items-center justify-center">
-                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                              <span className="text-sm text-slate-400">
-                                Upload brand guidelines
-                              </span>
-                              <span className="text-xs text-slate-500 mt-1">
-                                PDF, TXT (Max 10MB)
-                              </span>
-                            </div>
-                            <input
-                              type="file"
-                              accept=".pdf,.txt,text/plain,application/pdf"
-                              onChange={handleGuidelinesChange}
-                              className="hidden"
-                            />
-                          </label>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">
-                          💡 AI will follow your brand guidelines for tone and style
-                        </p>
-                      </div>
-
-                      {/* Reference Image Upload (NEW) */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-slate-300">
-                            Reference Image (Optional - Visual Style)
-                          </label>
-                          {referenceImageUploaded && (
-                            <Badge variant="success" className="flex items-center gap-1">
-                              <Check className="w-3 h-3" />
-                              Added
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 mb-3">
-                          Upload a mood board or reference image to guide the visual style (colors, lighting, mood). 
-                          Style will be extracted and applied to all scenes.
-                        </p>
-                        {referenceImage ? (
-                          <div className="relative w-full">
-                            <img
-                              src={URL.createObjectURL(referenceImage)}
-                              alt="Reference preview"
-                              className="w-full h-40 object-cover bg-slate-900/50 rounded-lg border border-indigo-500/50 p-2"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleRemoveReferenceImage}
-                              className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                            >
-                              <X className="w-4 h-4 text-white" />
-                            </button>
-                            <div className="mt-2 p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-                              <p className="text-xs text-indigo-400">
-                                ✓ {referenceImage.name} selected ({(referenceImage.size / 1024 / 1024).toFixed(2)} MB)
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-colors">
-                            <div className="flex flex-col items-center justify-center">
-                              <Upload className="w-6 h-6 text-slate-500 mb-1" />
-                              <span className="text-sm text-slate-400">
-                                Upload reference image
-                              </span>
-                              <span className="text-xs text-slate-500 mt-1">
-                                JPG, PNG (Max 5MB)
-                              </span>
-                            </div>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/*"
-                              onChange={handleReferenceImageChange}
-                              className="hidden"
-                              disabled={isUploadingReference}
-                            />
-                          </label>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">
-                          🎨 AI will extract colors, lighting, mood, and camera style from your reference
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* PHASE 7: Video Style Selection */}
-                    <div className="p-6 bg-slate-800/30 rounded-lg border border-slate-700">
+                    {/* Video Style Selector */}
+                    <div className="p-3 bg-olive-700/30 rounded-lg border border-olive-600/50">
                       <StyleSelector
                         styles={styles}
                         selectedStyle={selectedStyle}
@@ -747,203 +432,287 @@ export const CreateProject = () => {
                       />
                     </div>
 
-                    {/* Submit Buttons */}
-                    <div className="flex gap-4 pt-6 border-t border-slate-700">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        fullWidth
-                        onClick={() => navigate('/dashboard')}
-                        disabled={loading}
-                      >
-                        Cancel
-                      </Button>
-                  <Button
-                    type="submit"
-                    variant="gradient"
-                    fullWidth
-                  >
-                    {loading ? 'Creating...' : 'Create Project'}
-                  </Button>
+                    {/* Perfume Name */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Perfume Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Noir Élégance"
+                        value={formData.perfume_name}
+                        onChange={(e) => setFormData({ ...formData, perfume_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
                     </div>
-                  </form>
-                </CardContent>
-              </Card>
-            </motion.div>
 
-            {/* Info Boxes */}
-            <motion.div variants={itemVariants} className="space-y-4">
-              <div className="p-4 bg-indigo-500/10 border border-indigo-500/50 rounded-lg">
-                <p className="text-indigo-400 text-sm">
-                  💡 <strong>Pro Tip:</strong> Be specific in your creative vision! Describe the mood, pacing, key moments, and visual style you want. The AI director will bring your vision to life with professional camera work and scene pacing.
-                </p>
-              </div>
-              
-              {(productImage || logoImage || guidelinesFile) && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg">
-                  <p className="text-emerald-400 text-sm">
-                    ✅ <strong>Ready to upload:</strong> Your files will be uploaded to S3 before creating the project. The AI will use these assets when generating your video.
-                  </p>
+                    {/* Perfume Gender */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-2">
+                        Perfume Gender <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['masculine', 'feminine', 'unisex'] as const).map((gender) => (
+                          <button
+                            key={gender}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, perfume_gender: gender })}
+                            className={`p-2.5 rounded-lg border-2 transition-all duration-200 ${
+                              formData.perfume_gender === gender
+                                ? 'border-gold bg-gold/10 shadow-gold'
+                                : 'border-olive-600 bg-olive-700/30 hover:border-olive-500'
+                            }`}
+                          >
+                            <div className={`text-sm font-semibold capitalize ${formData.perfume_gender === gender ? 'text-gold' : 'text-off-white'}`}>
+                              {gender}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Duration Slider */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-2">
+                        Target Duration: <span className="text-gold font-bold">{formData.target_duration}s</span>
+                      </label>
+                      <div className="space-y-2">
+                        <Slider
+                          value={[formData.target_duration]}
+                          onValueChange={(value) => setFormData({ ...formData, target_duration: value[0] })}
+                          min={15}
+                          max={60}
+                          step={5}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-xs text-muted-gray">
+                          <span>15s</span>
+                          <span>30s</span>
+                          <span>60s</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </motion.div>
-          </motion.div>
-        </Container>
-      </div>
-
-      {/* Confirmation Modal */}
-      <Modal
-        isOpen={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        title="Review Your Project"
-        description="Confirm the details before creating your project"
-        size="lg"
-      >
-        <div className="space-y-6">
-          {/* Project Details Review */}
-          <div className="space-y-4 bg-slate-900/50 p-4 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Project Title
-                </label>
-                <p className="text-slate-100 mt-1">{formData.title}</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Brand Name
-                </label>
-                <p className="text-slate-100 mt-1">{formData.brand_name}</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">
-                Creative Vision
-              </label>
-              <p className="text-slate-100 mt-1 text-sm">{formData.creative_prompt}</p>
-            </div>
-
-            {formData.brand_description && (
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Brand Description
-                </label>
-                <p className="text-slate-100 mt-1 text-sm">{formData.brand_description}</p>
-              </div>
+              </motion.div>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
-              {formData.target_audience && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase">
-                    Target Audience
-                  </label>
-                  <p className="text-slate-100 mt-1 text-sm">{formData.target_audience}</p>
-                </div>
-              )}
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Target Duration
-                </label>
-                <p className="text-slate-100 mt-1">{formData.target_duration}s</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase">
-                  Aspect Ratio
-                </label>
-                <p className="text-slate-100 mt-1">
-                  {formData.aspect_ratio === '9:16' ? '📱 Vertical (1080×1920)' : formData.aspect_ratio === '1:1' ? '⬜ Square (1080×1080)' : '🖥️ Horizontal (1920×1080)'}
-                </p>
-              </div>
-            </div>
+            {currentStep === 3 && (
+              <motion.div
+                key="step3"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Upload Assets</h2>
+                    <p className="text-sm text-muted-gray">Add images and files to enhance your video (all optional)</p>
+                  </div>
 
-            {/* Assets Section */}
-            {(productImage || logoImage || guidelinesFile) && (
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase mb-2 block">
-                  Uploaded Assets
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {productImage && (
-                    <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-xs">
-                      ✓ Product Image
-                    </span>
-                  )}
-                  {logoImage && (
-                    <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
-                      ✓ Brand Logo
-                    </span>
-                  )}
-                  {guidelinesFile && (
-                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs">
-                      ✓ Brand Guidelines
-                    </span>
-                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Product Image */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-off-white">
+                        <ImageIcon className="w-4 h-4 inline mr-2 text-gold" />
+                        Product Image
+                      </label>
+                      {imagePreview ? (
+                        <div className="relative group">
+                          <img
+                            src={imagePreview}
+                            alt="Product preview"
+                            className="w-full h-32 object-cover rounded-lg border border-olive-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFile('product')}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                          <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                          <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload product</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'product')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Brand Logo */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-off-white">
+                        <Sparkles className="w-4 h-4 inline mr-2 text-gold" />
+                        Brand Logo
+                      </label>
+                      {logoPreview ? (
+                        <div className="relative group">
+                          <img
+                            src={logoPreview}
+                            alt="Logo preview"
+                            className="w-full h-32 object-contain bg-olive-700/30 rounded-lg border border-olive-600 p-3"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFile('logo')}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                          <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                          <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload logo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'logo')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Brand Guidelines */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-off-white">
+                      <FileText className="w-4 h-4 inline mr-2 text-gold" />
+                      Brand Guidelines
+                    </label>
+                    {guidelinesFile ? (
+                      <div className="flex items-center justify-between p-3 bg-olive-700/30 border border-olive-600 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-gold/10 rounded-lg border border-gold/20">
+                            <FileText className="w-4 h-4 text-gold" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-off-white">{guidelinesFile.name}</p>
+                            <p className="text-xs text-muted-gray">
+                              {(guidelinesFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile('guidelines')}
+                          className="p-1.5 text-muted-gray hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                        <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                        <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload guidelines</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.txt,text/plain,application/pdf"
+                          onChange={handleGuidelinesChange}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Reference Image */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-off-white">
+                      <Palette className="w-4 h-4 inline mr-2 text-gold" />
+                      Reference Image <span className="text-muted-gray text-xs font-normal">(Optional)</span>
+                    </label>
+                    {referencePreview ? (
+                      <div className="relative group">
+                        <img
+                          src={referencePreview}
+                          alt="Reference preview"
+                          className="w-full h-32 object-cover rounded-lg border border-gold/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFile('reference')}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <X className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                        <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                        <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload reference</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageChange(e, 'reference')}
+                          className="hidden"
+                          disabled={isUploadingReference}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
 
-          {/* Cost Estimate */}
-          <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-semibold text-emerald-400 uppercase">
-                Estimated Cost
-              </span>
-            </div>
-            <p className="text-2xl font-bold text-emerald-400">$0.19 - $0.43</p>
-            <p className="text-xs text-emerald-300 mt-1">
-              Final cost may vary based on complexity
-            </p>
-          </div>
-
-          {/* Auto-Generate Option */}
-          <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-            <input
-              type="checkbox"
-              id="autoGenerate"
-              checked={autoGenerate}
-              onChange={(e) => setAutoGenerate(e.target.checked)}
-              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
-            />
-            <label htmlFor="autoGenerate" className="flex-1 cursor-pointer">
-              <p className="text-sm font-medium text-slate-100">
-                Start generation immediately
-              </p>
-              <p className="text-xs text-slate-400">
-                {autoGenerate
-                  ? 'You will be taken to the progress page'
-                  : 'Project will be saved as draft'}
-              </p>
-            </label>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-slate-700">
+          {/* Navigation Buttons */}
+          <div className="flex items-center justify-between gap-4 mt-6">
             <Button
               type="button"
               variant="outline"
-              fullWidth
-              onClick={() => setShowConfirmation(false)}
-              disabled={loading}
+              onClick={currentStep === 1 ? () => navigate('/dashboard') : handleBack}
+              className="gap-2 border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
             >
-              Edit
+              <ArrowLeft className="w-4 h-4" />
+              {currentStep === 1 ? 'Cancel' : 'Back'}
             </Button>
-            <Button
-              type="button"
-              variant="gradient"
-              fullWidth
-              onClick={handleConfirmCreate}
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create Project'}
-            </Button>
+
+            {currentStep < 3 ? (
+              <Button
+                type="button"
+                variant="hero"
+                onClick={handleNext}
+                className="gap-2 transition-transform duration-200 hover:scale-105"
+              >
+                Next
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="hero"
+                onClick={handleSubmit}
+                disabled={loading || uploading}
+                className="gap-2 transition-transform duration-200 hover:scale-105"
+              >
+                {loading || uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-gold-foreground/30 border-t-gold-foreground rounded-full animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-4 h-4" />
+                    Start Creating Video
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
-      </Modal>
+      </div>
     </div>
   )
 }
-
