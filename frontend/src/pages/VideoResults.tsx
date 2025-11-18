@@ -33,6 +33,34 @@ export const VideoResults = () => {
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
 
+  /**
+   * Helper function to extract the display video path from project data.
+   * Handles both single video (string) and multi-variation (array) cases.
+   */
+  const getDisplayVideo = (projectData: any, aspectRatio: '9:16' | '1:1' | '16:9'): string | null => {
+    // Check ad_project_json first (new structure), then fallback to local_video_paths (backward compat)
+    const videoPaths = projectData?.ad_project_json?.local_video_paths?.[aspectRatio] 
+      || projectData?.local_video_paths?.[aspectRatio]
+    
+    if (!videoPaths) {
+      return null
+    }
+    
+    // If array (multi-variation case)
+    if (Array.isArray(videoPaths)) {
+      // Use selected_variation_index if set, otherwise default to 0
+      const selectedIndex = projectData?.selected_variation_index ?? 0
+      return videoPaths[selectedIndex] || videoPaths[0] || null
+    }
+    
+    // If string (single video case)
+    if (typeof videoPaths === 'string') {
+      return videoPaths
+    }
+    
+    return null
+  }
+
   useEffect(() => {
     const loadProjectAndVideos = async () => {
       try {
@@ -43,11 +71,21 @@ export const VideoResults = () => {
         const projectAspectRatio = (data.aspect_ratio || '9:16') as '9:16' | '1:1' | '16:9'
         setAspect(projectAspectRatio)
         
+        // Get the display video path (handles multi-variation selection)
+        const displayVideoPath = getDisplayVideo(data, projectAspectRatio)
+        
+        // Try IndexedDB first (for videos stored locally in browser)
         const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
+        } else if (displayVideoPath) {
+          // If no IndexedDB video, use the path from project data
+          // This could be a local file path or S3 URL
+          setVideoUrl(displayVideoPath)
+          setUseLocalStorage(false)
         } else {
+          // Fallback to output_videos (S3 URLs)
           setVideoUrl(data.output_videos?.[projectAspectRatio] || '')
           setUseLocalStorage(false)
         }
@@ -69,17 +107,28 @@ export const VideoResults = () => {
   
   useEffect(() => {
     const loadVideoForAspect = async () => {
-      if (!projectId || !aspect) return
+      if (!projectId || !aspect || !project) return
       
       try {
+        // Try IndexedDB first (for videos stored locally in browser)
         const localVideoUrl = await getVideoURL(projectId, aspect)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
         } else {
-          const s3Url = project?.output_videos?.[aspect] || ''
-          setVideoUrl(s3Url)
-          setUseLocalStorage(false)
+          // Get the display video path (handles multi-variation selection)
+          const displayVideoPath = getDisplayVideo(project, aspect)
+          
+          if (displayVideoPath) {
+            // Use the path from project data (could be local file path or S3 URL)
+            setVideoUrl(displayVideoPath)
+            setUseLocalStorage(false)
+          } else {
+            // Fallback to output_videos (S3 URLs)
+            const s3Url = project?.output_videos?.[aspect] || ''
+            setVideoUrl(s3Url)
+            setUseLocalStorage(false)
+          }
         }
       } catch (err) {
         console.error(`Failed to load video for ${aspect}:`, err)

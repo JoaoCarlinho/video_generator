@@ -20,9 +20,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.options("/projects/{project_id}/preview")
+async def options_preview_video(project_id: UUID):
+    """Handle CORS preflight for preview endpoint."""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+
 @router.get("/projects/{project_id}/preview")
 async def get_preview_video(
     project_id: UUID,
+    variation: int = 0,  # Query parameter: variation index (0, 1, or 2)
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -30,10 +45,14 @@ async def get_preview_video(
     
     Used during preview phase before finalization.
     Streams video from local disk instead of S3.
-    Returns the generated video regardless of aspect ratio.
+    Supports multi-variation generation - use variation query parameter to select which video.
     
     **Path Parameters:**
     - project_id: UUID of the project
+    
+    **Query Parameters:**
+    - variation: Optional variation index (0, 1, or 2). Defaults to 0.
+                 Only used when num_variations > 1.
     
     **Response:** 
     - Content-Type: video/mp4
@@ -41,6 +60,7 @@ async def get_preview_video(
     
     **Errors:**
     - 404: Project not found or video not available
+    - 400: Invalid variation index
     - 403: Not authorized
     """
     try:
@@ -55,25 +75,75 @@ async def get_preview_video(
         # Check if videos are in local storage
         local_video_paths = project.local_video_paths or {}
         
-        # Get the first (and only) video since we only generate one
-        local_video_path = next(iter(local_video_paths.values()), None) if local_video_paths else None
+        # Get video path(s) for 9:16 aspect ratio (TikTok vertical)
+        video_paths = local_video_paths.get("9:16")
+        
+        # Fallback: Check local_video_path if local_video_paths is empty (backward compatibility)
+        if not video_paths and project.local_video_path:
+            video_paths = project.local_video_path
+            logger.info(f"Using fallback local_video_path: {video_paths}")
+        
+        if not video_paths:
+            raise HTTPException(
+                status_code=404,
+                detail="Preview video not available"
+            )
+        
+        # Handle multi-variation case (array) vs single video (string)
+        if isinstance(video_paths, list):
+            # Multiple variations - validate index and get specific video
+            num_variations = project.num_variations or len(video_paths)
+            
+            if variation < 0 or variation >= num_variations:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid variation index {variation}. Must be between 0 and {num_variations - 1}"
+                )
+            
+            if variation >= len(video_paths):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Variation {variation} not available"
+                )
+            
+            local_video_path = video_paths[variation]
+            logger.info(f"✅ Streaming variation {variation} from local storage: {local_video_path}")
+        elif isinstance(video_paths, str):
+            # Single video - ignore variation parameter
+            local_video_path = video_paths
+            logger.info(f"✅ Streaming preview from local storage: {local_video_path}")
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid video path format"
+            )
+        
+        # Validate path is a string
+        if not isinstance(local_video_path, str):
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid video path"
+            )
         
         # If local file exists, stream from local disk
-        if local_video_path and LocalStorageManager.file_exists(local_video_path):
-            logger.info(f"✅ Streaming preview from local storage: {local_video_path}")
+        if LocalStorageManager.file_exists(local_video_path):
             return FileResponse(
                 local_video_path,
                 media_type="video/mp4",
                 headers={
-                    "Content-Disposition": f"inline; filename=preview.mp4",
-                    "Cache-Control": "no-cache"
+                    "Content-Disposition": f"inline; filename=preview_variation_{variation}.mp4",
+                    "Cache-Control": "public, max-age=3600",
+                    "Accept-Ranges": "bytes",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Access-Control-Allow-Headers": "Range",
                 }
             )
         
         # No video found in local storage
         raise HTTPException(
             status_code=404,
-            detail=f"Preview video not available"
+            detail=f"Preview video not available at path: {local_video_path}"
         )
     
     except HTTPException:

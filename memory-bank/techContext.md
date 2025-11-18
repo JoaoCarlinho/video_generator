@@ -202,6 +202,10 @@ CREATE TABLE projects (
   -- Style selection (Phase 7, updated Phase 4)
   selected_style VARCHAR(50),  -- 'gold_luxe', 'dark_elegance', 'romantic_floral'
   
+  -- Multi-variation generation (Phase 1, Nov 18, 2025)
+  num_variations INTEGER DEFAULT 1 NOT NULL,  -- Number of variations (1-3)
+  selected_variation_index INTEGER,  -- Selected variation index (0-2), NULL if not selected
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -211,6 +215,8 @@ CREATE INDEX idx_projects_status ON projects(status);
 CREATE INDEX idx_projects_selected_style ON projects(selected_style);
 CREATE INDEX idx_projects_perfume_name ON projects(perfume_name);  -- Phase 9
 CREATE INDEX idx_projects_perfume_gender ON projects(perfume_gender);  -- Phase 9
+CREATE INDEX idx_projects_num_variations ON projects(num_variations);  -- Multi-Variation Phase 1
+CREATE INDEX idx_projects_selected_variation ON projects(selected_variation_index);  -- Multi-Variation Phase 1
 ```
 
 **Why JSONB:**
@@ -487,5 +493,5 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 17, 2025 (Phase 10 Complete)
+**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete + Preview Endpoint Fix)
 

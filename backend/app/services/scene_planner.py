@@ -1371,3 +1371,129 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             "grade_postprocessing": "warm color temperature, lifted blacks, subtle vignette",
             "music_mood": "uplifting",
         }
+
+    async def _generate_scene_variations(
+        self,
+        num_variations: int,
+        creative_prompt: str,
+        brand_name: str,
+        brand_description: Optional[str],
+        brand_colors: List[str],
+        brand_guidelines: Optional[str],
+        target_audience: Optional[str],
+        target_duration: int,
+        has_product: bool,
+        has_logo: bool,
+        selected_style: Optional[str],
+        extracted_style: Optional[Dict[str, Any]],
+        perfume_name: Optional[str] = None,
+        perfume_gender: Optional[str] = None,
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Generate N variations of scene plans with different visual approaches.
+        
+        Each variation uses a different approach:
+        - Variation 0: Cinematic + dramatic lighting + wide shots
+        - Variation 1: Minimal + clean + close-up macro
+        - Variation 2: Lifestyle + real-world + atmospheric
+        
+        Args:
+            num_variations: Number of variations to generate (1-3)
+            creative_prompt: User's creative vision
+            brand_name: Brand name
+            brand_description: Brand description
+            brand_colors: Brand colors
+            brand_guidelines: Brand guidelines
+            target_audience: Target audience
+            target_duration: Target duration
+            has_product: Whether product image is available
+            has_logo: Whether logo is available
+            selected_style: Selected style name
+            extracted_style: Optional extracted style from reference image
+            perfume_name: Perfume product name
+            perfume_gender: Perfume gender
+            
+        Returns:
+            List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
+        """
+        logger.info(f"Generating {num_variations} scene plan variations...")
+        
+        variation_scenes = []
+        
+        for var_idx in range(num_variations):
+            logger.info(f"Generating variation {var_idx + 1}/{num_variations}...")
+            
+            # Build variation-specific prompt
+            variation_prompt = self._build_variation_prompt(
+                variation_index=var_idx,
+                total_variations=num_variations,
+                creative_prompt=creative_prompt,
+                brand_guidelines=brand_guidelines,
+                selected_style=selected_style,
+            )
+            
+            # Generate scenes for this variation using existing method
+            scenes_json = await self._generate_perfume_scenes_with_grammar(
+                creative_prompt=variation_prompt,
+                brand_name=brand_name,
+                perfume_name=perfume_name or brand_name,
+                brand_description=brand_description,
+                brand_colors=brand_colors,
+                brand_guidelines=brand_guidelines,
+                target_audience=target_audience or "general consumers",
+                target_duration=target_duration,
+                chosen_style=selected_style or "cinematic",
+                perfume_gender=perfume_gender,
+            )
+            
+            variation_scenes.append(scenes_json)
+            logger.info(f"Variation {var_idx + 1} complete: {len(scenes_json)} scenes")
+        
+        logger.info(f"Generated {len(variation_scenes)} scene plan variations")
+        return variation_scenes
+
+    def _build_variation_prompt(
+        self,
+        variation_index: int,
+        total_variations: int,
+        creative_prompt: str,
+        brand_guidelines: Optional[str],
+        selected_style: Optional[str],
+    ) -> str:
+        """
+        Build a variation-specific prompt with different visual approach.
+        
+        Args:
+            variation_index: Index of this variation (0-based)
+            total_variations: Total number of variations
+            creative_prompt: Original creative prompt
+            brand_guidelines: Brand guidelines text
+            selected_style: Selected style name
+            
+        Returns:
+            Enhanced prompt with variation-specific instructions
+        """
+        # Define variation approaches
+        variation_approaches = [
+            "Cinematic approach: Use dramatic lighting with high contrast, wide establishing shots, epic scale, cinematic color grading, and dynamic camera movements. Focus on grandeur and visual impact.",
+            "Minimal approach: Use clean, soft diffused lighting, close-up macro shots, minimalist composition, subtle textures, and refined simplicity. Focus on product details and elegance.",
+            "Lifestyle approach: Use warm atmospheric lighting, real-world settings, natural environments, relatable scenarios, and authentic moments. Focus on emotional connection and everyday luxury.",
+        ]
+        
+        # Get approach for this variation
+        approach = variation_approaches[variation_index % len(variation_approaches)]
+        
+        # Build enhanced prompt
+        enhanced_prompt = f"""{creative_prompt}
+
+VARIATION {variation_index + 1} OF {total_variations}:
+{approach}
+
+Brand Guidelines: {brand_guidelines or 'Maintain brand consistency'}
+Style: {selected_style or 'cinematic'}
+
+IMPORTANT: Generate scenes with a DIFFERENT visual approach than other variations,
+but maintain the SAME brand message and product positioning.
+"""
+        
+        return enhanced_prompt

@@ -1,6 +1,7 @@
 """API endpoints for generation control."""
 
 from fastapi import APIRouter, Depends, HTTPException, Header
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -10,7 +11,7 @@ import boto3
 from io import BytesIO
 
 from app.database.connection import get_db, init_db
-from app.database.crud import get_project_by_user, update_project_status
+from app.database.crud import get_project_by_user, update_project_status, update_project
 from app.models.schemas import GenerationProgressResponse
 from app.jobs.worker import create_worker
 from app.api.auth import get_current_user_id
@@ -214,6 +215,109 @@ async def reset_project_status(
     except Exception as e:
         logger.error(f"❌ Failed to reset project: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reset project: {str(e)}")
+
+
+# ============================================================================
+# MULTI-VARIATION GENERATION FEATURE: Variation Selection
+# ============================================================================
+
+class SelectVariationRequest(BaseModel):
+    """Request schema for selecting a video variation."""
+    variation_index: int = Field(..., ge=0, le=2, description="Index of variation to select (0-2)")
+
+
+@router.post("/projects/{project_id}/select-variation")
+async def select_variation(
+    project_id: UUID,
+    request: SelectVariationRequest,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """
+    Select a video variation for a multi-variation project.
+    
+    After generating multiple variations (num_variations > 1), users can select their preferred
+    variation. This endpoint updates the project's selected_variation_index field.
+    
+    **Path Parameters:**
+    - project_id: UUID of the project
+    
+    **Headers:**
+    - Authorization: Bearer {token} (optional in development)
+    
+    **Request Body:**
+    ```json
+    {
+        "variation_index": 0
+    }
+    ```
+    
+    **Response:**
+    ```json
+    {
+        "status": "success",
+        "project_id": "...",
+        "selected_variation": 0,
+        "message": "Variation 0 selected successfully"
+    }
+    ```
+    
+    **Errors:**
+    - 400: Invalid variation_index (out of range) or project has only 1 variation
+    - 404: Project not found
+    - 403: Not authorized
+    - 401: Missing or invalid authorization
+    """
+    try:
+        init_db()
+        
+        user_id = get_current_user_id(authorization)
+        
+        # Get project and verify ownership
+        project = get_project_by_user(db, project_id, user_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Validate that project has multiple variations
+        num_variations = getattr(project, 'num_variations', 1)
+        if num_variations <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project has only {num_variations} variation(s). Selection is only available for projects with 2-3 variations."
+            )
+        
+        # Validate variation_index is in valid range
+        if request.variation_index < 0 or request.variation_index >= num_variations:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid variation_index: {request.variation_index}. Must be between 0 and {num_variations - 1}."
+            )
+        
+        # Update project with selected variation
+        updated_project = update_project(
+            db,
+            project_id,
+            selected_variation_index=request.variation_index
+        )
+        
+        if not updated_project:
+            raise HTTPException(status_code=404, detail="Failed to update project")
+        
+        logger.info(f"✅ Selected variation {request.variation_index} for project {project_id}")
+        
+        return {
+            "status": "success",
+            "project_id": str(project_id),
+            "selected_variation": request.variation_index,
+            "message": f"Variation {request.variation_index} selected successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to select variation for project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to select variation: {str(e)}")
 
 
 @router.post("/jobs/{job_id}/cancel")

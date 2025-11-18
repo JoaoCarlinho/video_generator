@@ -232,124 +232,186 @@ class GenerationPipeline:
             else:
                 logger.info("Step 1: Skipping product extraction (no product image provided)")
 
-            # STEP 2: Plan Scenes
+            # STEP 2: Plan Scenes (with multi-variation support)
             planning_start = 15 if has_product else 10
-            logger.info("Step 2: Planning scenes...")
-            updated_project = await self._plan_scenes(project, ad_project, progress_start=planning_start)
-
-            # Update project with new ad_project data
-            ad_project = AdProject(**updated_project.ad_project_json)
-
-            # STEP 3A: Spawn Music Generation (parallel with video)
-            logger.info("Step 3A: Spawning background music generation...")
-            music_task = asyncio.create_task(
-                self._generate_audio(project, ad_project, progress_start=30)
-            )
-
-            # STEP 3B: Generate Videos (parallel with music)
-            logger.info("Step 3B: Generating videos for all scenes...")
-            video_start = 25 if has_product else 20
-            replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
+            num_variations = getattr(project, 'num_variations', 1) or 1
+            logger.info(f"Step 2: Planning scenes (variations: {num_variations})...")
             
-            logger.info("Saving videos to local storage...")
-            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
-            logger.info(f"Saved {len(scene_videos)} videos to local storage")
-
-            # STEP 4: Composite Product (Optional)
-            if product_url:
-                logger.info("Step 4: Compositing product onto scenes...")
-                composited_videos = await self._composite_products(
-                    scene_videos, product_url, ad_project, progress_start=40
+            if num_variations > 1:
+                # Multi-variation flow: Generate N scene plan variations
+                logger.info(f"Generating {num_variations} scene plan variations...")
+                scene_variations = await self._plan_scenes_variations(
+                    project, ad_project, num_variations, progress_start=planning_start
                 )
+                # Use first variation's ad_project for metadata (all variations share same brand/product info)
+                updated_project = await self._plan_scenes(project, ad_project, progress_start=planning_start)
+                ad_project = AdProject(**updated_project.ad_project_json)
             else:
-                logger.info("Step 4: Skipping compositing (no product image)")
-                composited_videos = scene_videos
+                # Single variation flow (existing behavior)
+                updated_project = await self._plan_scenes(project, ad_project, progress_start=planning_start)
+                ad_project = AdProject(**updated_project.ad_project_json)
+                scene_variations = [ad_project.scenes]
 
-            # STEP 4B: Composite Logo (Optional)
-            logo_url = ad_project.brand.get('logo_url') if isinstance(ad_project.brand, dict) else None
-            if logo_url:
-                logger.info("Step 4B: Compositing logo onto scenes...")
-                logo_composited_videos = await self._composite_logos(
-                    composited_videos,
-                    logo_url,
-                    ad_project,
-                    progress_start=55 if product_url else 50
+            # STEP 3-7: Process all variations IN PARALLEL
+            if num_variations > 1:
+                logger.info(f"Processing {num_variations} variations in parallel...")
+                variation_tasks = [
+                    self._process_variation(
+                        scenes=scenes,
+                        var_idx=var_idx,
+                        num_variations=num_variations,
+                        project=project,
+                        ad_project=ad_project,
+                        product_url=product_url,
+                        has_product=has_product,
+                        progress_start=planning_start + 5,
+                    )
+                    for var_idx, scenes in enumerate(scene_variations)
+                ]
+                final_videos = await asyncio.gather(*variation_tasks, return_exceptions=True)
+                
+                # Check for errors
+                errors = [v for v in final_videos if isinstance(v, Exception)]
+                if errors:
+                    error_msg = f"{len(errors)} variation(s) failed: {errors[0]}"
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg)
+                
+                # Store all variations locally
+                local_video_paths = self._save_variations_locally(final_videos, num_variations)
+                
+                # Update project with variation info
+                await self._update_project_variations(num_variations, final_videos)
+                
+                total_elapsed = time.time() - pipeline_start
+                logger.info(f"Pipeline complete in {total_elapsed:.1f}s ({num_variations} variations)")
+                
+                storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
+                logger.info(f"Total local storage: {format_storage_size(storage_size)}")
+                
+                return {
+                    "status": "COMPLETED",
+                    "project_id": str(self.project_id),
+                    "local_video_paths": local_video_paths,
+                    "num_variations": num_variations,
+                    "storage_size": storage_size,
+                    "storage_size_formatted": format_storage_size(storage_size),
+                    "message": f"{num_variations} TikTok vertical video variations ready for preview.",
+                    "timing_seconds": total_elapsed,
+                    "step_timings": self.step_timings,
+                }
+            else:
+                # Single variation flow (existing code)
+                # STEP 3A: Spawn Music Generation (parallel with video)
+                logger.info("Step 3A: Spawning background music generation...")
+                music_task = asyncio.create_task(
+                    self._generate_audio(project, ad_project, progress_start=30)
                 )
-            else:
-                logger.info("Step 4B: Skipping logo compositing (no logo provided)")
-                logo_composited_videos = composited_videos
 
-            # STEP 5: Add Text Overlays
-            logger.info("Step 5: Rendering text overlays...")
-            overlay_start = 65 if (product_url or logo_url) else 50
-            text_rendered_videos = await self._add_text_overlays(
-                logo_composited_videos, ad_project, progress_start=overlay_start
-            )
+                # STEP 3B: Generate Videos (parallel with music)
+                logger.info("Step 3B: Generating videos for all scenes...")
+                video_start = 25 if has_product else 20
+                replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
+                
+                logger.info("Saving videos to local storage...")
+                scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
+                logger.info(f"Saved {len(scene_videos)} videos to local storage")
 
-            # STEP 6: Wait for Music Generation
-            logger.info("Step 6: Waiting for background music generation to complete...")
-            try:
-                audio_url = await music_task
-                logger.info(f"Background music generation complete: {audio_url}")
-            except asyncio.CancelledError:
-                logger.error("Music generation was cancelled")
-                raise
-            except Exception as e:
-                logger.error(f"Music generation failed: {e}", exc_info=True)
-                # Ensure task exception is retrieved to avoid "Task exception was never retrieved" warning
-                if music_task.done() and music_task.exception():
-                    logger.debug(f"Task exception details: {music_task.exception()}")
-                raise
+                # STEP 4: Composite Product (Optional)
+                if product_url:
+                    logger.info("Step 4: Compositing product onto scenes...")
+                    composited_videos = await self._composite_products(
+                        scene_videos, product_url, ad_project, progress_start=40
+                    )
+                else:
+                    logger.info("Step 4: Skipping compositing (no product image)")
+                    composited_videos = scene_videos
 
-            # STEP 7: Render Final TikTok Vertical Video (9:16 only)
-            logger.info("Step 7: Rendering final TikTok vertical video (9:16)...")
-            render_start = 85 if has_product else 80
-            final_video_path = await self._render_final(
-                text_rendered_videos, audio_url, ad_project, progress_start=render_start
-            )
+                # STEP 4B: Composite Logo (Optional)
+                logo_url = ad_project.brand.get('logo_url') if isinstance(ad_project.brand, dict) else None
+                if logo_url:
+                    logger.info("Step 4B: Compositing logo onto scenes...")
+                    logo_composited_videos = await self._composite_logos(
+                        composited_videos,
+                        logo_url,
+                        ad_project,
+                        progress_start=55 if product_url else 50
+                    )
+                else:
+                    logger.info("Step 4B: Skipping logo compositing (no logo provided)")
+                    logo_composited_videos = composited_videos
 
-            total_elapsed = time.time() - pipeline_start
-            logger.info(f"Pipeline complete in {total_elapsed:.1f}s")
-            logger.info(f"Step timings: {self.step_timings}")
+                # STEP 5: Add Text Overlays
+                logger.info("Step 5: Rendering text overlays...")
+                overlay_start = 65 if (product_url or logo_url) else 50
+                text_rendered_videos = await self._add_text_overlays(
+                    logo_composited_videos, ad_project, progress_start=overlay_start
+                )
 
-            # ===== LOCAL-FIRST: Final video already saved locally by renderer =====
-            logger.info("Final TikTok vertical video already saved to local storage by renderer")
-            # Store as dict with single 9:16 entry for backward compatibility
-            local_video_paths = {"9:16": final_video_path}
+                # STEP 6: Wait for Music Generation
+                logger.info("Step 6: Waiting for background music generation to complete...")
+                try:
+                    audio_url = await music_task
+                    logger.info(f"Background music generation complete: {audio_url}")
+                except asyncio.CancelledError:
+                    logger.error("Music generation was cancelled")
+                    raise
+                except Exception as e:
+                    logger.error(f"Music generation failed: {e}", exc_info=True)
+                    # Ensure task exception is retrieved to avoid "Task exception was never retrieved" warning
+                    if music_task.done() and music_task.exception():
+                        logger.debug(f"Task exception details: {music_task.exception()}")
+                    raise
 
-            # Calculate local storage size
-            storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
-            logger.info(f"Total local storage: {format_storage_size(storage_size)}")
+                # STEP 7: Render Final TikTok Vertical Video (9:16 only)
+                logger.info("Step 7: Rendering final TikTok vertical video (9:16)...")
+                render_start = 85 if has_product else 80
+                final_video_path = await self._render_final(
+                    text_rendered_videos, audio_url, ad_project, progress_start=render_start
+                )
 
-            # Update project with local path
-            project.local_video_paths = local_video_paths  # Backward compat (deprecated)
-            project.local_video_path = final_video_path  # Phase 9: Single TikTok vertical video path
-            project.aspect_ratio = "9:16"  # Set default aspect ratio
-            project.status = 'COMPLETED'
-            self.db.commit()
+                total_elapsed = time.time() - pipeline_start
+                logger.info(f"Pipeline complete in {total_elapsed:.1f}s")
+                logger.info(f"Step timings: {self.step_timings}")
 
-            logger.info(f"Project ready for preview. TikTok vertical video stored locally.")
+                # ===== LOCAL-FIRST: Final video already saved locally by renderer =====
+                logger.info("Final TikTok vertical video already saved to local storage by renderer")
+                # Store as dict with single 9:16 entry for backward compatibility
+                local_video_paths = {"9:16": final_video_path}
 
-            # Update legacy output_videos field for backward compatibility
-            update_project_output(
-                self.db,
-                self.project_id,
-                {},
-                0.0,
-                {},
-            )
+                # Calculate local storage size
+                storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
+                logger.info(f"Total local storage: {format_storage_size(storage_size)}")
 
-            return {
-                "status": "COMPLETED",
-                "project_id": str(self.project_id),
-                "local_video_paths": local_video_paths,  # Backward compat (deprecated)
-                "local_video_path": final_video_path,  # Phase 9: Single TikTok vertical video path
-                "storage_size": storage_size,
-                "storage_size_formatted": format_storage_size(storage_size),
-                "message": "TikTok vertical video ready for preview. Video stored in local storage.",
-                "timing_seconds": total_elapsed,
-                "step_timings": self.step_timings,
-            }
+                # Update project with local path
+                project.local_video_paths = local_video_paths  # Backward compat (deprecated)
+                project.local_video_path = final_video_path  # Phase 9: Single TikTok vertical video path
+                project.aspect_ratio = "9:16"  # Set default aspect ratio
+                project.status = 'COMPLETED'
+                self.db.commit()
+
+                logger.info(f"Project ready for preview. TikTok vertical video stored locally.")
+
+                # Update legacy output_videos field for backward compatibility
+                update_project_output(
+                    self.db,
+                    self.project_id,
+                    {},
+                    0.0,
+                    {},
+                )
+
+                return {
+                    "status": "COMPLETED",
+                    "project_id": str(self.project_id),
+                    "local_video_paths": local_video_paths,  # Backward compat (deprecated)
+                    "local_video_path": final_video_path,  # Phase 9: Single TikTok vertical video path
+                    "storage_size": storage_size,
+                    "storage_size_formatted": format_storage_size(storage_size),
+                    "message": "TikTok vertical video ready for preview. Video stored in local storage.",
+                    "timing_seconds": total_elapsed,
+                    "step_timings": self.step_timings,
+                }
 
         except Exception as e:
             total_elapsed = time.time() - pipeline_start
@@ -1208,6 +1270,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         audio_url: str,
         ad_project: AdProject,
         progress_start: int = 85,
+        variation_index: int = None,
     ) -> str:
         """Render final TikTok vertical video (9:16 only)."""
         try:
@@ -1228,6 +1291,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
                 project_id=str(self.project_id),
+                variation_index=variation_index,
             )
 
             update_project_status(
@@ -1341,6 +1405,304 @@ BRAND GUIDELINES (extracted from guidelines document):
             
         except Exception as e:
             logger.error(f"Failed to save TikTok vertical video locally: {e}")
+            raise
+
+    async def _plan_scenes_variations(
+        self,
+        project: Any,
+        ad_project: AdProject,
+        num_variations: int,
+        progress_start: int = 15,
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Generate N variations of scene plans with different visual approaches.
+        
+        Args:
+            project: Project database object
+            ad_project: AdProject schema object
+            num_variations: Number of variations to generate (1-3)
+            progress_start: Progress percentage start
+            
+        Returns:
+            List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
+        """
+        try:
+            update_project_status(
+                self.db, self.project_id, "PLANNING_VARIATIONS", progress=progress_start
+            )
+            
+            from app.config import settings
+            planner = ScenePlanner(api_key=settings.openai_api_key)
+            
+            # Extract perfume-specific info
+            perfume_name = getattr(ad_project, 'perfume_name', None) or None
+            if not perfume_name and project.ad_project_json and isinstance(project.ad_project_json, dict):
+                perfume_name = project.ad_project_json.get("perfume_name")
+            if not perfume_name:
+                perfume_name = ad_project.brand.get('name', 'Perfume') if isinstance(ad_project.brand, dict) else 'Perfume'
+            
+            # Check if reference style was extracted
+            extracted_style = None
+            if project.ad_project_json:
+                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+            
+            # Brand colors
+            brand_colors = []
+            if extracted_style:
+                brand_colors = extracted_style.get("colors", [])
+            
+            # Check if product/logo are available
+            has_product = ad_project.product_asset is not None and ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False
+            has_logo = ad_project.brand.get('logo_url') is not None if isinstance(ad_project.brand, dict) else False
+            
+            # Extract brand guidelines
+            extracted_guidelines = None
+            guidelines_url = ad_project.brand.get('guidelines_url') if isinstance(ad_project.brand, dict) else None
+            if guidelines_url:
+                try:
+                    from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
+                    from openai import AsyncOpenAI
+                    
+                    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+                    extractor = BrandGuidelineExtractor(
+                        openai_client=openai_client,
+                        aws_access_key_id=settings.aws_access_key_id,
+                        aws_secret_access_key=settings.aws_secret_access_key,
+                        s3_bucket_name=settings.s3_bucket_name,
+                        aws_region=settings.aws_region,
+                    )
+                    
+                    extracted_guidelines = await extractor.extract_guidelines(
+                        guidelines_url=guidelines_url,
+                        brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else ''
+                    )
+                except Exception as e:
+                    logger.warning(f"Guidelines extraction failed: {e}")
+                    extracted_guidelines = None
+            
+            # Merge colors from guidelines
+            if extracted_guidelines and extracted_guidelines.color_palette:
+                brand_colors.extend(extracted_guidelines.color_palette)
+                brand_colors = list(set(brand_colors))
+            
+            # Build creative prompt
+            creative_prompt = ad_project.creative_prompt
+            if extracted_style:
+                creative_prompt += f"\n\nREFERENCE VISUAL STYLE: {extracted_style.get('mood', 'professional')}"
+            
+            # Generate scene variations
+            scene_variations = await planner._generate_scene_variations(
+                num_variations=num_variations,
+                creative_prompt=creative_prompt,
+                brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else '',
+                brand_description=ad_project.brand.get('description', '') if isinstance(ad_project.brand, dict) else '',
+                brand_colors=brand_colors,
+                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
+                target_audience=ad_project.target_audience or "general consumers",
+                target_duration=ad_project.target_duration,
+                has_product=has_product,
+                has_logo=has_logo,
+                selected_style=project.selected_style,
+                extracted_style=extracted_style,
+                perfume_name=perfume_name,
+                perfume_gender=ad_project.perfume_gender if hasattr(ad_project, 'perfume_gender') else None,
+            )
+            
+            logger.info(f"Generated {len(scene_variations)} scene plan variations")
+            return scene_variations
+            
+        except Exception as e:
+            logger.error(f"Failed to plan scene variations: {e}")
+            raise
+
+    async def _process_variation(
+        self,
+        scenes: List[Any],
+        var_idx: int,
+        num_variations: int,
+        project: Any,
+        ad_project: AdProject,
+        product_url: Optional[str],
+        has_product: bool,
+        progress_start: int = 20,
+    ) -> str:
+        """
+        Process one variation through the full pipeline.
+        
+        This method processes a single variation through all steps:
+        - Generate videos
+        - Composite products/logos
+        - Add text overlays
+        - Generate audio
+        - Render final video
+        
+        Args:
+            scenes: List of scene dictionaries for this variation
+            var_idx: Variation index (0-based)
+            num_variations: Total number of variations
+            project: Project database object
+            ad_project: AdProject schema object
+            product_url: Product image URL (if available)
+            has_product: Whether product is available
+            progress_start: Progress percentage start
+            
+        Returns:
+            Final video path for this variation
+        """
+        logger.info(f"Processing variation {var_idx + 1}/{num_variations}...")
+        
+        try:
+            # Convert scene dictionaries to AdProjectScene objects
+            from app.models.schemas import Overlay, Scene as AdProjectScene, AdProject
+            
+            # Get chosen style from project
+            chosen_style = project.selected_style or "cinematic"
+            
+            # Convert scenes to AdProjectScene format
+            ad_project_scenes = []
+            for i, scene_dict in enumerate(scenes):
+                ad_project_scenes.append(
+                    AdProjectScene(
+                        id=str(scene_dict.get('scene_id', i)),
+                        role=scene_dict.get('role', 'showcase'),
+                        duration=scene_dict.get('duration', 5),
+                        description=scene_dict.get('background_prompt', ''),
+                        background_prompt=scene_dict.get('background_prompt', ''),
+                        background_type=scene_dict.get('background_type', 'cinematic'),
+                        style=scene_dict.get('style', chosen_style),
+                        use_product=scene_dict.get('use_product', False),
+                        product_usage=scene_dict.get('product_usage', 'static_insert'),
+                        product_position=scene_dict.get('product_position', 'center'),
+                        product_scale=scene_dict.get('product_scale'),
+                        product_opacity=scene_dict.get('product_opacity', 1.0),
+                        use_logo=scene_dict.get('use_logo', False),
+                        logo_position=scene_dict.get('logo_position', 'top_right'),
+                        logo_scale=scene_dict.get('logo_scale', 0.1),
+                        logo_opacity=scene_dict.get('logo_opacity', 0.9),
+                        camera_movement=scene_dict.get('camera_movement', 'static'),
+                        transition_to_next=scene_dict.get('transition_to_next', 'cut'),
+                        overlay=Overlay(
+                            text=scene_dict.get('overlay', {}).get('text', ''),
+                            position=scene_dict.get('overlay', {}).get('position', 'bottom'),
+                            duration=scene_dict.get('overlay', {}).get('duration', 3.0),
+                            font_size=scene_dict.get('overlay', {}).get('font_size', 48),
+                            color=scene_dict.get('overlay', {}).get('color', '#FFFFFF'),
+                            animation=scene_dict.get('overlay', {}).get('animation', 'fade_in'),
+                        ) if scene_dict.get('overlay') else None,
+                    )
+                )
+            
+            # Create a temporary ad_project with this variation's scenes
+            variation_ad_project = AdProject(
+                creative_prompt=ad_project.creative_prompt,
+                brand=ad_project.brand,
+                target_audience=ad_project.target_audience,
+                target_duration=ad_project.target_duration,
+                scenes=ad_project_scenes,
+                style_spec=ad_project.style_spec,
+                product_asset=ad_project.product_asset,
+                video_metadata=ad_project.video_metadata,
+            )
+            
+            # STEP 1: Generate Videos
+            video_start = progress_start + (var_idx * 5)
+            replicate_videos = await self._generate_scene_videos(
+                project, variation_ad_project, progress_start=video_start
+            )
+            
+            # Save videos locally
+            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
+            
+            # STEP 2: Composite Product (if available)
+            if product_url:
+                composited_videos = await self._composite_products(
+                    scene_videos, product_url, variation_ad_project, progress_start=video_start + 10
+                )
+            else:
+                composited_videos = scene_videos
+            
+            # STEP 3: Composite Logo (if available)
+            logo_url = variation_ad_project.brand.get('logo_url') if isinstance(variation_ad_project.brand, dict) else None
+            if logo_url:
+                logo_composited_videos = await self._composite_logos(
+                    composited_videos,
+                    logo_url,
+                    variation_ad_project,
+                    progress_start=video_start + 15
+                )
+            else:
+                logo_composited_videos = composited_videos
+            
+            # STEP 4: Add Text Overlays
+            text_rendered_videos = await self._add_text_overlays(
+                logo_composited_videos, variation_ad_project, progress_start=video_start + 20
+            )
+            
+            # STEP 5: Generate Audio (shared across variations, but we need it per variation)
+            audio_url = await self._generate_audio(project, variation_ad_project, progress_start=video_start + 25)
+            
+            # STEP 6: Render Final Video
+            final_video_path = await self._render_final(
+                text_rendered_videos, audio_url, variation_ad_project, progress_start=video_start + 30, variation_index=var_idx
+            )
+            
+            logger.info(f"Variation {var_idx + 1} complete: {final_video_path}")
+            return final_video_path
+            
+        except Exception as e:
+            logger.error(f"Failed to process variation {var_idx + 1}: {e}")
+            raise
+
+    def _save_variations_locally(self, final_videos: List[str], num_variations: int) -> Dict[str, Any]:
+        """
+        Save all variation videos locally and return paths structure.
+        
+        Args:
+            final_videos: List of final video paths (one per variation)
+            num_variations: Number of variations
+            
+        Returns:
+            Dictionary with video paths structure:
+            - If num_variations == 1: {"9:16": "path/to/video.mp4"}
+            - If num_variations > 1: {"9:16": ["path/to/v1.mp4", "path/to/v2.mp4", ...]}
+        """
+        if num_variations == 1:
+            return {"9:16": final_videos[0] if final_videos else ""}
+        else:
+            return {"9:16": final_videos}
+
+    async def _update_project_variations(self, num_variations: int, final_videos: List[str]) -> None:
+        """
+        Update project database with variation information.
+        
+        Args:
+            num_variations: Number of variations generated
+            final_videos: List of final video paths
+        """
+        try:
+            project = get_project(self.db, self.project_id)
+            if not project:
+                raise ValueError(f"Project {self.project_id} not found")
+            
+            # Update local_video_paths
+            local_video_paths = self._save_variations_locally(final_videos, num_variations)
+            project.local_video_paths = local_video_paths
+            
+            # Set first video as local_video_path for backward compatibility
+            if num_variations == 1:
+                project.local_video_path = final_videos[0] if final_videos else None
+            else:
+                project.local_video_path = final_videos[0] if final_videos else None
+            
+            project.aspect_ratio = "9:16"
+            project.status = 'COMPLETED'
+            project.selected_variation_index = None  # User hasn't selected yet
+            
+            self.db.commit()
+            logger.info(f"Updated project with {num_variations} variations")
+            
+        except Exception as e:
+            logger.error(f"Failed to update project variations: {e}")
             raise
 
 

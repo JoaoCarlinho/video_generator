@@ -88,31 +88,52 @@ export const GenerationProgress = () => {
         const projectResponse = await api.get(`/api/projects/${projectId}`)
         const project = projectResponse.data
         const projectAspectRatio = project.aspect_ratio || '9:16'
+        const numVariations = project.num_variations || 1
         
         console.log(`📐 Project aspect ratio: ${projectAspectRatio}`)
+        console.log(`🎬 Number of variations: ${numVariations}`)
         
-        try {
-          const response = await api.get(`/api/projects/${projectId}/preview`, {
-            responseType: 'blob'
-          })
-          
-          if (response.data) {
-            await storeVideo(projectId, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
-            console.log(`✅ Downloaded video from local storage`)
+        // For single variation, download video to local storage
+        // For multiple variations, videos are already stored locally by the pipeline
+        if (numVariations === 1) {
+          try {
+            const response = await api.get(`/api/local-generation/projects/${projectId}/preview`, {
+              responseType: 'blob'
+            })
+            
+            if (response.data) {
+              await storeVideo(projectId, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
+              console.log(`✅ Downloaded video from local storage`)
+            }
+          } catch (err) {
+            console.error(`⚠️ Failed to download video:`, err)
           }
-        } catch (err) {
-          console.error(`⚠️ Failed to download video:`, err)
+        } else {
+          console.log(`📹 Multiple variations generated - skipping single video download`)
         }
         
         const usage = await getStorageUsage(projectId)
         console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
+        
+        // Route based on number of variations
+        setTimeout(() => {
+          if (numVariations > 1) {
+            // Multiple variations - go to selection page
+            console.log(`🎯 Routing to selection page for ${numVariations} variations`)
+            navigate(`/projects/${projectId}/select`)
+          } else {
+            // Single variation - go directly to results
+            console.log(`🎯 Routing to results page (single variation)`)
+            navigate(`/projects/${projectId}/results`)
+          }
+        }, 1000)
       } catch (err) {
         console.error('⚠️ Failed to download video to local storage:', err)
+        // Fallback: navigate to results page
+        setTimeout(() => {
+          navigate(`/projects/${projectId}/results`)
+        }, 1000)
       }
-      
-      setTimeout(() => {
-        navigate(`/projects/${projectId}/results`)
-      }, 1000)
     },
     onError: (error) => {
       console.error('Generation error:', error)

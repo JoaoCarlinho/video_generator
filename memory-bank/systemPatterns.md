@@ -506,5 +506,134 @@ local_video_paths = {"9:16": final_video_path}
 
 ---
 
-**Last Updated:** November 17, 2025 (Phase 10 Complete)
+## Multi-Variation Generation Pattern (Nov 18, 2025)
+
+### Parallel Variation Processing
+
+```python
+# Key insight: Generate all variations concurrently, not sequentially
+import asyncio
+
+async def run():
+    # Plan N different scene variations upfront
+    scene_variations = await self._plan_scenes_variations(num_variations=3)
+    # [[scene1_v1, scene2_v1], [scene1_v2, scene2_v2], [scene1_v3, scene2_v3]]
+    
+    # Process all variations IN PARALLEL
+    tasks = [
+        self._process_variation(scenes, var_idx, num_variations)
+        for var_idx, scenes in enumerate(scene_variations)
+    ]
+    final_videos = await asyncio.gather(*tasks)
+    # All 3 variations complete ~simultaneously = 5-7 min (not 15-21!)
+```
+
+**Why This Works:**
+- Each variation is independent
+- No shared state conflicts
+- asyncio coordinates the waiting
+- API requests happen concurrently (Replicate handles parallel requests)
+- Worker isn't blocked (just awaiting)
+
+### Variation Uniqueness Pattern
+
+```python
+# Each variation gets different "approach"
+def _build_variation_prompt(variation_index):
+    approaches = [
+        "Cinematic: dramatic lighting, wide shots",
+        "Minimal: clean aesthetic, macro shots",
+        "Lifestyle: real-world moments, atmospheric"
+    ]
+    
+    # Also use different seed for video generation
+    seed = 1000 + variation_index  # 1000, 1001, 1002
+    
+    # Combine: different scenes + different seeds = visibly different videos
+    return {
+        "prompt": base_prompt + approaches[variation_index],
+        "seed": seed
+    }
+```
+
+**Why This Works:**
+- Scene prompt variation creates different storylines
+- Video seed variation creates different visual treatments
+- Together = meaningful choice for user
+- Not "completely different" (same brand/requirements maintained)
+
+### Storage & Selection Pattern
+
+```python
+# Multi-variation storage pattern
+if num_variations > 1:
+    # Store as array
+    local_video_paths["9:16"] = [
+        "/path/to/variation_0.mp4",
+        "/path/to/variation_1.mp4",
+        "/path/to/variation_2.mp4"
+    ]
+else:
+    # Store as string (backward compat)
+    local_video_paths["9:16"] = "/path/to/video.mp4"
+
+# After user selection
+selected_index = 1  # User picked Option 2
+selected_video = local_video_paths["9:16"][selected_index]
+
+# After finalization (keep only selected)
+# Delete unselected videos
+# Upload selected to S3
+# Keep only in final project
+```
+
+**Why This Works:**
+- Flexible data structure (array or string)
+- No database schema changes needed (JSONB)
+- Selection preserved for audit trail
+- Easy cleanup (delete unselected)
+
+### Routing Pattern
+
+```typescript
+// Conditional routing based on variation count
+if (project.num_variations === 1) {
+    // Skip selection page entirely
+    navigate(`/project/${projectId}`);  // → VideoResults
+} else {
+    // Show selection page
+    navigate(`/project/${projectId}/select`);  // → VideoSelection
+    // After selection:
+    navigate(`/project/${projectId}`);  // → VideoResults
+}
+```
+
+**Why This Works:**
+- Better UX (no unnecessary pages)
+- Single variation same as current flow
+- Multi-variation adds selection page
+- No breaking changes
+
+### Preview Endpoint Pattern (Nov 18, 2025)
+
+```python
+# Preview endpoint supports variation selection
+GET /api/local-generation/projects/{id}/preview?variation={0|1|2}
+
+# Backend handles array vs string
+if isinstance(video_paths, list):
+    return video_paths[variation_index]  # Multi-variation
+else:
+    return video_paths  # Single video (ignores variation param)
+```
+
+**Why This Works:**
+- Single endpoint serves all variations
+- Query parameter selects which variation
+- Backward compatible (single video still works)
+- Frontend constructs URLs with variation index
+
+---
+
+**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete + Preview Endpoint Fix)
 

@@ -15,6 +15,8 @@ export interface Project {
   cost_estimate?: number
   output_videos?: Record<string, string>
   progress?: number
+  num_variations?: number // 1-3
+  selected_variation_index?: number | null // 0-2 or null
 }
 
 interface CreateProjectInput {
@@ -33,6 +35,8 @@ interface CreateProjectInput {
   // Phase 9: Perfume-specific fields
   perfume_name: string
   perfume_gender: 'masculine' | 'feminine' | 'unisex'
+  // Phase 3: Multi-variation support
+  num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }
 
 export const useProjects = () => {
