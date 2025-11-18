@@ -122,10 +122,6 @@ export const CreateProject = () => {
         setSubmitError('Brand name is required')
         return false
       }
-      if (!formData.perfume_name.trim()) {
-        setSubmitError('Perfume name is required')
-        return false
-      }
       return true
     }
     
@@ -136,6 +132,10 @@ export const CreateProject = () => {
       }
       if (formData.creative_prompt.trim().length < 20) {
         setSubmitError('Creative vision must be at least 20 characters')
+        return false
+      }
+      if (!formData.perfume_name.trim()) {
+        setSubmitError('Perfume name is required')
         return false
       }
       return true

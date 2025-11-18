@@ -571,38 +571,13 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.info(f"ScenePlanner chose style: {chosen_style} ({style_source})")
             
             # PHASE 8: Validate grammar compliance
-            # CRITICAL: Validate BEFORE conversion to ensure shot_type is preserved
             from app.services.perfume_grammar_loader import PerfumeGrammarLoader
             grammar_loader = PerfumeGrammarLoader()
-            
-            # LOG: Show shot_types received from ScenePlanner
-            logger.info(f"📋 Scenes received from ScenePlanner ({len(plan_scenes_list)} scenes):")
-            for i, scene in enumerate(plan_scenes_list):
-                shot_type = scene.get('shot_type', 'MISSING')
-                shot_variation = scene.get('shot_variation', 'N/A')
-                role = scene.get('role', 'N/A')
-                duration = scene.get('duration', 'N/A')
-                logger.info(f"   Scene {i+1}: shot_type='{shot_type}', shot_variation='{shot_variation}', role='{role}', duration={duration}s")
-            
-            # Ensure all scenes have shot_type before validation
-            for scene in plan_scenes_list:
-                if 'shot_type' not in scene or scene.get('shot_type') is None:
-                    logger.error(f"❌ Scene {scene.get('scene_id', 'unknown')} missing shot_type field!")
-                    logger.error(f"   Scene keys: {list(scene.keys())}")
-                    # This should never happen if ScenePlanner is working correctly
-                    # But if it does, we need to fix it
             
             is_valid, violations = grammar_loader.validate_scene_plan(plan_scenes_list)
             
             if not is_valid:
-                logger.error(f"❌ Grammar violations detected: {violations}")
-                logger.error("Scene plan does NOT comply with perfume shot grammar rules")
-                # Log scene details for debugging
-                for i, scene in enumerate(plan_scenes_list):
-                    logger.error(f"   Scene {i}: shot_type={scene.get('shot_type')}, role={scene.get('role')}")
-                # Don't fail pipeline, but log error clearly
-            else:
-                logger.info("✅ Scene plan validated against perfume shot grammar - all rules passed")
+                logger.warning(f"⚠️ Grammar violations detected: {violations}")
 
             # Update ad_project with scenes and style spec from plan
             # Convert plan scenes to AdProject scenes format
@@ -720,12 +695,10 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Generate TikTok vertical videos (9:16 hardcoded)
             logger.info("Generating TikTok vertical videos (9:16)")
 
-            # LOG: Show background prompts that will be sent to video generator
-            logger.info(f"📝 Scene prompts to send to video generator ({len(ad_project.scenes)} scenes):")
+            # LOG: Show scene scripts that will be sent to video generator
+            logger.info(f"📝 Scene scripts to send to video generator ({len(ad_project.scenes)} scenes):")
             for i, scene in enumerate(ad_project.scenes):
-                shot_type = getattr(scene, 'shot_type', 'N/A') if hasattr(scene, 'shot_type') else 'N/A'
-                logger.info(f"   Scene {i+1} (shot_type='{shot_type}', role='{scene.role}', duration={scene.duration}s):")
-                logger.info(f"      Original prompt: {scene.background_prompt}")
+                logger.info(f"   Scene {i+1} script: {scene.background_prompt}")
             
             tasks = []
             for i, scene in enumerate(ad_project.scenes):

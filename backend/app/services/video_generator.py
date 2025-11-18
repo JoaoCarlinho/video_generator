@@ -179,9 +179,7 @@ class VideoGenerator:
         style_string = ". ".join(style_parts)
         enhanced = f"{prompt}. {style_string}. Modern cinematic product commercial."
 
-        logger.info(f"📝 Enhanced prompt for video generation:")
-        logger.info(f"   Original: {prompt}")
-        logger.info(f"   Enhanced: {enhanced}")
+        logger.info(f"📝 Enhanced script sent to video generator: {enhanced}")
         return enhanced
 
 
