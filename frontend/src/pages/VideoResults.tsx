@@ -15,6 +15,9 @@ import {
   markAsFinalized,
 } from '@/services/videoStorage'
 
+// Get API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 export const VideoResults = () => {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -33,6 +36,56 @@ export const VideoResults = () => {
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
 
+  /**
+   * Helper function to extract the display video path from project data.
+   * Handles both single video (string) and multi-variation (array) cases.
+   */
+  const getDisplayVideo = (projectData: any, aspectRatio: '9:16' | '1:1' | '16:9'): string | null => {
+    // Check ad_project_json first (new structure), then fallback to local_video_paths (backward compat)
+    const videoPaths = projectData?.ad_project_json?.local_video_paths?.[aspectRatio] 
+      || projectData?.local_video_paths?.[aspectRatio]
+    
+    if (!videoPaths) {
+      return null
+    }
+    
+    // If array (multi-variation case)
+    if (Array.isArray(videoPaths)) {
+      // Use selected_variation_index if set, otherwise default to 0
+      const selectedIndex = projectData?.selected_variation_index ?? 0
+      return videoPaths[selectedIndex] || videoPaths[0] || null
+    }
+    
+    // If string (single video case)
+    if (typeof videoPaths === 'string') {
+      return videoPaths
+    }
+    
+    return null
+  }
+
+  /**
+   * Helper to convert a local path to a valid API URL if needed.
+   */
+  const getPlayableVideoUrl = (path: string, projectId: string, variationIndex?: number): string => {
+    if (!path) return ''
+    
+    // If it's already a URL, return as is
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+      return path
+    }
+    
+    // If it's a local file path (starts with /), convert to API endpoint
+    if (path.startsWith('/')) {
+      // Use the preview endpoint
+      // If variationIndex is provided, append it
+      const variationParam = variationIndex !== undefined ? `?variation=${variationIndex}` : ''
+      return `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview${variationParam}`
+    }
+    
+    return path
+  }
+
   useEffect(() => {
     const loadProjectAndVideos = async () => {
       try {
@@ -43,11 +96,26 @@ export const VideoResults = () => {
         const projectAspectRatio = (data.aspect_ratio || '9:16') as '9:16' | '1:1' | '16:9'
         setAspect(projectAspectRatio)
         
+        // Get the display video path (handles multi-variation selection)
+        const displayVideoPath = getDisplayVideo(data, projectAspectRatio)
+        
+        // Try IndexedDB first (for videos stored locally in browser)
         const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
+        } else if (displayVideoPath) {
+          // If no IndexedDB video, use the path from project data
+          // Convert local path to API URL if necessary
+          const playableUrl = getPlayableVideoUrl(
+            displayVideoPath, 
+            projectId, 
+            data.selected_variation_index ?? undefined
+          )
+          setVideoUrl(playableUrl)
+          setUseLocalStorage(false)
         } else {
+          // Fallback to output_videos (S3 URLs)
           setVideoUrl(data.output_videos?.[projectAspectRatio] || '')
           setUseLocalStorage(false)
         }
@@ -69,17 +137,33 @@ export const VideoResults = () => {
   
   useEffect(() => {
     const loadVideoForAspect = async () => {
-      if (!projectId || !aspect) return
+      if (!projectId || !aspect || !project) return
       
       try {
+        // Try IndexedDB first (for videos stored locally in browser)
         const localVideoUrl = await getVideoURL(projectId, aspect)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
         } else {
-          const s3Url = project?.output_videos?.[aspect] || ''
-          setVideoUrl(s3Url)
-          setUseLocalStorage(false)
+          // Get the display video path (handles multi-variation selection)
+          const displayVideoPath = getDisplayVideo(project, aspect)
+          
+          if (displayVideoPath) {
+            // Use the path from project data (could be local file path or S3 URL)
+            const playableUrl = getPlayableVideoUrl(
+              displayVideoPath, 
+              projectId, 
+              project.selected_variation_index ?? undefined
+            )
+            setVideoUrl(playableUrl)
+            setUseLocalStorage(false)
+          } else {
+            // Fallback to output_videos (S3 URLs)
+            const s3Url = project?.output_videos?.[aspect] || ''
+            setVideoUrl(s3Url)
+            setUseLocalStorage(false)
+          }
         }
       } catch (err) {
         console.error(`Failed to load video for ${aspect}:`, err)

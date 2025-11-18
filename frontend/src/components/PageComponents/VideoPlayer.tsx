@@ -25,15 +25,22 @@ export const VideoPlayer = ({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isVideoReady, setIsVideoReady] = useState(false)
 
   const togglePlay = () => {
-    if (videoRef.current) {
+    if (videoRef.current && videoUrl && isVideoReady) {
       if (isPlaying) {
         videoRef.current.pause()
+        setIsPlaying(false)
       } else {
-        videoRef.current.play()
+        videoRef.current.play().catch((err) => {
+          console.error('Failed to play video:', err)
+          setIsPlaying(false)
+        })
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
+    } else if (!isVideoReady) {
+      console.warn('Video not ready yet, cannot play')
     }
   }
 
@@ -53,6 +60,8 @@ export const VideoPlayer = ({
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration)
+      setIsVideoReady(true)
+      console.log('Video metadata loaded, ready to play')
     }
   }
 
@@ -104,6 +113,12 @@ export const VideoPlayer = ({
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
     }
   }, [])
+
+  // Reset video ready state when videoUrl changes
+  useEffect(() => {
+    setIsVideoReady(false)
+    setIsPlaying(false)
+  }, [videoUrl])
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value)
@@ -159,9 +174,35 @@ export const VideoPlayer = ({
               ref={videoRef}
               src={videoUrl}
               className={`${isFullscreen ? 'w-full h-full object-contain' : 'w-full h-full'}`}
+              preload="metadata"
+              playsInline
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={() => setIsPlaying(false)}
+              onError={(e) => {
+                console.error('Video loading error:', e)
+                console.error('Video URL:', videoUrl)
+                const video = e.currentTarget
+                console.error('Video error code:', video.error?.code)
+                console.error('Video error message:', video.error?.message)
+                console.error('Video network state:', video.networkState)
+                console.error('Video ready state:', video.readyState)
+                setIsVideoReady(false)
+              }}
+              onLoadStart={() => {
+                console.log('Video loading started:', videoUrl)
+                setIsVideoReady(false)
+              }}
+              onCanPlay={() => {
+                setIsVideoReady(true)
+                console.log('Video can play:', videoUrl)
+              }}
+              onLoadedData={() => {
+                console.log('Video data loaded:', videoUrl)
+              }}
+              onStalled={() => {
+                console.warn('Video stalled:', videoUrl)
+              }}
             />
 
             {/* Play Button Overlay */}

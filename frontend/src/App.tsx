@@ -9,6 +9,7 @@ import { Landing } from './pages/Landing'
 import { CreateProject } from './pages/CreateProject'
 import { GenerationProgress } from './pages/GenerationProgress'
 import { VideoResults } from './pages/VideoResults'
+import { VideoSelection } from './pages/VideoSelection'
 
 function App() {
   return (
@@ -42,6 +43,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <GenerationProgress />
+              </ProtectedRoute>
+            }
+          />
+          {/* Phase 3: VideoSelection route - component will be fully implemented in Phase 4 */}
+          <Route
+            path="/projects/:projectId/select"
+            element={
+              <ProtectedRoute>
+                <VideoSelection />
               </ProtectedRoute>
             }
           />

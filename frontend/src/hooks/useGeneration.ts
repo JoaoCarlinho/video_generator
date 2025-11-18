@@ -110,6 +110,26 @@ export const useGeneration = () => {
     }
   }, [])
 
+  // Select variation (Phase 4: Multi-variation feature)
+  const selectVariation = useCallback(async (projectId: string, variationIndex: number) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await apiClient.post(
+        `/api/generation/projects/${projectId}/select-variation`,
+        { variation_index: variationIndex }
+      )
+      return response.data
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err instanceof Error ? err.message : 'Failed to select variation'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return {
     loading,
     error,
@@ -118,6 +138,7 @@ export const useGeneration = () => {
     getJobStatus,
     cancelGeneration,
     resetProject,
+    selectVariation,
   }
 }
 

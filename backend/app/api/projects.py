@@ -68,6 +68,7 @@ async def create_new_project(
     - product_image_url: (optional) S3 URL of uploaded perfume bottle image
     - guidelines_url: (optional) S3 URL of uploaded brand guidelines
     - selected_style: (optional) Perfume video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
+    - num_variations: (optional) Number of video variations to generate (1-3, default: 1)
     
     **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all perfume ads.
     
@@ -183,7 +184,8 @@ async def create_new_project(
             aspect_ratio="9:16",  # Phase 9: Hardcoded TikTok vertical
             selected_style=request.selected_style,  # PHASE 7: Store selected style
             perfume_name=request.perfume_name,  # Phase 9: Store perfume name
-            perfume_gender=request.perfume_gender  # Phase 9: Store perfume gender
+            perfume_gender=request.perfume_gender,  # Phase 9: Store perfume gender
+            num_variations=request.num_variations  # MULTI-VARIATION: Store variation count
         )
         
         # S3 RESTRUCTURING: Initialize S3 folder structure for new project

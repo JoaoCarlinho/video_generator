@@ -26,6 +26,7 @@ export const CreateProject = () => {
     target_duration: 30,
     perfume_name: '',
     perfume_gender: 'unisex' as 'masculine' | 'feminine' | 'unisex',
+    num_variations: 1 as 1 | 2 | 3, // Phase 3: Multi-variation support
   })
 
   const [productImage, setProductImage] = useState<File | null>(null)
@@ -234,6 +235,7 @@ export const CreateProject = () => {
         product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
         selected_style: selectedStyle || undefined,
+        num_variations: formData.num_variations, // Phase 3: Include variation count
       } as any)
 
       if (referenceImage) {
@@ -492,6 +494,34 @@ export const CreateProject = () => {
                           <span>60s</span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Variation Count Selector */}
+                    <div className="p-4 bg-olive-700/30 rounded-lg border border-olive-600/50">
+                      <label className="block text-sm font-semibold text-off-white mb-3">
+                        How many variations would you like?
+                      </label>
+                      <div className="flex gap-3 flex-wrap">
+                        {([1, 2, 3] as const).map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, num_variations: num })}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 ${
+                              formData.num_variations === num
+                                ? 'bg-gold text-gold-foreground shadow-gold'
+                                : 'bg-olive-700/50 text-off-white hover:bg-olive-600/50 border border-olive-600'
+                            }`}
+                          >
+                            {num} Variation{num > 1 ? 's' : ''}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-gray mt-3">
+                        {formData.num_variations === 1
+                          ? 'Generate one video with your selected style.'
+                          : `Generate ${formData.num_variations} videos with slightly different storylines. You'll select your favorite.`}
+                      </p>
                     </div>
                   </div>
                 </div>

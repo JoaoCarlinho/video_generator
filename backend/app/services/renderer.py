@@ -45,6 +45,7 @@ class Renderer:
         scene_video_urls: List[str],
         audio_url: str,
         project_id: str,
+        variation_index: int = None,
     ) -> str:
         """
         Render final TikTok vertical video (9:16, 1080x1920).
@@ -90,7 +91,8 @@ class Renderer:
                 local_path = LocalStorageManager.save_final_video(
                     UUID(project_id),
                     "9:16",
-                    str(output_path)
+                    str(output_path),
+                    variation_index=variation_index
                 )
 
                 logger.info(f"✅ Final TikTok vertical video rendered: {local_path}")

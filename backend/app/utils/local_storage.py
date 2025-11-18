@@ -133,13 +133,14 @@ class LocalStorageManager:
             raise
     
     @staticmethod
-    def save_final_video(project_id: UUID, aspect_ratio: str, file_path: str) -> str:
+    def save_final_video(project_id: UUID, aspect_ratio: str, file_path: str, variation_index: int = None) -> str:
         """Save final video.
         
         Args:
             project_id: Project UUID
             aspect_ratio: '16:9'
             file_path: Path to video file to save
+            variation_index: Optional variation index (0, 1, 2) for multi-variation support
             
         Returns:
             Local file path in final directory
@@ -147,8 +148,11 @@ class LocalStorageManager:
         try:
             final_dir = LocalStorageManager.get_final_dir(project_id)
             
-            # Save with simple name (no aspect ratio since we only generate one video)
-            filename = 'video.mp4'
+            # Save with variation index if provided (for multi-variation support)
+            if variation_index is not None:
+                filename = f'video_{variation_index}.mp4'
+            else:
+                filename = 'video.mp4'
             dest_path = final_dir / filename
             
             # Copy video file

@@ -30,7 +30,8 @@ def create_project(
     aspect_ratio: str = "9:16",  # Phase 9: Default to TikTok vertical
     selected_style: Optional[str] = None,  # PHASE 7: User-selected style
     perfume_name: Optional[str] = None,  # Phase 9: Perfume product name
-    perfume_gender: Optional[str] = None  # Phase 9: Perfume gender
+    perfume_gender: Optional[str] = None,  # Phase 9: Perfume gender
+    num_variations: int = 1  # MULTI-VARIATION: Number of variations (1-3)
 ) -> Project:
     """
     Create a new luxury perfume TikTok ad project in the database.
@@ -47,6 +48,7 @@ def create_project(
         selected_style: (PHASE 7) User-selected video style or None
         perfume_name: (Phase 9) Perfume product name (e.g., "Noir Élégance")
         perfume_gender: (Phase 9) Perfume gender ('masculine', 'feminine', 'unisex')
+        num_variations: (MULTI-VARIATION) Number of video variations to generate (1-3)
     
     Returns:
         Project: Created project object
@@ -65,7 +67,9 @@ def create_project(
             cost=0.0,
             aspect_ratio=aspect_ratio,
             perfume_name=perfume_name,  # Phase 9: Store perfume name
-            perfume_gender=perfume_gender  # Phase 9: Store perfume gender
+            perfume_gender=perfume_gender,  # Phase 9: Store perfume gender
+            num_variations=num_variations,  # MULTI-VARIATION: Store variation count
+            selected_variation_index=None  # MULTI-VARIATION: No selection yet
         )
         db.add(project)
         db.commit()

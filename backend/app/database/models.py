@@ -44,6 +44,10 @@ class Project(Base):
     # PHASE 7: Style Selection (Updated for Phase 4 - Perfume Styles)
     selected_style = Column(String(50), nullable=True)       # 'gold_luxe', 'dark_elegance', 'romantic_floral', or NULL
     
+    # MULTI-VARIATION GENERATION FEATURE
+    num_variations = Column(Integer, default=1, nullable=False)  # Number of video variations (1-3)
+    selected_variation_index = Column(Integer, nullable=True)    # Index of selected variation (0-2), NULL if not selected
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
