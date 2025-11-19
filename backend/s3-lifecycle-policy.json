@@ -1,0 +1,55 @@
+{
+  "Rules": [
+    {
+      "ID": "DeleteDraftVideosAfter30Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {
+              "Key": "type",
+              "Value": "campaign_video"
+            },
+            {
+              "Key": "subtype",
+              "Value": "draft"
+            }
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {
+        "Days": 30
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 1
+      }
+    },
+    {
+      "ID": "DeleteFinalVideosAfter90Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {
+              "Key": "type",
+              "Value": "campaign_video"
+            },
+            {
+              "Key": "subtype",
+              "Value": "final"
+            }
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {
+        "Days": 90
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 1
+      }
+    }
+  ]
+}
+

@@ -6,11 +6,11 @@
 
 ## Current Phase
 
-**Status:** PHASE 2 B2B SAAS TRANSFORMATION - PLANNING COMPLETE ✅  
-**Focus:** Ready for Phase 2 Implementation (Database, Backend, Frontend)  
+**Status:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 2 COMPLETE ✅  
+**Focus:** Phase 2 (S3 Storage Refactor) complete ✅ → Phase 3 (Backend API - Brands & Perfumes) next  
 **Date:** November 18, 2025  
-**Progress:** Phase 1 (Multi-Variation) complete ✅, Phase 2 (B2B SaaS) Planning complete ✅ → Implementation next
-**Last Updated:** After Phase 2 B2B SaaS Planning Complete (Nov 18, 2025)
+**Progress:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, Phase 3 next
+**Last Updated:** After Phase 2 S3 Storage Refactor Complete (Nov 18, 2025)
 
 ---
 
@@ -208,13 +208,35 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 
 ### Implementation Phases
 
-**Phase 1: Database & Models (1-2 days)**
-- Create new database schema
-- Migrate existing projects table
-- Create User/Brand, Perfume, Campaign tables
-- Setup relationships and indexes
+**Phase 1: Database & Models ✅ COMPLETE (Nov 18, 2025)**
+- ✅ Created Alembic migration 008_create_b2b_schema.py
+- ✅ Dropped old projects table
+- ✅ Created brands, perfumes, campaigns tables
+- ✅ Setup relationships, indexes, and constraints
+- ✅ Updated SQLAlchemy models (Brand, Perfume, Campaign)
+- ✅ Updated Pydantic schemas (Brand, Perfume, Campaign)
+- ✅ Created CRUD operations for all 3 entities
+- ✅ Updated auth dependencies (get_current_brand_id, verify_onboarding, etc.)
+- ✅ Created test file (test_database_schema.py)
+- ✅ Database tested and verified (Docker PostgreSQL)
+- ✅ All constraints tested (unique, CHECK, cascade delete)
+- ✅ Backward compatibility maintained (Project model kept temporarily)
 
-**Phase 2: Backend API (2-3 days)**
+**Phase 2: S3 Storage Refactor ✅ COMPLETE (Nov 18, 2025)**
+- ✅ Updated S3 utility functions (s3_utils.py) - Added brand/perfume/campaign path functions
+- ✅ Added upload functions: upload_brand_logo, upload_brand_guidelines, upload_perfume_image, upload_draft_video, upload_draft_music, upload_final_video
+- ✅ All functions apply S3 tags for lifecycle management (permanent, 30days, 90days)
+- ✅ Created S3 lifecycle policy JSON (s3-lifecycle-policy.json)
+- ✅ Created lifecycle setup documentation (S3_LIFECYCLE_SETUP.md)
+- ✅ Created comprehensive test suite (test_s3_uploads.py - 13 tests)
+- ✅ Created S3 bucket (genads-gauntlet) and applied lifecycle policy
+- ✅ Tested all upload functions with real S3 uploads (7/7 tests passed)
+- ✅ Verified S3 tags are correctly applied (draft videos: 30days, final videos: 90days)
+- ✅ Fixed ACL issue (removed ACL="public-read" for modern buckets)
+- ✅ Fixed lifecycle policy JSON format (Id → ID)
+- ✅ All code tested, linted, and production-ready
+
+**Phase 3: Backend API - Brands & Perfumes (2-3 days)**
 - Onboarding endpoints
 - Perfume management CRUD
 - Campaign management CRUD
@@ -240,23 +262,16 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 
 ### Next Immediate Steps
 
-1. **Database Schema Creation**
-   - Create User/Brand, Perfume, Campaign tables
-   - Setup foreign keys and indexes
-   - Migrate existing projects table data (if needed)
-
-2. **Backend API Implementation**
+1. **Phase 3: Backend API - Brands & Perfumes** (NEXT)
    - Onboarding endpoints
    - Perfume management CRUD
+   - Brand management endpoints
+
+3. **Phase 4: Backend API - Campaigns**
    - Campaign management CRUD
-   - Update generation pipeline
+   - Update generation pipeline for new structure
 
-3. **Frontend UI Implementation**
-   - Onboarding page
-   - Perfumes dashboard
-   - Campaign management pages
-
-**Status:** ✅ Planning complete, all decisions locked, ready for implementation
+**Status:** ✅ Phase 1 complete, ✅ Phase 2 complete, S3 bucket ready, ready for Phase 3
 
 ---
 
@@ -2212,6 +2227,6 @@ All major questions resolved during planning:
 
 ---
 
-**Last Updated:** November 17, 2025 (Phase 10 Complete)  
-**Next Update:** After End-to-End Testing
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 Complete)  
+**Next Update:** After Phase 3 (Backend API - Brands & Perfumes)
 

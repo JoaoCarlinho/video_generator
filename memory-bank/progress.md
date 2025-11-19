@@ -6,10 +6,10 @@
 
 ## Overall Progress
 
-**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PLANNING COMPLETE ✅  
-**Status:** Phase 1 (Multi-Variation) complete ✅, Phase 2 (B2B SaaS) Planning complete ✅ → Implementation next  
+**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 2 COMPLETE ✅  
+**Status:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅ → Phase 3 (Backend API - Brands & Perfumes) next  
 **Date:** November 18, 2025  
-**Next:** Phase 2 Implementation - Database, Backend, Frontend restructuring
+**Next:** Phase 3 - Backend API - Brands & Perfumes
 
 ```
 [████████████████████] 100% Generic MVP (Backend + Frontend + Features Complete)
@@ -34,6 +34,117 @@ Refactor Progress:
 [████████████████████] 100% Phase 9: Database & API Updates ✅ COMPLETE
 [████████████████████] 100% Phase 10: Frontend Updates & Cleanup ✅ COMPLETE
 ```
+
+---
+
+## ✅ COMPLETE: Phase 2 B2B SaaS Transformation - Phase 2 (S3 Storage Refactor)
+
+**Status:** ✅ PHASE 2 COMPLETE  
+**Date:** November 18, 2025  
+**Duration:** ~2 hours implementation + testing  
+**Deliverables:** S3 utility functions, lifecycle policy, test suite, bucket creation and testing
+
+### Phase 2: S3 Storage Refactor ✅ COMPLETE
+
+**Completed Tasks:**
+- ✅ Updated S3 utility functions (`s3_utils.py`) - Added 3 path functions and 6 upload functions
+- ✅ Created S3 lifecycle policy JSON (`s3-lifecycle-policy.json`) - Draft videos (30 days), final videos (90 days)
+- ✅ Created lifecycle setup documentation (`S3_LIFECYCLE_SETUP.md`) - AWS CLI commands and troubleshooting
+- ✅ Created comprehensive test suite (`test_s3_uploads.py`) - 13 test cases covering all upload functions
+- ✅ Created S3 bucket (`genads-gauntlet`) and applied lifecycle policy
+- ✅ Tested all upload functions with real S3 uploads (7/7 tests passed)
+- ✅ Verified S3 tags are correctly applied (type, subtype, lifecycle tags)
+- ✅ Fixed ACL issue (removed ACL="public-read" for modern buckets)
+- ✅ Fixed lifecycle policy JSON format (Id → ID for AWS CLI compatibility)
+
+**S3 Functions Added:**
+1. **Path Functions:**
+   - `get_brand_s3_path(brand_id)` → `brands/{brand_id}/`
+   - `get_perfume_s3_path(brand_id, perfume_id)` → `brands/{brand_id}/perfumes/{perfume_id}/`
+   - `get_campaign_s3_path(brand_id, perfume_id, campaign_id)` → Full campaign path
+
+2. **Upload Functions:**
+   - `upload_brand_logo()` - Brand logo with permanent tags
+   - `upload_brand_guidelines()` - Brand guidelines PDF/DOCX with permanent tags
+   - `upload_perfume_image()` - Perfume images (front/back/top/left/right) with permanent tags
+   - `upload_draft_video()` - Draft scene videos with 30-day lifecycle tags
+   - `upload_draft_music()` - Draft background music with 30-day lifecycle tags
+   - `upload_final_video()` - Final rendered videos with 90-day lifecycle tags
+
+**S3 Tagging:**
+- Brand assets: `type=brand_asset&lifecycle=permanent`
+- Perfume images: `type=perfume_image&angle={angle}&lifecycle=permanent`
+- Draft videos: `type=campaign_video&subtype=draft&lifecycle=30days`
+- Final videos: `type=campaign_video&subtype=final&lifecycle=90days`
+
+**S3 Bucket:**
+- **Name:** `genads-gauntlet`
+- **Region:** `us-east-1`
+- **Lifecycle Policy:** Applied and verified
+- **Status:** Ready for production use
+
+**Files Created:**
+- `backend/s3-lifecycle-policy.json` - AWS lifecycle policy configuration
+- `backend/S3_LIFECYCLE_SETUP.md` - Setup guide and documentation
+- `backend/tests/test_s3_uploads.py` - Comprehensive test suite (13 tests)
+- `backend/test_s3_upload.py` - Real S3 upload test script
+- `backend/PHASE2_COMPLETE.md` - Completion summary
+- `backend/PHASE2_S3_TEST_RESULTS.md` - Test results documentation
+
+**Files Modified:**
+- `backend/app/utils/s3_utils.py` - Added Phase 2 functions (600+ lines added)
+
+**Total:** ~800 lines of code added, 7/7 real-world tests passed
+
+**Next:** Phase 3 - Backend API - Brands & Perfumes
+
+---
+
+## ✅ COMPLETE: Phase 2 B2B SaaS Transformation - Phase 1 (Database & Models)
+
+**Status:** ✅ PHASE 1 COMPLETE  
+**Date:** November 18, 2025  
+**Duration:** ~2-3 hours implementation + testing  
+**Deliverables:** Database schema, models, CRUD operations, auth dependencies, tests
+
+### Phase 1: Database & Models ✅ COMPLETE
+
+**Completed Tasks:**
+- ✅ Created Alembic migration `008_create_b2b_schema.py` (drops projects, creates brands/perfumes/campaigns)
+- ✅ Updated SQLAlchemy models (`models.py`) - Added Brand, Perfume, Campaign models
+- ✅ Updated Pydantic schemas (`schemas.py`) - Added Brand, Perfume, Campaign schemas
+- ✅ Created Brand CRUD operations (`crud.py`) - create_brand, get_brand_by_user_id, update_brand, etc.
+- ✅ Created Perfume CRUD operations (`crud.py`) - create_perfume, get_perfumes_by_brand, update_perfume, etc.
+- ✅ Created Campaign CRUD operations (`crud.py`) - create_campaign, get_campaigns_by_perfume, update_campaign, etc.
+- ✅ Updated auth dependencies (`auth.py`) - get_current_brand_id, verify_onboarding, verify_perfume_ownership, verify_campaign_ownership
+- ✅ Created test file (`test_database_schema.py`) - Comprehensive tests for all operations
+
+**Database Testing:**
+- ✅ Database reset and recreated (Docker PostgreSQL)
+- ✅ Migration applied successfully
+- ✅ All tables created: brands, perfumes, campaigns
+- ✅ All indexes created correctly
+- ✅ All foreign keys with CASCADE delete working
+- ✅ All CHECK constraints working (gender, style, duration, variations)
+- ✅ All UNIQUE constraints working (user_id, brand_name, perfume_name)
+- ✅ Cascade delete tested (deleting brand deletes perfumes and campaigns)
+
+**Backward Compatibility:**
+- ✅ Project model kept temporarily (marked DEPRECATED) for API compatibility
+- ✅ Project schemas kept temporarily for API compatibility
+- ✅ Will be removed in Phase 3-4 when API endpoints are updated
+
+**Files Created/Modified:**
+- `backend/alembic/versions/008_create_b2b_schema.py` (NEW, ~200 lines)
+- `backend/app/database/models.py` (+Brand, Perfume, Campaign models, ~300 lines)
+- `backend/app/models/schemas.py` (+Brand, Perfume, Campaign schemas, ~400 lines)
+- `backend/app/database/crud.py` (+Brand, Perfume, Campaign CRUD, ~600 lines)
+- `backend/app/api/auth.py` (+brand-related dependencies, ~150 lines)
+- `backend/tests/test_database_schema.py` (NEW, ~200 lines)
+
+**Total:** ~1,850 lines of code added/modified
+
+**Next:** Phase 2 - S3 Storage Refactor
 
 ---
 
@@ -2043,7 +2154,7 @@ Current Spend:
 
 ---
 
-**Current Status:** Phase 1-10 complete, Multi-Variation Phase 5 complete, Preview Endpoint Fix complete, ready for Phase 6 testing  
-**Next Update:** After Phase 6 completion  
-**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete + Preview Endpoint Fix)
+**Current Status:** Phase 2 B2B SaaS - Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, ready for Phase 3 (Backend API - Brands & Perfumes)  
+**Next Update:** After Phase 3 completion  
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
 
