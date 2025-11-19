@@ -7,9 +7,25 @@ export default {
     // Explicitly include component libraries if used
     "./node_modules/@radix-ui/**/*.{js,ts,jsx,tsx}",
   ],
+
+  // Safelist - classes that should always be included
+  safelist: [
+    'bg-gradient-light',
+    'bg-gradient-light-subtle',
+  ],
   
   // Theme configuration
   theme: {
+    extend: {
+      backgroundImage: {
+        'gradient-to-br': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
+        'gradient-indigo-purple': 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
+        'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        // Light theme - very light blue gradient (almost white)
+        'gradient-light': 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 50%, #F0F9FF 100%)',
+        'gradient-light-subtle': 'linear-gradient(135deg, #FAFBFF 0%, #F5FAFF 50%, #FAFBFF 100%)',
+      },
+    },
     colors: {
       white: '#ffffff',
       black: '#000000',
@@ -124,8 +140,15 @@ export default {
         600: '#d97706',
       },
       blue: {
+        50: '#eff6ff',
+        100: '#dbeafe',
+        200: '#bfdbfe',
+        300: '#93c5fd',
+        400: '#60a5fa',
         500: '#3b82f6',
         600: '#2563eb',
+        700: '#1d4ed8',
+        800: '#1e40af',
       },
     },
     
@@ -198,15 +221,6 @@ export default {
       gradient: 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
       'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
     }),
-
-    backgroundImage: {
-      'gradient-to-br': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
-      'gradient-indigo-purple': 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
-      'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      // Light theme - very light blue gradient (almost white)
-      'gradient-light': 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 50%, #F0F9FF 100%)',
-      'gradient-light-subtle': 'linear-gradient(135deg, #FAFBFF 0%, #F5FAFF 50%, #FAFBFF 100%)',
-    },
     
     animation: {
       'fade-in': 'fadeIn 0.3s ease-in-out',

@@ -7,20 +7,20 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary button (solid red)
-        default: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-gray-50 shadow-sm hover:shadow-md',
+        // Primary button (blue with dark text for light theme)
+        default: 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-gray-900 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300',
         // Secondary button (light with border)
         secondary: 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400',
         // Outline button (subtle border, text only)
         outline: 'border border-gray-300 text-gray-900 hover:border-primary-500 hover:text-primary-600',
         // Ghost button (minimal, text only)
         ghost: 'text-gray-600 hover:text-primary-500 hover:bg-gray-50',
-        // Danger button (solid red)
-        danger: 'bg-error-500 text-gray-50 hover:bg-error-600 active:bg-error-700 shadow-sm hover:shadow-md',
-        // Success button (solid green)
-        success: 'bg-success-500 text-gray-50 hover:bg-success-600 active:bg-success-700 shadow-sm hover:shadow-md',
-        // Gradient variant (kept for backward compatibility, but using solid primary)
-        gradient: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-gray-50 shadow-sm hover:shadow-md',
+        // Danger button (light red with dark text)
+        danger: 'bg-red-100 text-gray-900 hover:bg-red-200 active:bg-red-300 shadow-sm hover:shadow-md border border-red-200 hover:border-red-300',
+        // Success button (light green with dark text)
+        success: 'bg-emerald-100 text-gray-900 hover:bg-emerald-200 active:bg-emerald-300 shadow-sm hover:shadow-md border border-emerald-200 hover:border-emerald-300',
+        // Gradient variant (light blue with dark text)
+        gradient: 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-gray-900 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

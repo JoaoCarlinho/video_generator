@@ -34,7 +34,7 @@ export const Footer = () => {
   ]
 
   return (
-    <footer className="border-t border-slate-800/50 bg-slate-900/30">
+    <footer className="border-t border-gray-200 bg-white">
       <motion.div
         className="max-w-7xl mx-auto px-6 py-16"
         variants={containerVariants}
@@ -45,8 +45,8 @@ export const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
           <motion.div variants={itemVariants} className="md:col-span-2">
-            <h3 className="text-2xl font-bold text-slate-100 mb-2">GenAds</h3>
-            <p className="text-slate-400 text-sm">
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">GenAds</h3>
+            <p className="text-gray-600 text-sm">
               Create professional AI-powered video ads with perfect product consistency.
             </p>
             <div className="flex gap-4 mt-6">
@@ -57,7 +57,7 @@ export const Footer = () => {
                     key={social.label}
                     href={social.href}
                     aria-label={social.label}
-                    className="p-2 bg-slate-800/50 hover:bg-indigo-600/20 rounded-lg transition-colors text-slate-400 hover:text-indigo-400"
+                    className="p-2 bg-gray-100 hover:bg-blue-50 rounded-lg transition-colors text-gray-600 hover:text-blue-600"
                   >
                     <Icon className="w-5 h-5" />
                   </a>
@@ -68,13 +68,13 @@ export const Footer = () => {
 
           {/* Links */}
           <motion.div variants={itemVariants}>
-            <h4 className="font-semibold text-slate-100 mb-4">Product</h4>
+            <h4 className="font-semibold text-gray-900 mb-4">Product</h4>
             <ul className="space-y-2">
               {['Features', 'Pricing', 'Demo', 'API'].map((link) => (
                 <li key={link}>
                   <a
                     href="#"
-                    className="text-slate-400 hover:text-indigo-400 transition-colors text-sm"
+                    className="text-gray-600 hover:text-blue-600 transition-colors text-sm"
                   >
                     {link}
                   </a>
@@ -85,13 +85,13 @@ export const Footer = () => {
 
           {/* Support */}
           <motion.div variants={itemVariants}>
-            <h4 className="font-semibold text-slate-100 mb-4">Support</h4>
+            <h4 className="font-semibold text-gray-900 mb-4">Support</h4>
             <ul className="space-y-2">
               {footerLinks.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-slate-400 hover:text-indigo-400 transition-colors text-sm"
+                    className="text-gray-600 hover:text-blue-600 transition-colors text-sm"
                   >
                     {link.label}
                   </a>
@@ -104,12 +104,12 @@ export const Footer = () => {
         {/* Bottom */}
         <motion.div
           variants={itemVariants}
-          className="border-t border-slate-800/50 pt-8 flex flex-col md:flex-row justify-between items-center gap-4"
+          className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4"
         >
-          <p className="text-slate-500 text-sm">
+          <p className="text-gray-500 text-sm">
             © {currentYear} GenAds. All rights reserved.
           </p>
-          <p className="text-slate-500 text-sm">
+          <p className="text-gray-500 text-sm">
             Built with ❤️ for creators and brands
           </p>
         </motion.div>

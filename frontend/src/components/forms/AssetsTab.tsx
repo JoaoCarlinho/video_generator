@@ -118,9 +118,11 @@ export const AssetsTab: React.FC<AssetsTabProps> = ({ data, onChange }) => {
             <button
               type="button"
               onClick={handleRemoveGuidelines}
-              className="p-2 bg-error-500 hover:bg-error-600 rounded-lg transition-colors"
+              className="p-2 bg-error-600 hover:bg-error-700 rounded-full transition-all hover:scale-110 shadow-md"
+              title="Remove brand guidelines"
+              aria-label="Remove brand guidelines"
             >
-              <X className="w-4 h-4 text-gray-50" />
+              <X className="w-4 h-4 text-white" />
             </button>
           </div>
         ) : (
