@@ -6,7 +6,7 @@ and uploads the result to S3 for use in compositing.
 
 import logging
 import io
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from PIL import Image
 from urllib.parse import urlparse
 import aiohttp

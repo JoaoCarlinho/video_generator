@@ -6,10 +6,10 @@
 
 ## Overall Progress
 
-**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 5 COMPLETE ✅  
-**Status:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, Phase 3 (Brands & Perfumes API) complete ✅, Phase 4 (Campaigns API) complete ✅, Phase 5 (Generation Pipeline Updates) complete ✅ → Phase 6 (Frontend Pages) next  
+**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 6 IN PROGRESS 🚧  
+**Status:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅, Phase 6 (3/6 tasks complete)  
 **Date:** December 2024  
-**Next:** Phase 6 - Frontend Pages (Onboarding, Dashboard, Campaign Management)
+**Next:** Phase 6 - Complete remaining pages (Add Perfume, Campaign Dashboard, CreateCampaign, CampaignResults)
 
 ```
 [████████████████████] 100% Generic MVP (Backend + Frontend + Features Complete)
@@ -288,6 +288,52 @@ Refactor Progress:
 - ⏳ Full E2E testing pending (requires Supabase auth.users table setup)
 
 **Next:** Phase 5 - Update Generation Pipeline for Campaign Structure
+
+---
+
+## 🚧 IN PROGRESS: Phase 2 B2B SaaS Transformation - Phase 6 (Frontend Pages)
+
+**Status:** 🚧 PHASE 6 IN PROGRESS (3/6 tasks complete)  
+**Date:** December 2024  
+**Duration:** ~2 hours so far  
+**Deliverables:** Hooks created, Onboarding page, Dashboard updated, routing configured
+
+### Phase 6 Progress
+
+**Completed:**
+- ✅ Created 3 hooks (useBrand.ts, usePerfumes.ts, useCampaigns.ts) - 400+ lines total
+- ✅ Created Onboarding page (Onboarding.tsx) - Brand name input, logo upload, guidelines upload, validation
+- ✅ Updated Dashboard page - Shows perfumes list instead of projects, uses PerfumeCard component
+- ✅ Created PerfumeCard component - Displays perfume with image, name, gender badge, campaign count
+- ✅ Updated ProtectedRoute - Added onboarding check, redirects to /onboarding if not completed
+- ✅ Updated App.tsx routing - Added /onboarding route, placeholder for /perfumes/add
+- ✅ Fixed backend bug - Added missing `Any` import in product_extractor.py
+
+**Remaining:**
+- ⏳ Add Perfume page (placeholder exists)
+- ⏳ Campaign Dashboard page
+- ⏳ CreateCampaign page (update from CreateProject)
+- ⏳ CampaignResults page (update from VideoResults)
+
+**Files Created:**
+- `frontend/src/hooks/useBrand.ts` (~110 lines)
+- `frontend/src/hooks/usePerfumes.ts` (~150 lines)
+- `frontend/src/hooks/useCampaigns.ts` (~140 lines)
+- `frontend/src/pages/Onboarding.tsx` (~250 lines)
+- `frontend/src/components/PerfumeCard.tsx` (~70 lines)
+- `PHASE6_TESTING_GUIDE.md` (testing documentation)
+
+**Files Modified:**
+- `frontend/src/pages/Dashboard.tsx` (complete refactor for perfumes)
+- `frontend/src/components/ProtectedRoute.tsx` (added onboarding check)
+- `frontend/src/App.tsx` (added onboarding route)
+- `backend/app/services/product_extractor.py` (fixed missing Any import)
+
+**Testing Status:**
+- ✅ TypeScript compilation passes
+- ✅ No linting errors
+- ✅ Backend API container healthy
+- ⏳ End-to-end testing pending
 
 ---
 
