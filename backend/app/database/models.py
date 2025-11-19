@@ -1,12 +1,88 @@
 """SQLAlchemy ORM models for the database."""
 
-from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, JSON, ARRAY
+from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, JSON, ARRAY, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
 Base = declarative_base()
+
+
+class Brand(Base):
+    """Brand model for storing brand identity information."""
+
+    __tablename__ = "brands"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    company_name = Column(String(200), nullable=False)
+    brand_name = Column(String(200), nullable=True)
+    description = Column(Text, nullable=True)
+    guidelines = Column(Text, nullable=True)
+    logo_urls = Column(JSONB, nullable=True)  # Array of S3 logo URLs
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    products = relationship("Product", back_populates="brand", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Brand {self.id} - {self.company_name}>"
+
+
+class Product(Base):
+    """Product model for storing product catalog information."""
+
+    __tablename__ = "products"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id = Column(UUID(as_uuid=True), ForeignKey('brands.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_type = Column(String(100), nullable=False)
+    name = Column(String(200), nullable=False)
+    icp_segment = Column(Text, nullable=True)
+    image_urls = Column(JSONB, nullable=True)  # Array of S3 product image URLs
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    brand = relationship("Brand", back_populates="products")
+    campaigns = relationship("Campaign", back_populates="product", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Product {self.id} - {self.name}>"
+
+
+class Campaign(Base):
+    """Campaign model for storing marketing campaign configurations."""
+
+    __tablename__ = "campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id = Column(UUID(as_uuid=True), ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    seasonal_event = Column(String(100), nullable=False)
+    year = Column(Integer, nullable=False)
+    duration = Column(Integer, nullable=False)  # Duration in seconds: 15, 30, 45, 60
+    scene_configs = Column(JSONB, nullable=False)  # Array of scene configuration objects
+    status = Column(String(50), default="draft", index=True)  # draft, generating, completed, failed
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    product = relationship("Product", back_populates="campaigns")
+
+    def __repr__(self):
+        return f"<Campaign {self.id} - {self.name}>"
+
+    @property
+    def display_name(self):
+        """Auto-generate display name from name, event, and year."""
+        return f"{self.name}-{self.seasonal_event}-{self.year}"
 
 
 class Project(Base):

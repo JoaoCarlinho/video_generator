@@ -1,6 +1,6 @@
 """Pydantic schemas for API validation and serialization."""
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -48,6 +48,12 @@ class CreateProjectRequest(BaseModel):
     output_formats: Optional[List[str]] = Field(
         default=["16:9"],
         description="Array of desired aspect ratios: '9:16' (vertical), '16:9' (horizontal), '1:1' (square)"
+    )
+
+    # PHASE 7: Style selection field
+    selected_style: Optional[str] = Field(
+        default=None,
+        description="User-selected video style (e.g., 'cinematic', 'minimalist', 'energetic'). If None, LLM will infer."
     )
 
     # LEGACY FIELDS (for backward compatibility)
@@ -148,6 +154,181 @@ class GenerationProgressResponse(BaseModel):
     progress: int
     error_message: Optional[str] = None
     local_video_paths: Optional[Dict[str, str]] = None
+
+
+# ============================================================================
+# Brand Schemas
+# ============================================================================
+
+class CreateBrandRequest(BaseModel):
+    """Request schema for creating a new brand."""
+    company_name: str = Field(..., min_length=1, max_length=200, description="Company name (required)")
+    brand_name: Optional[str] = Field(None, max_length=200, description="Brand name (optional, if different from company name)")
+    description: Optional[str] = Field(None, description="Brand description, story, values")
+    guidelines: Optional[str] = Field(None, description="Brand guidelines, voice, style notes")
+    logo_urls: Optional[Dict[str, Any]] = Field(None, description="JSONB object with logo URLs array")
+
+
+class UpdateBrandRequest(BaseModel):
+    """Request schema for updating an existing brand."""
+    company_name: Optional[str] = Field(None, min_length=1, max_length=200, description="Company name")
+    brand_name: Optional[str] = Field(None, max_length=200, description="Brand name")
+    description: Optional[str] = Field(None, description="Brand description")
+    guidelines: Optional[str] = Field(None, description="Brand guidelines")
+    logo_urls: Optional[Dict[str, Any]] = Field(None, description="JSONB object with logo URLs array")
+
+
+class BrandResponse(BaseModel):
+    """Response schema for brand data."""
+    id: UUID
+    user_id: UUID
+    company_name: str
+    brand_name: Optional[str]
+    description: Optional[str]
+    guidelines: Optional[str]
+    logo_urls: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Product Schemas
+# ============================================================================
+
+class CreateProductRequest(BaseModel):
+    """Request schema for creating a new product."""
+    product_type: str = Field(..., min_length=1, max_length=100, description="Product type (required)")
+    name: str = Field(..., min_length=1, max_length=200, description="Product name (required)")
+    icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
+    image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
+
+    @field_validator('image_urls')
+    @classmethod
+    def validate_image_urls(cls, v):
+        """Validate image_urls array has max 10 items."""
+        if v is not None and len(v) > 10:
+            raise ValueError('Maximum 10 image URLs allowed')
+        return v
+
+
+class UpdateProductRequest(BaseModel):
+    """Request schema for updating an existing product."""
+    product_type: Optional[str] = Field(None, min_length=1, max_length=100, description="Product type")
+    name: Optional[str] = Field(None, min_length=1, max_length=200, description="Product name")
+    icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
+    image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
+
+    @field_validator('image_urls')
+    @classmethod
+    def validate_image_urls(cls, v):
+        """Validate image_urls array has max 10 items."""
+        if v is not None and len(v) > 10:
+            raise ValueError('Maximum 10 image URLs allowed')
+        return v
+
+
+class ProductResponse(BaseModel):
+    """Response schema for product data."""
+    id: UUID
+    brand_id: UUID
+    product_type: str
+    name: str
+    icp_segment: Optional[str]
+    image_urls: Optional[List[str]]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Campaign Schemas
+# ============================================================================
+
+class CinematographySchema(BaseModel):
+    """Cinematography configuration for a scene."""
+    camera_aspect: str = Field(..., description="Camera angle: POV, near_birds_eye, satellite, follow")
+    lighting: str = Field(..., description="Lighting style: natural, golden_hour, dramatic, soft, high_contrast, studio, dim, bright")
+    mood: str = Field(..., description="Scene mood: energetic, calm, suspenseful, playful, professional, intimate, powerful")
+    transition: str = Field(..., description="Transition to next scene: cut, fade, dissolve, wipe, slide")
+    environment: str = Field(..., description="Environment: bright, dim, foggy, clear, urban, natural, indoor, outdoor")
+    setting: str = Field(..., max_length=100, description="Physical setting (residential, office, beach, etc.)")
+
+
+class SceneConfigSchema(BaseModel):
+    """Scene configuration for campaign."""
+    scene_number: int = Field(..., ge=1, le=10, description="Scene number (1-10)")
+    creative_vision: str = Field(..., min_length=20, max_length=2000, description="Creative vision description")
+    reference_images: List[str] = Field(..., min_items=3, max_items=3, description="3 reference images: theme, start interpolation, end interpolation")
+    cinematography: CinematographySchema
+
+
+class CreateCampaignRequest(BaseModel):
+    """Request schema for creating a new campaign."""
+    name: str = Field(..., min_length=1, max_length=100, description="Campaign name")
+    seasonal_event: str = Field(..., min_length=1, max_length=100, description="Seasonal event or marketing initiative")
+    year: int = Field(..., ge=2020, le=2030, description="Campaign year")
+    duration: int = Field(..., description="Video duration in seconds (15, 30, 45, or 60)")
+    scene_configs: List[SceneConfigSchema] = Field(..., min_items=1, max_items=10, description="Array of scene configurations")
+
+    @field_validator('duration')
+    @classmethod
+    def validate_duration(cls, v):
+        """Validate duration is one of the allowed values."""
+        if v not in [15, 30, 45, 60]:
+            raise ValueError('Duration must be 15, 30, 45, or 60 seconds')
+        return v
+
+    @field_validator('scene_configs')
+    @classmethod
+    def validate_scene_numbers(cls, v):
+        """Validate scene numbers are sequential starting from 1."""
+        if not v:
+            raise ValueError('At least one scene is required')
+        scene_numbers = [scene.scene_number for scene in v]
+        expected = list(range(1, len(v) + 1))
+        if scene_numbers != expected:
+            raise ValueError(f'Scene numbers must be sequential from 1 to {len(v)}')
+        return v
+
+
+class UpdateCampaignRequest(BaseModel):
+    """Request schema for updating an existing campaign."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="Campaign name")
+    seasonal_event: Optional[str] = Field(None, min_length=1, max_length=100, description="Seasonal event")
+    year: Optional[int] = Field(None, ge=2020, le=2030, description="Campaign year")
+    duration: Optional[int] = Field(None, description="Video duration in seconds")
+    scene_configs: Optional[List[SceneConfigSchema]] = Field(None, description="Array of scene configurations")
+
+    @field_validator('duration')
+    @classmethod
+    def validate_duration(cls, v):
+        """Validate duration is one of the allowed values."""
+        if v is not None and v not in [15, 30, 45, 60]:
+            raise ValueError('Duration must be 15, 30, 45, or 60 seconds')
+        return v
+
+
+class CampaignResponse(BaseModel):
+    """Response schema for campaign data."""
+    id: UUID
+    product_id: UUID
+    name: str
+    seasonal_event: str
+    year: int
+    display_name: str
+    duration: int
+    scene_configs: List[Dict[str, Any]]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # ============================================================================

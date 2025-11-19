@@ -86,9 +86,9 @@ async def trigger_generation(
                 detail=f"Cannot start generation: project is in state '{project.status}'. Only PENDING, QUEUED, or FAILED projects can be generated."
             )
         
-        # Enqueue job with RQ
+        # Enqueue job with SQS
         job = worker_config.enqueue_job(str(project_id))
-        
+
         # Update project status
         update_project_status(
             db,
@@ -96,12 +96,12 @@ async def trigger_generation(
             "QUEUED",
             progress=0
         )
-        
-        logger.info(f"✅ Enqueued generation for project {project_id}, job_id={job.id}")
-        
+
+        logger.info(f"✅ Enqueued generation for project {project_id}, job_id={job['id']}")
+
         return {
             "status": "queued",
-            "job_id": str(job.id),
+            "job_id": str(job["id"]),
             "message": "Generation job enqueued",
             "project_id": str(project_id)
         }
