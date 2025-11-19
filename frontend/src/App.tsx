@@ -9,6 +9,7 @@ import { Landing } from './pages/Landing'
 import { Onboarding } from './pages/Onboarding'
 import { AddPerfume } from './pages/AddPerfume'
 import { CampaignDashboard } from './pages/CampaignDashboard'
+import { CreateCampaign } from './pages/CreateCampaign'
 import { CreateProject } from './pages/CreateProject'
 import { GenerationProgress } from './pages/GenerationProgress'
 import { VideoResults } from './pages/VideoResults'
@@ -65,12 +66,7 @@ function App() {
             path="/perfumes/:perfumeId/campaigns/create"
             element={
               <ProtectedRoute>
-                <div className="min-h-screen flex items-center justify-center bg-slate-900">
-                  <div className="text-center">
-                    <h1 className="text-2xl font-bold text-white mb-4">Create Campaign</h1>
-                    <p className="text-gray-400">Coming soon...</p>
-                  </div>
-                </div>
+                <CreateCampaign />
               </ProtectedRoute>
             }
           />
