@@ -74,7 +74,11 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
             if not user_id_str:
                 raise HTTPException(status_code=401, detail="Token missing user ID")
             
-            user_id = UUID(user_id_str)
+            try:
+                user_id = UUID(user_id_str)
+            except ValueError:
+                # Invalid UUID format
+                raise HTTPException(status_code=401, detail="Invalid user ID in token")
             
             # Sync user to local auth.users table
             _ensure_user_exists(user_id, decoded.get("email"))
@@ -88,10 +92,7 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
                 logger.warning("⚠️  Failed to decode token, using test user")
                 _ensure_test_user_exists(test_user_id)
                 return test_user_id
-        raise HTTPException(status_code=401, detail="Invalid token")
-        except ValueError:
-            # Invalid UUID format
-            raise HTTPException(status_code=401, detail="Invalid user ID in token")
+            raise HTTPException(status_code=401, detail="Invalid token")
     
     except HTTPException:
         raise
