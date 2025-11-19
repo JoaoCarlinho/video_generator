@@ -60,17 +60,8 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    try:
-        logger.info("🚀 Starting up AI Ad Video Generator...")
-        
-        # Test database connection
-        if test_connection():
-            logger.info("✅ All systems ready!")
-        else:
-            logger.warning("⚠️ Database connection failed - some features may not work")
-    except Exception as e:
-        logger.error(f"❌ Startup error: {e}", exc_info=True)
-        # Don't crash - allow server to start anyway
+    logger.info("🚀 Starting up AI Ad Video Generator...")
+    logger.info("✅ Server started - database connection will be tested on first request")
 
 
 @app.get("/health")
@@ -94,12 +85,15 @@ async def root():
 
 
 # Import and include routers
-from app.api import projects, generation, storage, uploads, local_generation
+from app.api import projects, generation, storage, uploads, local_generation, brands, products, campaigns
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
 app.include_router(local_generation.router, prefix="/api", tags=["local-generation"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 app.include_router(uploads.router, prefix="/api", tags=["uploads"])
+app.include_router(brands.router, prefix="/api/brands", tags=["brands"])
+app.include_router(products.router, prefix="/api", tags=["products"])
+app.include_router(campaigns.router, prefix="/api", tags=["campaigns"])
 
 
 if __name__ == "__main__":

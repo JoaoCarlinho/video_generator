@@ -6,23 +6,8 @@ from sqlalchemy.pool import NullPool
 from app.config import settings
 import logging
 import ssl
-import socket
 
 logger = logging.getLogger(__name__)
-
-# Monkey-patch socket.getaddrinfo to prefer IPv4
-_original_getaddrinfo = socket.getaddrinfo
-
-def _ipv4_preferred_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    """Force IPv4 resolution for database connections."""
-    try:
-        # Try IPv4 first
-        return _original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-    except socket.gaierror:
-        # Fallback to original behavior if IPv4 fails
-        return _original_getaddrinfo(host, port, family, type, proto, flags)
-
-socket.getaddrinfo = _ipv4_preferred_getaddrinfo
 
 # Lazy database engine initialization
 engine = None
@@ -47,43 +32,38 @@ def init_db():
         # Modify connection string for SSL handling
         db_url = settings.database_url
         if db_url and 'postgresql' in db_url:
-            # Determine if this is a local or remote database
-            # Treat VPC private IPs (10.0.x.x) as local since proxy doesn't handle SSL
-            is_local = ('localhost' in db_url or '127.0.0.1' in db_url or
-                       'postgres' in db_url or '10.0.' in db_url)
-            
-            # Remove any existing sslmode parameters first
-            if 'sslmode=' in db_url:
-                # Remove existing sslmode parameter
-                parts = db_url.split('?')
-                if len(parts) == 2:
-                    base_url = parts[0]
-                    params = parts[1].split('&')
-                    params = [p for p in params if not p.startswith('sslmode=')]
-                    if params:
-                        db_url = base_url + '?' + '&'.join(params)
+            # Check if sslmode is already explicitly set in the URL
+            has_explicit_sslmode = 'sslmode=' in db_url
+
+            if not has_explicit_sslmode:
+                # Only add sslmode if not already specified
+                # Determine if this is a local or remote database
+                # Treat VPC private IPs (10.0.x.x) as local since proxy doesn't handle SSL
+                # Check for hostname patterns, not just 'postgres' which matches username
+                is_local = ('localhost' in db_url or '127.0.0.1' in db_url or
+                           '@postgres/' in db_url or '@postgres:' in db_url or '10.0.' in db_url)
+
+                # Add appropriate SSL mode
+                if is_local:
+                    # Local PostgreSQL - disable SSL
+                    if '?' in db_url:
+                        db_url += '&sslmode=disable'
                     else:
-                        db_url = base_url
-            
-            # Now add appropriate SSL mode
-            if is_local:
-                # Local PostgreSQL - disable SSL
-                if '?' in db_url:
-                    db_url += '&sslmode=disable'
+                        db_url += '?sslmode=disable'
+                    logger.debug("🔓 Using non-SSL for local PostgreSQL connection")
                 else:
-                    db_url += '?sslmode=disable'
-                logger.debug("🔓 Using non-SSL for local PostgreSQL connection")
+                    # Remote databases - require SSL
+                    if '?' in db_url:
+                        db_url += '&sslmode=require'
+                    else:
+                        db_url += '?sslmode=require'
+                    logger.debug("🔒 Using SSL for remote PostgreSQL connection")
             else:
-                # Remote databases - require SSL
-                if '?' in db_url:
-                    db_url += '&sslmode=require'
-                else:
-                    db_url += '?sslmode=require'
-                logger.debug("🔒 Using SSL for remote PostgreSQL connection")
+                logger.debug("📌 Using explicitly configured sslmode from DATABASE_URL")
         
         # Configure connection arguments
         is_local = ('localhost' in db_url or '127.0.0.1' in db_url or
-                   'postgres' in db_url or '10.0.' in db_url)
+                   '@postgres/' in db_url or '@postgres:' in db_url or '10.0.' in db_url)
 
         connect_args = {
             'connect_timeout': 10,
@@ -93,9 +73,8 @@ def init_db():
         if is_local:
             connect_args['sslmode'] = 'disable'
 
-        # VPC Lambda with IPv4: Use direct connection on port 5432
-        # NAT Gateway provides IPv4-only networking
-        logger.info("🔧 Using direct database connection (VPC provides IPv4)")
+        # Using Supabase transaction pooler for IPv4 compatibility
+        logger.info("🔧 Connecting to database via Supabase pooler")
 
         engine = create_engine(
             db_url,
