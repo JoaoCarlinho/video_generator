@@ -1,15 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui'
 import { useBrand } from '@/hooks/useBrand'
-import { UploadCloud, FileText, Image as ImageIcon, X, CheckCircle, Sparkles } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { UploadCloud, FileText, Image as ImageIcon, X, CheckCircle, Sparkles, LogOut } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const Onboarding = () => {
   const navigate = useNavigate()
-  const { onboardBrand, loading, error } = useBrand()
+  const { onboardBrand, loading, error, brand } = useBrand()
+  const { logout } = useAuth()
+
+  const handleSignOut = async () => {
+    try {
+      await logout()
+      navigate('/login')
+    } catch (err) {
+      console.error('Error signing out:', err)
+    }
+  }
+
+  // Check if user already has a brand and redirect
+  useEffect(() => {
+    if (brand && brand.onboarding_completed) {
+      // User already completed onboarding, redirect to dashboard
+      navigate('/dashboard', { replace: true })
+    }
+  }, [brand, navigate])
 
   const [brandName, setBrandName] = useState('')
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -120,10 +139,22 @@ export const Onboarding = () => {
 
     try {
       await onboardBrand(brandName, logoFile, guidelinesFile)
-      // Redirect to dashboard on success
-      navigate('/dashboard')
+      // Refresh brand data and redirect to dashboard on success
+      // Small delay to ensure brand data is synced
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 500)
     } catch (err: any) {
-      setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
+      // Handle 409 Conflict - brand already exists
+      if (err?.response?.status === 409) {
+        // Brand was already created, just redirect to dashboard
+        setSubmitError('Brand already exists. Redirecting to dashboard...')
+        setTimeout(() => {
+          navigate('/dashboard')
+        }, 1500)
+      } else {
+        setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -148,6 +179,15 @@ export const Onboarding = () => {
               </div>
               <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className="text-muted-gray hover:text-off-white hover:bg-olive-800/50"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
           </div>
         </div>
       </nav>

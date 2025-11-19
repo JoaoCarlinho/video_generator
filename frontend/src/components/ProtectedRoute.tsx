@@ -18,6 +18,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   skipOnboardingCheck = false 
 }) => {
   const { isAuthenticated, isLoading } = useAuth()
+  // Always call hook (Rules of Hooks), but hook will skip fetching on onboarding page
   const { brand, loading: brandLoading } = useBrand()
 
   // Show loading state while checking auth

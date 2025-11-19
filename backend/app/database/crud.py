@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from app.database.models import Project, Brand, Perfume, Campaign
+from app.database.models import Project, Brand, Perfume, Campaign, AuthUser  # AuthUser needed for FK resolution
 from app.models.schemas import (
     CreateProjectRequest,
     ProjectResponse,

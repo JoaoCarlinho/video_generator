@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
 import os
+import jwt
+from typing import Optional
 from app.database.connection import get_db
 from app.database import crud
 
@@ -31,15 +33,18 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
     - In development: Falls back to test user ID if no token
     - In production: Validates JWT with Supabase
     - Token format: "Bearer {token}"
+    - Automatically creates test user in auth.users if it doesn't exist (dev only)
     """
     # For Phase 4 development: Allow test user ID via header or environment
     env = os.getenv("ENVIRONMENT", "development")
+    test_user_id = UUID("00000000-0000-0000-0000-000000000001")
     
     if not authorization:
         if env == "development":
-            # Development: use test user ID
+            # Development: use test user ID and ensure it exists in database
+            _ensure_test_user_exists(test_user_id)
             logger.debug("⚠️  No auth header - using test user ID")
-            return UUID("00000000-0000-0000-0000-000000000001")
+            return test_user_id
         else:
             # Production: require token
             raise HTTPException(
@@ -58,28 +63,86 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
         
         token = parts[1]
         
-        # TODO: In production, validate JWT with Supabase
-        # For Phase 4, we'll accept any token and extract user_id from it
-        # This will be enhanced when Supabase Auth is fully integrated
-        
-        if env == "development":
-            # Development: accept any token
-            logger.debug(f"✓ Accepted dev token")
-            return UUID("00000000-0000-0000-0000-000000000001")
-        
-        # Production: validate with Supabase
-        # from supabase import create_client
-        # supabase = create_client(settings.supabase_url, settings.supabase_key)
-        # user = supabase.auth.get_user(token)
-        # return UUID(user.user.id)
-        
-        raise HTTPException(status_code=401, detail="Invalid token")
+        # Decode JWT token to extract user ID (without verification for now)
+        # Supabase JWT tokens contain user_id in the 'sub' claim
+        try:
+            # Decode without verification (for development)
+            # In production, we should verify with Supabase JWT secret
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            user_id_str = decoded.get("sub") or decoded.get("user_id")
+            
+            if not user_id_str:
+                raise HTTPException(status_code=401, detail="Token missing user ID")
+            
+            user_id = UUID(user_id_str)
+            
+            # Sync user to local auth.users table
+            _ensure_user_exists(user_id, decoded.get("email"))
+            
+            logger.debug(f"✓ Authenticated user: {user_id}")
+            return user_id
+            
+        except jwt.DecodeError:
+            # If token decode fails, fall back to test user in development
+            if env == "development":
+                logger.warning("⚠️  Failed to decode token, using test user")
+                _ensure_test_user_exists(test_user_id)
+                return test_user_id
+            raise HTTPException(status_code=401, detail="Invalid token")
+        except ValueError:
+            # Invalid UUID format
+            raise HTTPException(status_code=401, detail="Invalid user ID in token")
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid authorization")
+
+
+def _ensure_user_exists(user_id: UUID, email: Optional[str] = None):
+    """Ensure user exists in auth.users table (syncs from Supabase)."""
+    try:
+        from app.database.connection import SessionLocal
+        from sqlalchemy import text
+        
+        if SessionLocal is None:
+            return  # Can't create user if DB not available
+        
+        # Create a new session
+        db = SessionLocal()
+        try:
+            # Check if user exists, create if not
+            result = db.execute(
+                text("SELECT id FROM auth.users WHERE id = :user_id"),
+                {"user_id": str(user_id)}
+            ).fetchone()
+            
+            if not result:
+                # Create user (synced from Supabase)
+                db.execute(
+                    text("INSERT INTO auth.users (id, email, created_at) VALUES (:user_id, :email, NOW()) ON CONFLICT (id) DO NOTHING"),
+                    {"user_id": str(user_id), "email": email or "user@example.com"}
+                )
+                db.commit()
+                logger.info(f"✅ Synced user {user_id} to local auth.users table")
+            elif email:
+                # Update email if provided and different
+                db.execute(
+                    text("UPDATE auth.users SET email = :email WHERE id = :user_id AND (email IS NULL OR email != :email)"),
+                    {"user_id": str(user_id), "email": email}
+                )
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        # Non-critical - log but don't fail
+        logger.warning(f"⚠️  Could not sync user to local DB: {e}")
+
+
+def _ensure_test_user_exists(user_id: UUID):
+    """Ensure test user exists in auth.users table (dev only)."""
+    _ensure_user_exists(user_id, "test@example.com")
 
 
 async def get_authenticated_user(

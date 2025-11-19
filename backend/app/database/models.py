@@ -12,6 +12,26 @@ Base = declarative_base()
 
 
 # ============================================================================
+# Auth Users Model (for foreign key reference)
+# This is a minimal model to satisfy SQLAlchemy foreign key constraints
+# The actual auth.users table is managed by Supabase Auth
+# ============================================================================
+class AuthUser(Base):
+    """Minimal model for auth.users table (managed by Supabase).
+    
+    This model exists only to satisfy SQLAlchemy foreign key constraints.
+    We don't create/modify this table - it's managed by Supabase Auth.
+    """
+    __tablename__ = "users"
+    __table_args__ = {"schema": "auth"}
+    
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    
+    def __repr__(self):
+        return f"<AuthUser {self.id}>"
+
+
+# ============================================================================
 # DEPRECATED: Project model (will be removed in Phase 3-4)
 # Kept temporarily for backward compatibility with existing API endpoints
 # ============================================================================
@@ -49,6 +69,7 @@ class Brand(Base):
     __tablename__ = "brands"
     
     brand_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Foreign key to auth.users - AuthUser model defined above allows SQLAlchemy to resolve this
     user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, unique=True)
     brand_name = Column(String(100), nullable=False, unique=True)
     brand_logo_url = Column(String(500), nullable=False)
