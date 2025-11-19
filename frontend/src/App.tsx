@@ -41,6 +41,8 @@ function App() {
               </ProtectedRoute>
             }
           />
+          
+          {/* Perfume Routes */}
           <Route
             path="/perfumes/add"
             element={
@@ -54,6 +56,60 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/perfumes/:perfumeId"
+            element={
+              <ProtectedRoute>
+                <div className="min-h-screen flex items-center justify-center bg-slate-900">
+                  <div className="text-center">
+                    <h1 className="text-2xl font-bold text-white mb-4">Campaign Dashboard</h1>
+                    <p className="text-gray-400">Coming soon...</p>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfumes/:perfumeId/campaigns/create"
+            element={
+              <ProtectedRoute>
+                <div className="min-h-screen flex items-center justify-center bg-slate-900">
+                  <div className="text-center">
+                    <h1 className="text-2xl font-bold text-white mb-4">Create Campaign</h1>
+                    <p className="text-gray-400">Coming soon...</p>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Campaign Routes */}
+          <Route
+            path="/campaigns/:campaignId/progress"
+            element={
+              <ProtectedRoute>
+                <GenerationProgress />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campaignId/select"
+            element={
+              <ProtectedRoute>
+                <VideoSelection />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campaignId/results"
+            element={
+              <ProtectedRoute>
+                <VideoResults />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Legacy Routes (for backward compatibility during migration) */}
           <Route
             path="/create"
             element={
@@ -70,7 +126,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Phase 3: VideoSelection route - component will be fully implemented in Phase 4 */}
           <Route
             path="/projects/:projectId/select"
             element={
