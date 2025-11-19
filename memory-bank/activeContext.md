@@ -237,12 +237,15 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 - ✅ All code tested, linted, and production-ready
 
 **Phase 3: Backend API - Brands & Perfumes (2-3 days)**
-- Onboarding endpoints
-- Perfume management CRUD
-- Campaign management CRUD
-- Update generation pipeline for new structure
-- Remove reference image service
-- Update storage service for hierarchical paths
+- ✅ Phase 3.1: Brand onboarding endpoints (POST /api/brands/onboard)
+- ✅ Phase 3.2: Brand info endpoints (GET /api/brands/me, GET /api/brands/me/stats)
+- ✅ Phase 3.3: Perfume CRUD endpoints (POST, GET, DELETE /api/perfumes)
+- ✅ Phase 3.4: Brand API tests (7 tests, all passing)
+- ✅ Phase 3.5: Perfume API tests (10 tests, all passing)
+- ⏳ Phase 3.6: Campaign management CRUD (next)
+- ⏳ Phase 3.7: Update generation pipeline for new structure
+- ⏳ Phase 3.8: Remove reference image service
+- ⏳ Phase 3.9: Update storage service for hierarchical paths
 
 **Phase 3: Frontend UI (3-4 days)**
 - Onboarding page
