@@ -23,16 +23,22 @@ export const Landing = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
+    <div className="relative min-h-screen bg-gradient-to-b from-blue-50 via-blue-100 to-blue-50 flex flex-col">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-100/40 rounded-full blur-3xl"></div>
+      </div>
+
       {/* Header */}
       <Header
         logo="GenAds"
         actions={
           <div className="flex gap-3">
-            <Button variant="ghost" onClick={() => navigate('/login')}>
+            <Button variant="secondary" onClick={() => navigate('/login')}>
               Sign In
             </Button>
-            <Button variant="gradient" onClick={() => navigate('/signup')}>
+            <Button variant="default" onClick={() => navigate('/signup')}>
               Get Started
             </Button>
           </div>
@@ -94,10 +100,10 @@ export const Landing = () => {
                   viewport={{ once: true }}
                 >
                   <div className="text-5xl mb-4">{item.icon}</div>
-                  <h3 className="text-xl font-semibold text-slate-100 mb-2">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
                     {item.title}
                   </h3>
-                  <p className="text-slate-400">{item.description}</p>
+                  <p className="text-gray-600">{item.description}</p>
                 </motion.div>
               ))}
             </div>
@@ -113,16 +119,16 @@ export const Landing = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-100px' }}
           >
-            <h2 className="text-4xl font-bold text-slate-100 mb-6">
+            <h2 className="text-4xl font-bold text-gray-900 mb-6">
               Ready to create amazing ads?
             </h2>
-            <p className="text-xl text-slate-400 mb-8">
+            <p className="text-xl text-gray-600 mb-8">
               Join thousands of creators using GenAds to generate professional video ads
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
               <Button
                 size="lg"
-                variant="gradient"
+                variant="default"
                 onClick={() => navigate('/signup')}
                 className="gap-2"
               >
@@ -131,7 +137,7 @@ export const Landing = () => {
               </Button>
               <Button
                 size="lg"
-                variant="outline"
+                variant="secondary"
                 onClick={() => navigate('/login')}
               >
                 Sign In

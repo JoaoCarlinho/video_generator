@@ -91,8 +91,8 @@ export const FeaturesSection = ({
     <section className="py-20">
       {/* Header */}
       <motion.div className="text-center mb-16" variants={itemVariants}>
-        <h2 className="text-4xl font-bold text-slate-100 mb-4">{title}</h2>
-        <p className="text-xl text-slate-400 max-w-2xl mx-auto">{subtitle}</p>
+        <h2 className="text-4xl font-bold text-gray-900 mb-4">{title}</h2>
+        <p className="text-xl text-gray-600 max-w-2xl mx-auto">{subtitle}</p>
       </motion.div>
 
       {/* Features Grid */}
@@ -108,30 +108,30 @@ export const FeaturesSection = ({
           return (
             <motion.div key={index} variants={itemVariants}>
               <Card
-                variant="glass"
-                className="h-full hover:border-indigo-500/50 transition-all hover:shadow-lg hover:shadow-indigo-500/20"
+                variant="default"
+                className="h-full hover:border-blue-300 transition-all hover:shadow-lg hover:shadow-blue-500/10"
               >
                 <CardContent className="pt-8">
                   <div className="space-y-4">
                     {/* Icon */}
-                    <div className="inline-flex p-3 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-lg">
-                      <Icon className="w-6 h-6 text-indigo-400" />
+                    <div className="inline-flex p-3 bg-gradient-to-br from-blue-500/10 to-blue-600/10 rounded-lg">
+                      <Icon className="w-6 h-6 text-blue-600" />
                     </div>
 
                     {/* Title & Highlight */}
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-100">
+                      <h3 className="text-lg font-semibold text-gray-900">
                         {feature.title}
                       </h3>
                       {feature.highlight && (
-                        <p className="text-xs font-medium text-indigo-400 mt-1">
+                        <p className="text-xs font-medium text-blue-600 mt-1">
                           {feature.highlight}
                         </p>
                       )}
                     </div>
 
                     {/* Description */}
-                    <p className="text-slate-400 text-sm">{feature.description}</p>
+                    <p className="text-gray-600 text-sm">{feature.description}</p>
                   </div>
                 </CardContent>
               </Card>

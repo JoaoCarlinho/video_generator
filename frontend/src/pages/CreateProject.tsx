@@ -11,6 +11,9 @@ import { useProjects } from '@/hooks/useProjects'
 import { Zap } from 'lucide-react'
 import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
 
+// Get API base URL from environment
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 // Tab configuration
 const TABS = [
   { id: 'brand-info', label: 'Brand Info' },
@@ -135,9 +138,17 @@ export const CreateProject = () => {
       uploadFormData.append('file', file)
       uploadFormData.append('asset_type', assetType)
 
-      const uploadResponse = await fetch('http://localhost:8000/api/upload-asset', {
+      // Get auth token from localStorage
+      const token = localStorage.getItem('authToken')
+      const headers: HeadersInit = {}
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/upload-asset`, {
         method: 'POST',
         body: uploadFormData,
+        headers,
       })
 
       if (!uploadResponse.ok) {

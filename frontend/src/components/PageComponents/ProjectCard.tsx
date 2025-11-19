@@ -76,9 +76,9 @@ export const ProjectCard = ({
       <Card
         variant="glass"
         className={`h-full overflow-hidden border transition-all ${
-          isClickable 
-            ? 'border-slate-700/50 hover:border-indigo-500/50 cursor-pointer' 
-            : 'border-slate-700/50'
+          isClickable
+            ? 'border-gray-200 hover:border-indigo-400 cursor-pointer bg-white'
+            : 'border-gray-200 bg-white'
         }`}
       >
         <CardHeader className="pb-3">
@@ -86,7 +86,7 @@ export const ProjectCard = ({
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg truncate">{title}</CardTitle>
               {createdAt && (
-                <p className="text-xs text-slate-500 mt-1">{formatDate(createdAt)}</p>
+                <p className="text-xs text-gray-500 mt-1">{formatDate(createdAt)}</p>
               )}
             </div>
             <Badge
@@ -101,17 +101,17 @@ export const ProjectCard = ({
         <CardContent className="space-y-4">
           {/* Brief Preview */}
           {brief && (
-            <p className="text-sm text-slate-400 line-clamp-2">{brief}</p>
+            <p className="text-sm text-gray-600 line-clamp-2">{brief}</p>
           )}
 
           {/* Progress Bar */}
           {status === 'generating' && (
             <div className="space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400">Progress</span>
-                <span className="text-indigo-400 font-medium">{progress}%</span>
+                <span className="text-gray-600">Progress</span>
+                <span className="text-indigo-600 font-medium">{progress}%</span>
               </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
                   initial={{ width: 0 }}
@@ -124,7 +124,7 @@ export const ProjectCard = ({
 
           {/* Cost Info */}
           {costEstimate && (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-gray-600">
               <Clock className="w-3 h-3" />
               <span>Cost: ${costEstimate.toFixed(2)}</span>
             </div>
@@ -154,7 +154,7 @@ export const ProjectCard = ({
                   e.stopPropagation()
                   onDelete()
                 }}
-                className="gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

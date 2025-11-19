@@ -88,7 +88,7 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 flex flex-col">
       {/* Header */}
       <Header
         logo="GenAds"
@@ -96,7 +96,7 @@ export const Dashboard = () => {
         actions={
           <button
             onClick={() => logout()}
-            className="text-slate-400 hover:text-slate-200 text-sm transition-colors"
+            className="text-gray-600 hover:text-gray-900 text-sm transition-colors"
           >
             Sign Out
           </button>
@@ -114,10 +114,10 @@ export const Dashboard = () => {
           >
             {/* Welcome Section */}
             <motion.div variants={itemVariants} className="space-y-2">
-              <h1 className="text-4xl font-bold text-slate-100">
+              <h1 className="text-4xl font-bold text-gray-900">
                 Welcome back, {user?.email?.split('@')[0]}!
               </h1>
-              <p className="text-lg text-slate-400">
+              <p className="text-lg text-gray-600">
                 Create, manage, and track your AI-generated video projects
               </p>
             </motion.div>
@@ -130,26 +130,26 @@ export const Dashboard = () => {
               {stats.map((stat) => {
                 const Icon = stat.icon
                 const colorClasses = {
-                  indigo: 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400',
-                  purple: 'bg-purple-500/20 border-purple-500/50 text-purple-400',
-                  emerald: 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400',
+                  indigo: 'bg-indigo-100 border-indigo-200 text-indigo-600',
+                  purple: 'bg-purple-100 border-purple-200 text-purple-600',
+                  emerald: 'bg-emerald-100 border-emerald-200 text-emerald-600',
                 }
                 const bgClass = colorClasses[stat.color as keyof typeof colorClasses]
 
                 return (
                   <motion.div
                     key={stat.label}
-                    className={`p-6 rounded-lg border ${bgClass} backdrop-blur-sm`}
+                    className={`p-6 rounded-lg border ${bgClass}`}
                     whileHover={{ y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="p-3 bg-white rounded-lg shadow-sm">
                         <Icon className="w-6 h-6" />
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm">{stat.label}</p>
-                        <p className="text-3xl font-bold text-slate-100">
+                        <p className="text-gray-600 text-sm">{stat.label}</p>
+                        <p className="text-3xl font-bold text-gray-900">
                           {stat.value}
                         </p>
                       </div>
@@ -163,8 +163,8 @@ export const Dashboard = () => {
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-100">My Projects</h2>
-                  <p className="text-slate-400 text-sm mt-1">
+                  <h2 className="text-2xl font-bold text-gray-900">My Projects</h2>
+                  <p className="text-gray-600 text-sm mt-1">
                     {projects.length} project{projects.length !== 1 ? 's' : ''}
                   </p>
                 </div>
@@ -186,8 +186,8 @@ export const Dashboard = () => {
                   ))}
                 </div>
               ) : error ? (
-                <div className="p-6 bg-red-500/10 border border-red-500/50 rounded-lg text-center">
-                  <p className="text-red-400 font-medium">{error}</p>
+                <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-center">
+                  <p className="text-red-600 font-medium">{error}</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -200,10 +200,10 @@ export const Dashboard = () => {
               ) : projects.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="text-6xl mb-4">🎬</div>
-                  <h3 className="text-xl font-semibold text-slate-100 mb-2">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
                     No projects yet
                   </h3>
-                  <p className="text-slate-400 mb-6">
+                  <p className="text-gray-600 mb-6">
                     Create your first project to generate amazing video ads
                   </p>
                   <Button

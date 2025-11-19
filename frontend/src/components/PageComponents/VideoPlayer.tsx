@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Pause, Volume2, VolumeX, Download } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
+import { useVideoElementManager } from '@/utils/videoElementHelpers'
 
 interface VideoPlayerProps {
   videoUrl?: string
@@ -25,6 +26,9 @@ export const VideoPlayer = ({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
+  // Initialize defensive video element manager
+  const videoManager = useVideoElementManager({ debug: false })
+
   const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) {
@@ -43,17 +47,41 @@ export const VideoPlayer = ({
     }
   }
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime)
+  const handleTimeUpdate = (e?: Event) => {
+    const video = e ? (e.target as HTMLVideoElement) : videoRef.current
+    if (video) {
+      setCurrentTime(video.currentTime)
     }
   }
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration)
+  const handleLoadedMetadata = (e?: Event) => {
+    const video = e ? (e.target as HTMLVideoElement) : videoRef.current
+    if (video) {
+      setDuration(video.duration)
     }
   }
+
+  // Defensive listener attachment when video element is available
+  useEffect(() => {
+    if (!videoRef.current) return
+
+    // Attach listeners defensively to handle cases where the video element
+    // might not be immediately available (e.g., dynamic loading)
+    const setupListeners = async () => {
+      await videoManager.attachListeners(videoRef.current!, {
+        onTimeUpdate: handleTimeUpdate,
+        onLoadedMetadata: handleLoadedMetadata,
+        onEnded: () => setIsPlaying(false),
+      })
+    }
+
+    setupListeners()
+
+    // Cleanup on unmount
+    return () => {
+      videoManager.cleanup()
+    }
+  }, [videoUrl]) // Re-attach when video URL changes
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value)
@@ -88,9 +116,6 @@ export const VideoPlayer = ({
               ref={videoRef}
               src={videoUrl}
               className="w-full h-full"
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={() => setIsPlaying(false)}
             />
 
             {/* Play Button Overlay */}

@@ -72,16 +72,16 @@ export const HeroSection = ({
         className="text-5xl md:text-6xl font-bold leading-tight"
         variants={itemVariants}
       >
-        <span className="text-slate-100">{title.split('In Minutes')[0]}</span>
+        <span className="text-gray-900">{title.split('In Minutes')[0]}</span>
         {gradient && (
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800">
             {' '}In Minutes
           </span>
         )}
       </motion.h1>
 
       {/* Subtitle */}
-      <motion.p className="text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto" variants={itemVariants}>
+      <motion.p className="text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto" variants={itemVariants}>
         {subtitle}
       </motion.p>
 
@@ -90,7 +90,7 @@ export const HeroSection = ({
         {cta && (
           <Button
             size="lg"
-            variant="gradient"
+            variant="default"
             onClick={handleCTA}
             className="text-lg px-8 py-3"
           >
@@ -100,7 +100,7 @@ export const HeroSection = ({
         {secondaryAction && (
           <Button
             size="lg"
-            variant="outline"
+            variant="secondary"
             onClick={handleSecondary}
             className="text-lg px-8 py-3"
           >

@@ -165,14 +165,15 @@ export const MultiImageUpload = ({
                     className="w-full h-full object-cover"
                   />
                 </div>
-                {/* Delete Button - visible on hover */}
+                {/* Delete Button - always visible with enhanced styling */}
                 <button
                   type="button"
                   onClick={() => handleRemoveImage(index)}
-                  className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+                  className="absolute top-2 right-2 p-2 bg-error-600 hover:bg-error-700 rounded-full transition-all shadow-lg hover:scale-110"
                   aria-label={`Remove image ${index + 1}`}
+                  title="Remove this image"
                 >
-                  <X className="w-4 h-4 text-gray-50" />
+                  <X className="w-4 h-4 text-white" />
                 </button>
                 {/* Image Count Badge */}
                 <div className="absolute bottom-2 left-2 px-2 py-1 bg-slate-900/80 backdrop-blur-sm rounded text-xs text-slate-300 font-medium">

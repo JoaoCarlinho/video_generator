@@ -9,6 +9,63 @@ export interface User {
   created_at: string
 }
 
+// Brand Types (Epic 1)
+export interface Brand {
+  id: string
+  user_id: string
+  name: string
+  logo_url?: string
+  brand_guidelines_url?: string
+  primary_color: string
+  secondary_color?: string
+  target_audience?: string
+  created_at: string
+  updated_at: string
+}
+
+// Product Types (Epic 1)
+export interface Product {
+  id: string
+  brand_id: string
+  product_type?: string
+  name: string
+  icp_segment: string
+  image_urls?: string[]
+  created_at: string
+  updated_at: string
+}
+
+// Campaign Types (Epic 2)
+export interface Cinematography {
+  camera_aspect: string
+  lighting: string
+  mood: string
+  transition: string
+  environment: string
+  setting: string
+}
+
+export interface SceneConfig {
+  scene_number: number
+  creative_vision: string
+  reference_images: string[]  // Array of 3 S3 URLs
+  cinematography: Cinematography
+}
+
+export interface Campaign {
+  id: string
+  product_id: string
+  name: string
+  seasonal_event: string
+  year: number
+  display_name: string
+  duration: number  // 15, 30, 45, or 60 seconds
+  scene_configs: SceneConfig[]
+  status: 'draft' | 'generating' | 'completed' | 'failed'
+  created_at: string
+  updated_at: string
+}
+
 export interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
