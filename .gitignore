@@ -344,7 +344,7 @@ pytestdebug.log
 deploy_scripts/
 .railway/
 deploy_scripts/
-
+backend/scripts/
 
 
 # Vercel
