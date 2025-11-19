@@ -6,11 +6,11 @@
 
 ## Current Phase
 
-**Status:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 2 COMPLETE ✅  
-**Focus:** Phase 2 (S3 Storage Refactor) complete ✅ → Phase 3 (Backend API - Brands & Perfumes) next  
-**Date:** November 18, 2025  
-**Progress:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, Phase 3 next
-**Last Updated:** After Phase 2 S3 Storage Refactor Complete (Nov 18, 2025)
+**Status:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 5 COMPLETE ✅  
+**Focus:** Phase 5 (Generation Pipeline Updates) complete ✅ → Phase 6 (Frontend Pages) next  
+**Date:** December 2024  
+**Progress:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅, Phase 6 next
+**Last Updated:** After Phase 5 Generation Pipeline Updates Complete (Dec 2024)
 
 ---
 
@@ -248,10 +248,12 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 - ✅ Phase 4.2: Updated generation endpoints (campaign_id instead of project_id)
 - ✅ Phase 4.3: Campaign API structure testing (10/10 endpoints verified)
 - ✅ Fixed upload function calls in brands.py and perfumes.py (file_content + filename)
-- ⏳ Phase 4.4: Full E2E testing (requires Supabase auth.users table setup)
-- ⏳ Phase 5: Update generation pipeline for new structure
-- ⏳ Phase 6: Remove reference image service
-- ⏳ Phase 7: Update storage service for hierarchical paths
+
+**Phase 5: Generation Pipeline Updates ✅ COMPLETE (Dec 2024)**
+- ✅ Phase 5.1: Updated pipeline to use new data models (campaign_id, load campaign/perfume/brand)
+- ✅ Phase 5.2: Updated product extractor (get_perfume_image, extract_perfume_for_campaign)
+- ✅ Phase 5.3: Removed reference image extractor (deleted file, removed from imports)
+- ✅ Phase 5.4: Comprehensive testing (7/7 tests passing)
 
 **Phase 3: Frontend UI (3-4 days)**
 - Onboarding page
@@ -281,7 +283,7 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
    - Campaign creation form
    - Update all existing pages
 
-**Status:** ✅ Phase 1 complete, ✅ Phase 2 complete, ✅ Phase 3 complete, ✅ Phase 4 complete, ready for Phase 5
+**Status:** ✅ Phase 1 complete, ✅ Phase 2 complete, ✅ Phase 3 complete, ✅ Phase 4 complete, ✅ Phase 5 complete, ready for Phase 6
 
 ---
 

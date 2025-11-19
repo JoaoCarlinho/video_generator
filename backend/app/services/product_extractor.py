@@ -212,3 +212,55 @@ class ProductExtractor:
             logger.error(f"Error getting product dimensions: {e}")
             return (0, 0)
 
+    def get_perfume_image(self, perfume: Any, angle: str) -> str:
+        """
+        Get perfume image URL for a specific angle with fallback to front image.
+        
+        Args:
+            perfume: Perfume database object with image URLs
+            angle: Image angle ('front', 'back', 'top', 'left', 'right')
+            
+        Returns:
+            Image URL (falls back to front image if angle not available)
+        """
+        if angle == "front":
+            return perfume.front_image_url
+        elif angle == "back" and perfume.back_image_url:
+            return perfume.back_image_url
+        elif angle == "top" and perfume.top_image_url:
+            return perfume.top_image_url
+        elif angle == "left" and perfume.left_image_url:
+            return perfume.left_image_url
+        elif angle == "right" and perfume.right_image_url:
+            return perfume.right_image_url
+        else:
+            logger.warning(f"Perfume {perfume.perfume_id} missing {angle} image, falling back to front")
+            return perfume.front_image_url
+
+    async def extract_perfume_for_campaign(self, campaign: Any, perfume: Any) -> str:
+        """
+        Extract perfume product from front image for a campaign.
+        
+        Args:
+            campaign: Campaign database object
+            perfume: Perfume database object
+            
+        Returns:
+            Local file path of extracted product PNG with transparent background
+        """
+        # Use front image (required) for extraction
+        front_image_url = self.get_perfume_image(perfume, "front")
+        
+        if not front_image_url:
+            raise ValueError(f"Perfume {perfume.perfume_id} missing required front image")
+        
+        logger.info(f"Extracting perfume product from front image: {front_image_url}")
+        
+        # Extract product using existing method
+        product_url = await self.extract_product(
+            image_url=front_image_url,
+            project_id=str(campaign.campaign_id),  # LocalStorageManager uses project_id naming
+        )
+        
+        return product_url
+

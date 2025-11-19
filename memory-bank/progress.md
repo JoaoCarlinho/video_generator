@@ -6,10 +6,10 @@
 
 ## Overall Progress
 
-**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 4 COMPLETE ✅  
-**Status:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, Phase 3 (Brands & Perfumes API) complete ✅, Phase 4 (Campaigns API) complete ✅ → Phase 5 (Generation Pipeline Updates) next  
-**Date:** November 18, 2025  
-**Next:** Phase 5 - Update Generation Pipeline for Campaign Structure
+**Current Phase:** PHASE 2 B2B SAAS TRANSFORMATION - PHASE 5 COMPLETE ✅  
+**Status:** Phase 1 (Database & Models) complete ✅, Phase 2 (S3 Storage Refactor) complete ✅, Phase 3 (Brands & Perfumes API) complete ✅, Phase 4 (Campaigns API) complete ✅, Phase 5 (Generation Pipeline Updates) complete ✅ → Phase 6 (Frontend Pages) next  
+**Date:** December 2024  
+**Next:** Phase 6 - Frontend Pages (Onboarding, Dashboard, Campaign Management)
 
 ```
 [████████████████████] 100% Generic MVP (Backend + Frontend + Features Complete)
@@ -18,6 +18,7 @@
 [████████████████████] 100% Multi-Variation Feature Planning (7 docs, 2,500+ lines, parallel optimization)
 [██████████████████]  83% Multi-Variation Feature Implementation (Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅, Phase 6 next)
 [████████████████████] 100% Phase 2 B2B SaaS Planning (4 docs, 6,011 lines, comprehensive transformation plan)
+[██████████████████░░]  83% Phase 2 B2B SaaS Implementation (Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅, Phase 6 next)
 
 Refactor Progress:
 [████████████████████] 100% Planning Phase (LUXURY_PERFUME_REFACTOR_PLAN.md complete)
@@ -287,6 +288,71 @@ Refactor Progress:
 - ⏳ Full E2E testing pending (requires Supabase auth.users table setup)
 
 **Next:** Phase 5 - Update Generation Pipeline for Campaign Structure
+
+---
+
+## ✅ COMPLETE: Phase 2 B2B SaaS Transformation - Phase 5 (Generation Pipeline Updates)
+
+**Status:** ✅ PHASE 5 COMPLETE  
+**Date:** December 2024  
+**Duration:** ~2-3 hours implementation + testing  
+**Deliverables:** Pipeline refactored for new data models, product extractor updated, reference image extractor removed, comprehensive testing
+
+### Phase 5: Generation Pipeline Updates ✅ COMPLETE
+
+**Completed Tasks:**
+- ✅ Updated `generation_pipeline.py` - Complete refactor for new data models
+  - Replaced `project_id` with `campaign_id` throughout pipeline
+  - Updated `__init__` to load `Campaign`, `Perfume`, and `Brand` objects from database
+  - Removed reference image extraction step (STEP 0)
+  - Updated all method signatures to use `campaign`, `perfume`, `brand` objects
+  - Updated database calls to use `update_campaign` instead of `update_project_status`
+  - Updated S3 imports to use campaign-specific functions
+  - Removed unused imports (`get_project`, `update_project_status`, etc.)
+  - Updated `campaign_json` storage structure
+- ✅ Updated `product_extractor.py` - Added perfume-specific methods
+  - Added `get_perfume_image()` method with fallback logic for different angles
+  - Added `extract_perfume_for_campaign()` method
+  - Updated pipeline to use `extract_perfume_for_campaign()` directly
+  - Removed old `_extract_perfume_product` helper method
+- ✅ Removed reference image extractor feature
+  - Deleted `backend/app/services/reference_image_extractor.py`
+  - Removed `ReferenceImageStyleExtractor` from `backend/app/services/__init__.py`
+  - Removed reference image extraction step from pipeline
+  - Cleaned up all related imports
+- ✅ Updated worker and API endpoints
+  - Updated `worker.py` to use `campaign_id` in `enqueue_job`
+  - Updated `generation.py` API endpoint to use `campaign_id`
+- ✅ Created comprehensive test suite (`test_phase5.py`)
+  - 7/7 tests passing ✅
+  - All imports verified, removed features confirmed deleted, new methods validated
+
+**Key Changes:**
+1. **Data Model Migration:** Replaced `project_id` with `campaign_id` throughout `generation_pipeline.py`
+2. **Database Integration:** Pipeline now loads `Campaign`, `Perfume`, and `Brand` objects from database using foreign keys
+3. **Product Extractor Updates:** Added `get_perfume_image()` and `extract_perfume_for_campaign()` methods with fallback logic
+4. **Feature Removal:** Deleted `reference_image_extractor.py` and removed all references (STEP 0 removed from pipeline)
+5. **S3 Path Updates:** Updated to use new hierarchy structure (`brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/`)
+6. **Worker Updates:** Updated `worker.py` and `generation.py` API endpoints to use `campaign_id`
+
+**Files Modified:**
+- `backend/app/jobs/generation_pipeline.py` - Complete refactor for new data models (~500 lines changed)
+- `backend/app/services/product_extractor.py` - Added perfume-specific methods (~80 lines added)
+- `backend/app/services/__init__.py` - Removed ReferenceImageStyleExtractor export
+- `backend/app/jobs/worker.py` - Updated to use campaign_id
+- `backend/app/api/generation.py` - Updated endpoint to use campaign_id
+
+**Files Deleted:**
+- `backend/app/services/reference_image_extractor.py` - Feature removed
+
+**Testing:**
+- Created `backend/test_phase5.py` - Comprehensive test suite (7/7 tests passing)
+- All imports verified, removed features confirmed deleted, new methods validated
+- Pipeline structure verified (campaign_id usage, data loading, update_campaign calls)
+
+**Total:** ~600 lines of code modified, 1 file deleted, 7/7 tests passing
+
+**Next:** Phase 6 - Frontend Pages (Onboarding, Dashboard, Campaign Management)
 
 ---
 
