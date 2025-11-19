@@ -9,6 +9,8 @@
 *.env
 .envrc
 tokens
+.env.production
+terraform/
 
 # API keys and credentials
 *_credentials.json
