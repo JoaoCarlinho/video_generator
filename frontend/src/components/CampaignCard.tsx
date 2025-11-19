@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { Video, Clock, Sparkles, DollarSign, Calendar } from 'lucide-react'
 import { Badge } from '@/components/ui'
-import { Campaign, CampaignStatus } from '@/hooks/useCampaigns'
+import type { Campaign, CampaignStatus } from '@/hooks/useCampaigns'
 
 export interface CampaignCardProps {
   campaign: Campaign
