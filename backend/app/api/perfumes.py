@@ -110,34 +110,56 @@ async def create_perfume(
         from uuid import uuid4
         perfume_id = uuid4()
         
+        # Read front image content
+        front_image.file.seek(0)
+        front_content = await front_image.read()
+        front_image.file.seek(0)
+        
         # Upload front image (required)
         logger.info(f"📤 Uploading front image for perfume {perfume_id}")
-        front_url = await upload_perfume_image(str(brand_id), str(perfume_id), "front", front_image)
+        front_result = await upload_perfume_image(str(brand_id), str(perfume_id), "front", front_content, front_image.filename)
+        front_url = front_result["url"]
         logger.info(f"✅ Front image uploaded: {front_url}")
         
         # Upload optional images
         back_url = None
         if back_image:
+            back_image.file.seek(0)
+            back_content = await back_image.read()
+            back_image.file.seek(0)
             logger.info(f"📤 Uploading back image for perfume {perfume_id}")
-            back_url = await upload_perfume_image(str(brand_id), str(perfume_id), "back", back_image)
+            back_result = await upload_perfume_image(str(brand_id), str(perfume_id), "back", back_content, back_image.filename)
+            back_url = back_result["url"]
             logger.info(f"✅ Back image uploaded: {back_url}")
         
         top_url = None
         if top_image:
+            top_image.file.seek(0)
+            top_content = await top_image.read()
+            top_image.file.seek(0)
             logger.info(f"📤 Uploading top image for perfume {perfume_id}")
-            top_url = await upload_perfume_image(str(brand_id), str(perfume_id), "top", top_image)
+            top_result = await upload_perfume_image(str(brand_id), str(perfume_id), "top", top_content, top_image.filename)
+            top_url = top_result["url"]
             logger.info(f"✅ Top image uploaded: {top_url}")
         
         left_url = None
         if left_image:
+            left_image.file.seek(0)
+            left_content = await left_image.read()
+            left_image.file.seek(0)
             logger.info(f"📤 Uploading left image for perfume {perfume_id}")
-            left_url = await upload_perfume_image(str(brand_id), str(perfume_id), "left", left_image)
+            left_result = await upload_perfume_image(str(brand_id), str(perfume_id), "left", left_content, left_image.filename)
+            left_url = left_result["url"]
             logger.info(f"✅ Left image uploaded: {left_url}")
         
         right_url = None
         if right_image:
+            right_image.file.seek(0)
+            right_content = await right_image.read()
+            right_image.file.seek(0)
             logger.info(f"📤 Uploading right image for perfume {perfume_id}")
-            right_url = await upload_perfume_image(str(brand_id), str(perfume_id), "right", right_image)
+            right_result = await upload_perfume_image(str(brand_id), str(perfume_id), "right", right_content, right_image.filename)
+            right_url = right_result["url"]
             logger.info(f"✅ Right image uploaded: {right_url}")
         
         # Create perfume in database

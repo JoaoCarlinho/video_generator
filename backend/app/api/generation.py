@@ -11,10 +11,10 @@ import boto3
 from io import BytesIO
 
 from app.database.connection import get_db, init_db
-from app.database.crud import get_project_by_user, update_project_status, update_project
-from app.models.schemas import GenerationProgressResponse
+from app.database import crud
+from app.models.schemas import GenerationProgressResponse, CampaignStatus
 from app.jobs.worker import create_worker
-from app.api.auth import get_current_user_id
+from app.api.auth import get_current_brand_id, verify_campaign_ownership
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,18 @@ except Exception as e:
 # Generation Endpoints
 # ============================================================================
 
-@router.post("/projects/{project_id}/generate", deprecated=False)
-@router.post("/projects/{project_id}/generate/", deprecated=False)
+@router.post("/campaigns/{campaign_id}/generate", deprecated=False)
+@router.post("/campaigns/{campaign_id}/generate/", deprecated=False)
 async def trigger_generation(
-    project_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    campaign_id: UUID,
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
-    Trigger video generation for a project.
+    Trigger video generation for a campaign.
     
     **Path Parameters:**
-    - project_id: UUID of the project to generate
+    - campaign_id: UUID of the campaign to generate
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -54,12 +54,12 @@ async def trigger_generation(
         "status": "queued",
         "job_id": "...",
         "message": "Generation job enqueued",
-        "project_id": "..."
+        "campaign_id": "..."
     }
     ```
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 409: Generation already in progress
     - 401: Missing or invalid authorization
@@ -75,39 +75,37 @@ async def trigger_generation(
         
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        
-        # Check if already generating (allow retry from QUEUED or FAILED)
-        if project.status not in ["PENDING", "QUEUED", "FAILED"]:
+        # Check if already generating (allow retry from pending or failed)
+        if campaign.status not in [CampaignStatus.PENDING.value, CampaignStatus.FAILED.value]:
             raise HTTPException(
                 status_code=409,
-                detail=f"Cannot start generation: project is in state '{project.status}'. Only PENDING, QUEUED, or FAILED projects can be generated."
+                detail=f"Cannot start generation: campaign is in state '{campaign.status}'. Only pending or failed campaigns can be generated."
             )
         
         # Enqueue job with RQ
-        job = worker_config.enqueue_job(str(project_id))
+        job = worker_config.enqueue_job(str(campaign_id))
         
-        # Update project status
-        update_project_status(
+        # Update campaign status
+        crud.update_campaign(
             db,
-            project_id,
-            "QUEUED",
+            campaign_id,
+            status=CampaignStatus.PROCESSING.value,
             progress=0
         )
         
-        logger.info(f"✅ Enqueued generation for project {project_id}, job_id={job.id}")
+        logger.info(f"✅ Enqueued generation for campaign {campaign_id}, job_id={job.id}")
         
         return {
             "status": "queued",
             "job_id": str(job.id),
             "message": "Generation job enqueued",
-            "project_id": str(project_id)
+            "campaign_id": str(campaign_id)
         }
     
     except HTTPException:
@@ -150,20 +148,19 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
 
 
-@router.post("/projects/{project_id}/reset")
-async def reset_project_status(
-    project_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+@router.post("/campaigns/{campaign_id}/reset")
+async def reset_campaign_status(
+    campaign_id: UUID,
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
-    Reset a stuck project to FAILED status so it can be retried.
+    Reset a stuck campaign to FAILED status so it can be retried.
     
-    Useful when a project gets stuck in an intermediate state (e.g., EXTRACTING_PRODUCT, 
-    GENERATING_SCENES, etc.) and needs to be reset.
+    Useful when a campaign gets stuck in processing state and needs to be reset.
     
     **Path Parameters:**
-    - project_id: UUID of the project to reset
+    - campaign_id: UUID of the campaign to reset
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -172,49 +169,47 @@ async def reset_project_status(
     ```json
     {
         "status": "reset",
-        "project_id": "...",
-        "message": "Project reset to FAILED status. You can now retry generation."
+        "campaign_id": "...",
+        "message": "Campaign reset to FAILED status. You can now retry generation."
     }
     ```
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 401: Missing or invalid authorization
     """
     try:
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
         # Reset to FAILED status
-        update_project_status(
+        crud.update_campaign(
             db,
-            project_id,
-            "FAILED",
+            campaign_id,
+            status=CampaignStatus.FAILED.value,
             progress=0,
             error_message="Manually reset - ready for retry"
         )
         
-        logger.info(f"✅ Reset project {project_id} to FAILED status")
+        logger.info(f"✅ Reset campaign {campaign_id} to FAILED status")
         
         return {
             "status": "reset",
-            "project_id": str(project_id),
-            "message": "Project reset to FAILED status. You can now retry generation."
+            "campaign_id": str(campaign_id),
+            "message": "Campaign reset to FAILED status. You can now retry generation."
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to reset project: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to reset project: {str(e)}")
+        logger.error(f"❌ Failed to reset campaign: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset campaign: {str(e)}")
 
 
 # ============================================================================
@@ -226,21 +221,21 @@ class SelectVariationRequest(BaseModel):
     variation_index: int = Field(..., ge=0, le=2, description="Index of variation to select (0-2)")
 
 
-@router.post("/projects/{project_id}/select-variation")
+@router.post("/campaigns/{campaign_id}/select-variation")
 async def select_variation(
-    project_id: UUID,
+    campaign_id: UUID,
     request: SelectVariationRequest,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
-    Select a video variation for a multi-variation project.
+    Select a video variation for a multi-variation campaign.
     
     After generating multiple variations (num_variations > 1), users can select their preferred
-    variation. This endpoint updates the project's selected_variation_index field.
+    variation. This endpoint updates the campaign's selected_variation_index field.
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -256,35 +251,33 @@ async def select_variation(
     ```json
     {
         "status": "success",
-        "project_id": "...",
+        "campaign_id": "...",
         "selected_variation": 0,
         "message": "Variation 0 selected successfully"
     }
     ```
     
     **Errors:**
-    - 400: Invalid variation_index (out of range) or project has only 1 variation
-    - 404: Project not found
+    - 400: Invalid variation_index (out of range) or campaign has only 1 variation
+    - 404: Campaign not found
     - 403: Not authorized
     - 401: Missing or invalid authorization
     """
     try:
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        
-        # Validate that project has multiple variations
-        num_variations = getattr(project, 'num_variations', 1)
+        # Validate that campaign has multiple variations
+        num_variations = campaign.num_variations
         if num_variations <= 1:
             raise HTTPException(
                 status_code=400,
-                detail=f"Project has only {num_variations} variation(s). Selection is only available for projects with 2-3 variations."
+                detail=f"Campaign has only {num_variations} variation(s). Selection is only available for campaigns with 2-3 variations."
             )
         
         # Validate variation_index is in valid range
@@ -294,21 +287,21 @@ async def select_variation(
                 detail=f"Invalid variation_index: {request.variation_index}. Must be between 0 and {num_variations - 1}."
             )
         
-        # Update project with selected variation
-        updated_project = update_project(
+        # Update campaign with selected variation
+        updated_campaign = crud.update_campaign(
             db,
-            project_id,
+            campaign_id,
             selected_variation_index=request.variation_index
         )
         
-        if not updated_project:
-            raise HTTPException(status_code=404, detail="Failed to update project")
+        if not updated_campaign:
+            raise HTTPException(status_code=404, detail="Failed to update campaign")
         
-        logger.info(f"✅ Selected variation {request.variation_index} for project {project_id}")
+        logger.info(f"✅ Selected variation {request.variation_index} for campaign {campaign_id}")
         
         return {
             "status": "success",
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "selected_variation": request.variation_index,
             "message": f"Variation {request.variation_index} selected successfully"
         }
@@ -316,7 +309,7 @@ async def select_variation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to select variation for project {project_id}: {e}")
+        logger.error(f"❌ Failed to select variation for campaign {campaign_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to select variation: {str(e)}")
 
 
@@ -365,17 +358,17 @@ async def cancel_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
 
 
-@router.get("/projects/{project_id}/progress", response_model=GenerationProgressResponse)
+@router.get("/campaigns/{campaign_id}/progress", response_model=GenerationProgressResponse)
 async def get_generation_progress(
-    project_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    campaign_id: UUID,
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
-    Get current generation progress for a project.
+    Get current generation progress for a campaign.
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -385,8 +378,8 @@ async def get_generation_progress(
     **Example Response:**
     ```json
     {
-      "project_id": "550e8400-e29b-41d4-a716-446655440000",
-      "status": "GENERATING_SCENES",
+      "campaign_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "processing",
       "progress": 25,
       "current_step": "Generating Video Scenes",
       "cost_so_far": 0.12,
@@ -395,62 +388,54 @@ async def get_generation_progress(
     ```
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 401: Missing or invalid authorization
     """
     try:
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
         # Map status to readable step
         step_map = {
-            "PENDING": "Pending",
-            "EXTRACTING_PRODUCT": "Extracting Product",
-            "PLANNING": "Planning Scenes",
-            "GENERATING_SCENES": "Generating Video Scenes",
-            "COMPOSITING": "Compositing Product",
-            "ADDING_OVERLAYS": "Adding Text Overlays",
-            "GENERATING_AUDIO": "Generating Background Music",
-            "RENDERING": "Rendering Final Video",
-            "COMPLETED": "Completed",
-            "FAILED": "Failed"
+            CampaignStatus.PENDING.value: "Pending",
+            CampaignStatus.PROCESSING.value: "Processing",
+            CampaignStatus.COMPLETED.value: "Completed",
+            CampaignStatus.FAILED.value: "Failed"
         }
         
         return GenerationProgressResponse(
-            project_id=project.id,
-            status=project.status,
-            progress=project.progress,
-            current_step=step_map.get(project.status, project.status),
-            cost_so_far=float(project.cost),
-            error_message=project.error_message
+            campaign_id=campaign.campaign_id,
+            status=campaign.status,
+            progress=campaign.progress,
+            current_step=step_map.get(campaign.status, campaign.status),
+            cost_so_far=float(campaign.cost),
+            error_message=campaign.error_message
         )
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get progress for {project_id}: {e}")
+        logger.error(f"❌ Failed to get progress for {campaign_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
 
 
-@router.post("/projects/{project_id}/cancel")
+@router.post("/campaigns/{campaign_id}/cancel")
 async def cancel_generation(
-    project_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    campaign_id: UUID,
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
     Cancel an in-progress generation (if possible).
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -459,13 +444,13 @@ async def cancel_generation(
     ```json
     {
         "status": "cancelled",
-        "project_id": "...",
+        "campaign_id": "...",
         "message": "Generation cancelled"
     }
     ```
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 409: Cannot cancel (not in progress)
     - 401: Missing or invalid authorization
@@ -473,38 +458,36 @@ async def cancel_generation(
     try:
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
         # Check if generation is in progress
-        if project.status == "COMPLETED":
-            raise HTTPException(status_code=409, detail="Cannot cancel completed project")
+        if campaign.status == CampaignStatus.COMPLETED.value:
+            raise HTTPException(status_code=409, detail="Cannot cancel completed campaign")
         
-        if project.status == "FAILED":
-            raise HTTPException(status_code=409, detail="Cannot cancel failed project")
+        if campaign.status == CampaignStatus.FAILED.value:
+            raise HTTPException(status_code=409, detail="Cannot cancel failed campaign")
         
-        if project.status == "PENDING":
+        if campaign.status == CampaignStatus.PENDING.value:
             raise HTTPException(status_code=409, detail="Generation not started")
         
         # TODO: Cancel RQ job
         # For now, just mark as failed
-        update_project_status(
+        crud.update_campaign(
             db,
-            project_id,
-            "FAILED",
+            campaign_id,
+            status=CampaignStatus.FAILED.value,
             error_message="Cancelled by user"
         )
         
-        logger.info(f"✅ Cancelled generation for project {project_id}")
+        logger.info(f"✅ Cancelled generation for campaign {campaign_id}")
         
         return {
             "status": "cancelled",
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "message": "Generation cancelled"
         }
     
@@ -515,12 +498,12 @@ async def cancel_generation(
         raise HTTPException(status_code=500, detail=f"Failed to cancel generation: {str(e)}")
 
 
-@router.get("/projects/{project_id}/download/{aspect_ratio}")
+@router.get("/campaigns/{campaign_id}/download/{aspect_ratio}")
 async def download_video(
-    project_id: UUID,
+    campaign_id: UUID,
     aspect_ratio: str,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
     Download a video file as a blob for local storage (IndexedDB).
@@ -529,8 +512,8 @@ async def download_video(
     allowing the frontend to store it locally for preview before finalization.
     
     **Path Parameters:**
-    - project_id: UUID of the project
-    - aspect_ratio: Video aspect ratio ('16:9')
+    - campaign_id: UUID of the campaign
+    - aspect_ratio: Video aspect ratio ('9:16', '1:1', '16:9')
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -540,36 +523,46 @@ async def download_video(
     - Video file as binary blob
     
     **Errors:**
-    - 404: Project not found or video not available
+    - 404: Campaign not found or video not available
     - 403: Not authorized
     - 401: Missing or invalid authorization
     - 400: Invalid aspect ratio
     """
     try:
         # Validate aspect ratio
-        if aspect_ratio not in ['16:9']:
+        if aspect_ratio not in ['9:16', '1:1', '16:9']:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 16:9"
+                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 9:16, 1:1, or 16:9"
             )
         
         init_db()
         
-        user_id = get_current_user_id(authorization)
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        
-        # Get video URL from ad_project_json aspectExports
-        ad_json = project.ad_project_json or {}
-        if isinstance(ad_json, str):
+        # Get video URL from campaign_json variationPaths
+        campaign_json = campaign.campaign_json or {}
+        if isinstance(campaign_json, str):
             import json
-            ad_json = json.loads(ad_json)
-        output_videos = ad_json.get('aspectExports', {})
-        video_url = output_videos.get(aspect_ratio)
+            campaign_json = json.loads(campaign_json)
+        
+        # Get selected variation index (default to 0)
+        selected_variation = campaign.selected_variation_index if campaign.selected_variation_index is not None else 0
+        variation_paths = campaign_json.get('variationPaths', {})
+        variation_key = f"variation_{selected_variation}"
+        
+        if variation_key not in variation_paths:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Variation {selected_variation} not found for campaign"
+            )
+        
+        variation_data = variation_paths[variation_key]
+        video_url = variation_data.get('aspectExports', {}).get(aspect_ratio)
         
         if not video_url:
             raise HTTPException(

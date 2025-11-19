@@ -104,14 +104,25 @@ async def onboard_brand(
         from uuid import uuid4
         brand_id = uuid4()
         
+        # Read file contents
+        logo.file.seek(0)
+        logo_content = await logo.read()
+        logo.file.seek(0)
+        
+        guidelines.file.seek(0)
+        guidelines_content = await guidelines.read()
+        guidelines.file.seek(0)
+        
         # Upload logo to S3
         logger.info(f"📤 Uploading logo for brand {brand_id}")
-        logo_url = await upload_brand_logo(str(brand_id), logo)
+        logo_result = await upload_brand_logo(str(brand_id), logo_content, logo.filename)
+        logo_url = logo_result["url"]
         logger.info(f"✅ Logo uploaded: {logo_url}")
         
         # Upload guidelines to S3
         logger.info(f"📤 Uploading guidelines for brand {brand_id}")
-        guidelines_url = await upload_brand_guidelines(str(brand_id), guidelines)
+        guidelines_result = await upload_brand_guidelines(str(brand_id), guidelines_content, guidelines.filename)
+        guidelines_url = guidelines_result["url"]
         logger.info(f"✅ Guidelines uploaded: {guidelines_url}")
         
         # Create brand in database

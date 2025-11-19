@@ -242,10 +242,16 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 - ✅ Phase 3.3: Perfume CRUD endpoints (POST, GET, DELETE /api/perfumes)
 - ✅ Phase 3.4: Brand API tests (7 tests, all passing)
 - ✅ Phase 3.5: Perfume API tests (10 tests, all passing)
-- ⏳ Phase 3.6: Campaign management CRUD (next)
-- ⏳ Phase 3.7: Update generation pipeline for new structure
-- ⏳ Phase 3.8: Remove reference image service
-- ⏳ Phase 3.9: Update storage service for hierarchical paths
+
+**Phase 4: Backend API - Campaigns ✅ COMPLETE (Nov 18, 2025)**
+- ✅ Phase 4.1: Campaign CRUD endpoints (POST, GET, DELETE /api/campaigns)
+- ✅ Phase 4.2: Updated generation endpoints (campaign_id instead of project_id)
+- ✅ Phase 4.3: Campaign API structure testing (10/10 endpoints verified)
+- ✅ Fixed upload function calls in brands.py and perfumes.py (file_content + filename)
+- ⏳ Phase 4.4: Full E2E testing (requires Supabase auth.users table setup)
+- ⏳ Phase 5: Update generation pipeline for new structure
+- ⏳ Phase 6: Remove reference image service
+- ⏳ Phase 7: Update storage service for hierarchical paths
 
 **Phase 3: Frontend UI (3-4 days)**
 - Onboarding page
@@ -265,16 +271,17 @@ Priority: Brand Guidelines (from PDF) > Creative Prompt > Video Style > Perfume 
 
 ### Next Immediate Steps
 
-1. **Phase 3: Backend API - Brands & Perfumes** (NEXT)
-   - Onboarding endpoints
-   - Perfume management CRUD
-   - Brand management endpoints
+1. **Phase 5: Generation Pipeline Updates** (NEXT)
+   - Update pipeline to use campaign structure
+   - Load campaign + perfume + brand data
+   - Update S3 paths to hierarchical structure
 
-3. **Phase 4: Backend API - Campaigns**
-   - Campaign management CRUD
-   - Update generation pipeline for new structure
+2. **Phase 6: Frontend UI Updates**
+   - Campaign dashboard per perfume
+   - Campaign creation form
+   - Update all existing pages
 
-**Status:** ✅ Phase 1 complete, ✅ Phase 2 complete, S3 bucket ready, ready for Phase 3
+**Status:** ✅ Phase 1 complete, ✅ Phase 2 complete, ✅ Phase 3 complete, ✅ Phase 4 complete, ready for Phase 5
 
 ---
 
