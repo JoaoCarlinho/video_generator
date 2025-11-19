@@ -46,9 +46,9 @@ export const useBrand = () => {
         setBrand(null)
         setError(null) // Don't treat 404 as an error
       } else {
-        const message = err?.response?.data?.detail || err?.message || 'Failed to fetch brand'
-        setError(message)
-        console.error('Error fetching brand:', err)
+      const message = err?.response?.data?.detail || err?.message || 'Failed to fetch brand'
+      setError(message)
+      console.error('Error fetching brand:', err)
       }
     } finally {
       setLoading(false)
@@ -68,7 +68,7 @@ export const useBrand = () => {
         setStats(null)
         // Don't log 404 as error - it's expected for users without brands
       } else {
-        console.error('Error fetching brand stats:', err)
+      console.error('Error fetching brand stats:', err)
       }
     }
   }, [user])
@@ -108,10 +108,10 @@ export const useBrand = () => {
           setError(message)
           throw new Error(message)
         } else {
-          const message = err?.response?.data?.detail || err?.message || 'Failed to onboard brand'
-          setError(message)
-          console.error('Error onboarding brand:', err)
-          throw new Error(message)
+        const message = err?.response?.data?.detail || err?.message || 'Failed to onboard brand'
+        setError(message)
+        console.error('Error onboarding brand:', err)
+        throw new Error(message)
         }
       } finally {
         setLoading(false)
@@ -134,8 +134,8 @@ export const useBrand = () => {
       fetchBrand()
       // Only fetch stats if not on onboarding page (to avoid 404 spam)
       if (!isOnboardingPage) {
-        fetchBrandStats()
-      }
+      fetchBrandStats()
+    }
     }
   }, [user, isOnboardingPage, fetchBrand, fetchBrandStats])
   

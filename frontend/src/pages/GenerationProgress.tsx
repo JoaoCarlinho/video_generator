@@ -22,18 +22,22 @@ const stepLabels: Record<string, string> = {
 }
 
 export const GenerationProgress = () => {
-  const { projectId = '' } = useParams()
+  const { campaignId, projectId } = useParams<{ campaignId?: string; projectId?: string }>()
   const navigate = useNavigate()
-  const { generateVideo } = useGeneration()
+  const { generateVideo, generateCampaign } = useGeneration()
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
   const hasStartedGenerationRef = useRef(false)
-  const storageKey = `generation_started_${projectId}`
+  
+  // Use campaignId if available, otherwise fall back to projectId (legacy)
+  const id = campaignId || projectId || ''
+  const isCampaign = !!campaignId
+  const storageKey = `generation_started_${id}`
 
   // Start generation job when component mounts
   useEffect(() => {
     const alreadyStarted = hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true'
     
-    if (!projectId || alreadyStarted) {
+    if (!id || alreadyStarted) {
       return
     }
 
@@ -48,9 +52,11 @@ export const GenerationProgress = () => {
         hasStartedGenerationRef.current = true
         sessionStorage.setItem(storageKey, 'true')
         setIsStartingGeneration(true)
-        console.log('🚀 Starting generation for project:', projectId)
+        console.log(`🚀 Starting generation for ${isCampaign ? 'campaign' : 'project'}:`, id)
         
-        const result = await generateVideo(projectId)
+        const result = isCampaign 
+          ? await generateCampaign(id)
+          : await generateVideo(id)
         
         if (isMounted) {
           console.log('✅ Generation queued:', result)
@@ -73,19 +79,53 @@ export const GenerationProgress = () => {
     return () => {
       isMounted = false
     }
-  }, [projectId, generateVideo, storageKey])
+  }, [id, isCampaign, generateVideo, generateCampaign, storageKey])
 
   const { progress, isPolling, stopPolling } = useProgressPolling({
-    projectId,
+    projectId: isCampaign ? undefined : id,
+    campaignId: isCampaign ? id : undefined,
     enabled: true,
     interval: 2000,
     onComplete: async () => {
       sessionStorage.removeItem(storageKey)
       
       try {
+        if (isCampaign) {
+          // Campaign-based flow
+          console.log('📥 Campaign generation complete, navigating to results...')
+          
+          try {
+            const campaignResponse = await api.get(`/api/campaigns/${id}`)
+            const campaign = campaignResponse.data
+            const numVariations = campaign.num_variations || 1
+            
+            console.log(`🎬 Number of variations: ${numVariations}`)
+            
+            // For campaigns, videos are stored in S3, not local storage
+            // Navigate directly to results page
+            setTimeout(() => {
+              if (numVariations > 1) {
+                // Multiple variations - go to selection page
+                console.log(`🎯 Routing to selection page for ${numVariations} variations`)
+                navigate(`/campaigns/${id}/select`)
+              } else {
+                // Single variation - go directly to results
+                console.log(`🎯 Routing to results page (single variation)`)
+                navigate(`/campaigns/${id}/results`)
+              }
+            }, 1000)
+          } catch (err) {
+            console.error('⚠️ Failed to fetch campaign:', err)
+            // Fallback: navigate to results page
+            setTimeout(() => {
+              navigate(`/campaigns/${id}/results`)
+            }, 1000)
+          }
+        } else {
+          // Legacy project-based flow
         console.log('📥 Downloading video to local storage...')
         
-        const projectResponse = await api.get(`/api/projects/${projectId}`)
+          const projectResponse = await api.get(`/api/projects/${id}`)
         const project = projectResponse.data
         const projectAspectRatio = project.aspect_ratio || '9:16'
         const numVariations = project.num_variations || 1
@@ -97,12 +137,12 @@ export const GenerationProgress = () => {
         // For multiple variations, videos are already stored locally by the pipeline
         if (numVariations === 1) {
           try {
-            const response = await api.get(`/api/local-generation/projects/${projectId}/preview`, {
+              const response = await api.get(`/api/local-generation/projects/${id}/preview`, {
               responseType: 'blob'
             })
             
             if (response.data) {
-              await storeVideo(projectId, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
+                await storeVideo(id, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
               console.log(`✅ Downloaded video from local storage`)
             }
           } catch (err) {
@@ -112,7 +152,7 @@ export const GenerationProgress = () => {
           console.log(`📹 Multiple variations generated - skipping single video download`)
         }
         
-        const usage = await getStorageUsage(projectId)
+          const usage = await getStorageUsage(id)
         console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
         
         // Route based on number of variations
@@ -120,18 +160,23 @@ export const GenerationProgress = () => {
           if (numVariations > 1) {
             // Multiple variations - go to selection page
             console.log(`🎯 Routing to selection page for ${numVariations} variations`)
-            navigate(`/projects/${projectId}/select`)
+              navigate(`/projects/${id}/select`)
           } else {
             // Single variation - go directly to results
             console.log(`🎯 Routing to results page (single variation)`)
-            navigate(`/projects/${projectId}/results`)
+              navigate(`/projects/${id}/results`)
           }
         }, 1000)
+        }
       } catch (err) {
         console.error('⚠️ Failed to download video to local storage:', err)
         // Fallback: navigate to results page
         setTimeout(() => {
-          navigate(`/projects/${projectId}/results`)
+          if (isCampaign) {
+            navigate(`/campaigns/${id}/results`)
+          } else {
+            navigate(`/projects/${id}/results`)
+          }
         }, 1000)
       }
     },

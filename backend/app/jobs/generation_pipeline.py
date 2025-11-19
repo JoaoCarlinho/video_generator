@@ -195,12 +195,12 @@ class GenerationPipeline:
                     campaign, perfume, brand, ad_project, num_variations, progress_start=planning_start
                 )
                 # Use first variation's ad_project for metadata (all variations share same brand/product info)
-                updated_campaign_json = await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
-                ad_project = AdProject(**updated_campaign_json)
+                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
             else:
                 # Single variation flow (existing behavior)
-                updated_campaign_json = await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
-                ad_project = AdProject(**updated_campaign_json)
+                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
                 scene_variations = [ad_project.scenes]
 
             # STEP 3-7: Process all variations IN PARALLEL
@@ -532,12 +532,29 @@ BRAND GUIDELINES (extracted from guidelines document):
                 guideline_text += "\n\nEnsure all scenes follow these brand guidelines."
                 creative_prompt += guideline_text
             
+            # Convert brand guidelines dict to string format for scene planner
+            brand_guidelines_str = None
+            if extracted_guidelines:
+                import json
+                guidelines_dict = extracted_guidelines.to_dict()
+                # Format as readable string instead of raw JSON
+                guidelines_parts = []
+                if guidelines_dict.get('tone_of_voice'):
+                    guidelines_parts.append(f"Tone: {guidelines_dict['tone_of_voice']}")
+                if guidelines_dict.get('color_palette'):
+                    guidelines_parts.append(f"Colors: {', '.join(guidelines_dict['color_palette'])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('dos'):
+                    guidelines_parts.append(f"DO: {'; '.join(guidelines_dict['dos_and_donts']['dos'][:3])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('donts'):
+                    guidelines_parts.append(f"DON'T: {'; '.join(guidelines_dict['dos_and_donts']['donts'][:3])}")
+                brand_guidelines_str = " | ".join(guidelines_parts) if guidelines_parts else None
+            
             plan = await planner.plan_scenes(
                 creative_prompt=creative_prompt,
                 brand_name=brand.brand_name,
                 brand_description="",  # Not stored in brand table (extracted from guidelines)
                 brand_colors=brand_colors,
-                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
+                brand_guidelines=brand_guidelines_str,
                 target_audience="general consumers",  # Removed feature in Phase 2
                 target_duration=campaign.target_duration,
                 has_product=has_product,
@@ -1369,6 +1386,23 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Build creative prompt (reference image removed in Phase 2)
             creative_prompt = campaign.creative_prompt
             
+            # Convert brand guidelines dict to string format for scene planner
+            brand_guidelines_str = None
+            if extracted_guidelines:
+                import json
+                guidelines_dict = extracted_guidelines.to_dict()
+                # Format as readable string instead of raw JSON
+                guidelines_parts = []
+                if guidelines_dict.get('tone_of_voice'):
+                    guidelines_parts.append(f"Tone: {guidelines_dict['tone_of_voice']}")
+                if guidelines_dict.get('color_palette'):
+                    guidelines_parts.append(f"Colors: {', '.join(guidelines_dict['color_palette'])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('dos'):
+                    guidelines_parts.append(f"DO: {'; '.join(guidelines_dict['dos_and_donts']['dos'][:3])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('donts'):
+                    guidelines_parts.append(f"DON'T: {'; '.join(guidelines_dict['dos_and_donts']['donts'][:3])}")
+                brand_guidelines_str = " | ".join(guidelines_parts) if guidelines_parts else None
+            
             # Generate scene variations
             scene_variations = await planner._generate_scene_variations(
                 num_variations=num_variations,
@@ -1376,7 +1410,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 brand_name=brand.brand_name,
                 brand_description="",  # Not stored in brand table
                 brand_colors=brand_colors,
-                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
+                brand_guidelines=brand_guidelines_str,
                 target_audience="general consumers",  # Removed feature
                 target_duration=campaign.target_duration,
                 has_product=has_product,
@@ -1596,6 +1630,21 @@ BRAND GUIDELINES (extracted from guidelines document):
         }
         
         # Build AdProject from campaign data
+        # Note: style_spec will be populated during scene planning, but we need to provide defaults here
+        # to satisfy AdProject validation. These defaults will be replaced during planning.
+        default_style_spec = campaign_json.get("style_spec", {})
+        if not default_style_spec or not isinstance(default_style_spec, dict):
+            # Provide minimal defaults - these will be replaced during scene planning
+            default_style_spec = {
+                "lighting_direction": "",
+                "camera_style": "",
+                "texture_materials": "",
+                "mood_atmosphere": "",
+                "color_palette": [],
+                "grade_postprocessing": "",
+                "music_mood": "uplifting",
+            }
+        
         ad_project_dict = {
             "creative_prompt": campaign.creative_prompt,
             "brand": brand_dict,
@@ -1605,7 +1654,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             "perfume_gender": perfume.perfume_gender,
             "product_asset": product_asset,
             "scenes": campaign_json.get("scenes", []),
-            "style_spec": campaign_json.get("style_spec", {}),
+            "style_spec": default_style_spec,
             "video_metadata": campaign_json.get("video_metadata", {}),
             "selectedStyle": {
                 "id": campaign.selected_style,

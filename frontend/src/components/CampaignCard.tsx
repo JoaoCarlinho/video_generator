@@ -27,8 +27,15 @@ const formatDate = (dateString: string): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const formatCost = (cost: number): string => {
-  return `$${cost.toFixed(2)}`
+const formatCost = (cost: number | string | null | undefined): string => {
+  if (cost === null || cost === undefined) {
+    return '$0.00'
+  }
+  const numCost = typeof cost === 'string' ? parseFloat(cost) : cost
+  if (isNaN(numCost)) {
+    return '$0.00'
+  }
+  return `$${numCost.toFixed(2)}`
 }
 
 export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {

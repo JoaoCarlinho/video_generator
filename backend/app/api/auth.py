@@ -88,7 +88,7 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
                 logger.warning("⚠️  Failed to decode token, using test user")
                 _ensure_test_user_exists(test_user_id)
                 return test_user_id
-            raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token")
         except ValueError:
             # Invalid UUID format
             raise HTTPException(status_code=401, detail="Invalid user ID in token")

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { VideoPlayer } from '@/components/PageComponents'
 import { useProjects } from '@/hooks/useProjects'
+import { useCampaigns } from '@/hooks/useCampaigns'
 import { api } from '@/services/api'
 import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play } from 'lucide-react'
 import {
@@ -19,9 +20,14 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const VideoResults = () => {
-  const { projectId = '' } = useParams()
+  const { projectId, campaignId } = useParams<{ projectId?: string; campaignId?: string }>()
   const navigate = useNavigate()
   const { getProject } = useProjects()
+  const { getCampaign, deleteCampaign } = useCampaigns()
+
+  // Use campaignId if available, otherwise fall back to projectId (legacy)
+  const id = campaignId || projectId || ''
+  const isCampaign = !!campaignId
 
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -37,13 +43,29 @@ export const VideoResults = () => {
   const [useLocalStorage, setUseLocalStorage] = useState(true)
 
   /**
-   * Helper function to extract the display video path from project data.
+   * Helper function to extract the display video path from project/campaign data.
    * Handles both single video (string) and multi-variation (array) cases.
    */
-  const getDisplayVideo = (projectData: any, aspectRatio: '9:16' | '1:1' | '16:9'): string | null => {
-    // Check ad_project_json first (new structure), then fallback to local_video_paths (backward compat)
-    const videoPaths = projectData?.ad_project_json?.local_video_paths?.[aspectRatio] 
-      || projectData?.local_video_paths?.[aspectRatio]
+  const getDisplayVideo = (data: any, aspectRatio: '9:16' | '1:1' | '16:9'): string | null => {
+    if (isCampaign) {
+      // Campaign structure: campaign_json.variationPaths
+      const campaignJson = data?.campaign_json || {}
+      const variationPaths = campaignJson?.variationPaths || []
+      
+      if (variationPaths.length === 0) {
+        return null
+      }
+      
+      // Use selected_variation_index if set, otherwise default to 0
+      const selectedIndex = data?.selected_variation_index ?? 0
+      const variation = variationPaths[selectedIndex] || variationPaths[0]
+      
+      // Get video URL for the aspect ratio (campaigns use 9:16 by default)
+      return variation?.final_video_url || variation?.video_url || null
+    } else {
+      // Project structure: ad_project_json.local_video_paths or local_video_paths
+      const videoPaths = data?.ad_project_json?.local_video_paths?.[aspectRatio] 
+        || data?.local_video_paths?.[aspectRatio]
     
     if (!videoPaths) {
       return null
@@ -52,7 +74,7 @@ export const VideoResults = () => {
     // If array (multi-variation case)
     if (Array.isArray(videoPaths)) {
       // Use selected_variation_index if set, otherwise default to 0
-      const selectedIndex = projectData?.selected_variation_index ?? 0
+        const selectedIndex = data?.selected_variation_index ?? 0
       return videoPaths[selectedIndex] || videoPaths[0] || null
     }
     
@@ -62,12 +84,13 @@ export const VideoResults = () => {
     }
     
     return null
+    }
   }
 
   /**
    * Helper to convert a local path to a valid API URL if needed.
    */
-  const getPlayableVideoUrl = (path: string, projectId: string, variationIndex?: number): string => {
+  const getPlayableVideoUrl = (path: string, entityId: string, variationIndex?: number): string => {
     if (!path) return ''
     
     // If it's already a URL, return as is
@@ -77,10 +100,15 @@ export const VideoResults = () => {
     
     // If it's a local file path (starts with /), convert to API endpoint
     if (path.startsWith('/')) {
-      // Use the preview endpoint
-      // If variationIndex is provided, append it
+      if (isCampaign) {
+        // Campaign download endpoint
+        const variationParam = variationIndex !== undefined ? `?variation=${variationIndex}` : ''
+        return `${API_BASE_URL}/api/generation/campaigns/${entityId}/download/9:16${variationParam}`
+      } else {
+        // Project preview endpoint
       const variationParam = variationIndex !== undefined ? `?variation=${variationIndex}` : ''
-      return `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview${variationParam}`
+        return `${API_BASE_URL}/api/local-generation/projects/${entityId}/preview${variationParam}`
+      }
     }
     
     return path
@@ -90,17 +118,41 @@ export const VideoResults = () => {
     const loadProjectAndVideos = async () => {
       try {
         setLoading(true)
-        const data = await getProject(projectId)
+        
+        let data: any
+        if (isCampaign) {
+          data = await getCampaign(id)
+        } else {
+          data = await getProject(id)
+        }
         setProject(data)
         
-        const projectAspectRatio = (data.aspect_ratio || '9:16') as '9:16' | '1:1' | '16:9'
-        setAspect(projectAspectRatio)
+        // Campaigns always use 9:16, projects can have different aspect ratios
+        const aspectRatio = isCampaign ? '9:16' : (data.aspect_ratio || '9:16')
+        setAspect(aspectRatio as '9:16' | '1:1' | '16:9')
         
         // Get the display video path (handles multi-variation selection)
-        const displayVideoPath = getDisplayVideo(data, projectAspectRatio)
+        const displayVideoPath = getDisplayVideo(data, aspectRatio as '9:16' | '1:1' | '16:9')
         
-        // Try IndexedDB first (for videos stored locally in browser)
-        const localVideoUrl = await getVideoURL(projectId, projectAspectRatio)
+        if (isCampaign) {
+          // Campaigns: videos are in S3, use the URL directly
+          if (displayVideoPath) {
+            setVideoUrl(displayVideoPath)
+            setUseLocalStorage(false)
+          } else {
+            // Fallback: try to get from campaign_json
+            const campaignJson = data?.campaign_json || {}
+            const variationPaths = campaignJson?.variationPaths || []
+            if (variationPaths.length > 0) {
+              const variation = variationPaths[data?.selected_variation_index ?? 0] || variationPaths[0]
+              setVideoUrl(variation?.final_video_url || variation?.video_url || '')
+              setUseLocalStorage(false)
+            }
+          }
+          setStorageUsage(0) // Campaigns don't use local storage
+        } else {
+          // Projects: Try IndexedDB first (for videos stored locally in browser)
+          const localVideoUrl = await getVideoURL(id, aspectRatio as '9:16' | '1:1' | '16:9')
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
@@ -109,39 +161,48 @@ export const VideoResults = () => {
           // Convert local path to API URL if necessary
           const playableUrl = getPlayableVideoUrl(
             displayVideoPath, 
-            projectId, 
+              id, 
             data.selected_variation_index ?? undefined
           )
           setVideoUrl(playableUrl)
           setUseLocalStorage(false)
         } else {
           // Fallback to output_videos (S3 URLs)
-          setVideoUrl(data.output_videos?.[projectAspectRatio] || '')
+            setVideoUrl(data.output_videos?.[aspectRatio] || '')
           setUseLocalStorage(false)
         }
         
-        const usage = await getStorageUsage(projectId)
+          const usage = await getStorageUsage(id)
         setStorageUsage(usage)
+        }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load project'
+        const message = err instanceof Error ? err.message : `Failed to load ${isCampaign ? 'campaign' : 'project'}`
         setError(message)
       } finally {
         setLoading(false)
       }
     }
 
-    if (projectId) {
+    if (id) {
       loadProjectAndVideos()
     }
-  }, [projectId, getProject])
+  }, [id, isCampaign, getProject, getCampaign])
   
   useEffect(() => {
     const loadVideoForAspect = async () => {
-      if (!projectId || !aspect || !project) return
+      if (!id || !aspect || !project) return
       
       try {
-        // Try IndexedDB first (for videos stored locally in browser)
-        const localVideoUrl = await getVideoURL(projectId, aspect)
+        if (isCampaign) {
+          // Campaigns: videos are in S3, aspect ratio is always 9:16
+          const displayVideoPath = getDisplayVideo(project, aspect)
+          if (displayVideoPath) {
+            setVideoUrl(displayVideoPath)
+            setUseLocalStorage(false)
+          }
+        } else {
+          // Projects: Try IndexedDB first (for videos stored locally in browser)
+          const localVideoUrl = await getVideoURL(id, aspect)
         if (localVideoUrl) {
           setVideoUrl(localVideoUrl)
           setUseLocalStorage(true)
@@ -153,7 +214,7 @@ export const VideoResults = () => {
             // Use the path from project data (could be local file path or S3 URL)
             const playableUrl = getPlayableVideoUrl(
               displayVideoPath, 
-              projectId, 
+                id, 
               project.selected_variation_index ?? undefined
             )
             setVideoUrl(playableUrl)
@@ -163,6 +224,7 @@ export const VideoResults = () => {
             const s3Url = project?.output_videos?.[aspect] || ''
             setVideoUrl(s3Url)
             setUseLocalStorage(false)
+            }
           }
         }
       } catch (err) {
@@ -173,14 +235,27 @@ export const VideoResults = () => {
     if (project) {
       loadVideoForAspect()
     }
-  }, [aspect, projectId, project])
+  }, [aspect, id, project, isCampaign])
 
   const handleDownload = async (aspectRatio: '9:16' | '1:1' | '16:9') => {
     try {
       setDownloadingAspect(aspectRatio)
       
-      const videoBlob = await getVideo(projectId, aspectRatio)
       let videoUrlToDownload: string
+      
+      if (isCampaign) {
+        // Campaigns: videos are in S3, download directly from URL
+        const displayVideoPath = getDisplayVideo(project, aspectRatio)
+        videoUrlToDownload = displayVideoPath || ''
+        
+        if (!videoUrlToDownload) {
+          setError('Video URL not available')
+          setDownloadingAspect(null)
+          return
+        }
+      } else {
+        // Projects: Try local storage first, then S3
+        const videoBlob = await getVideo(id, aspectRatio)
       
       if (videoBlob) {
         videoUrlToDownload = URL.createObjectURL(videoBlob)
@@ -190,6 +265,7 @@ export const VideoResults = () => {
           setError('Video URL not available')
           setDownloadingAspect(null)
           return
+          }
         }
       }
       
@@ -208,8 +284,10 @@ export const VideoResults = () => {
       }
       
       const timestamp = new Date().toISOString().slice(0, 10)
-      const projectTitle = project?.title ? project.title.replace(/\s+/g, '-') : 'video'
-      const filename = `${projectTitle}_${aspectNames[aspectRatio]}_${resolutions[aspectRatio]}_${timestamp}.mp4`
+      const entityTitle = isCampaign 
+        ? (project?.campaign_name || 'campaign').replace(/\s+/g, '-')
+        : (project?.title || 'video').replace(/\s+/g, '-')
+      const filename = `${entityTitle}_${aspectNames[aspectRatio]}_${resolutions[aspectRatio]}_${timestamp}.mp4`
       
       link.setAttribute('download', filename)
       link.style.display = 'none'
@@ -218,7 +296,7 @@ export const VideoResults = () => {
       link.click()
       document.body.removeChild(link)
       
-      if (videoBlob && videoUrlToDownload.startsWith('blob:')) {
+      if (videoUrlToDownload.startsWith('blob:')) {
         URL.revokeObjectURL(videoUrlToDownload)
       }
       
@@ -239,21 +317,27 @@ export const VideoResults = () => {
       setIsFinalizing(true)
       setError(null)
       
-      const response = await api.post(`/api/projects/${projectId}/finalize`)
+      if (isCampaign) {
+        // Campaigns are already finalized (videos in S3)
+        setIsFinalized(true)
+        setError(null)
+      } else {
+        const response = await api.post(`/api/projects/${id}/finalize`)
       
       setIsFinalized(true)
       
-      const updatedProject = await getProject(projectId)
+        const updatedProject = await getProject(id)
       setProject(updatedProject)
       
-      await markAsFinalized(projectId)
+        await markAsFinalized(id)
       
       setTimeout(async () => {
-        await deleteProjectVideos(projectId)
+          await deleteProjectVideos(id)
         setStorageUsage(0)
       }, 2000)
       
       setError(null)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to finalize video'
       setError(message)
@@ -262,16 +346,20 @@ export const VideoResults = () => {
   }
 
   const handleDeleteProject = async () => {
-    if (!confirm('Delete this project? This will remove all videos and project files from storage. This action cannot be undone.')) {
+    if (!confirm(`Delete this ${isCampaign ? 'campaign' : 'project'}? This will remove all videos and ${isCampaign ? 'campaign' : 'project'} files from storage. This action cannot be undone.`)) {
       return
     }
 
     try {
       setDeleting(true)
-      await api.delete(`/api/projects/${projectId}/`)
+      if (isCampaign) {
+        await deleteCampaign(id)
+      } else {
+        await api.delete(`/api/projects/${id}/`)
+      }
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete project'
+      const message = err instanceof Error ? `Failed to delete ${isCampaign ? 'campaign' : 'project'}` : 'Failed to delete'
       setError(message)
       setDeleting(false)
     }
@@ -307,7 +395,7 @@ export const VideoResults = () => {
         </nav>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-red-400 font-medium mb-4">{error || 'Project not found'}</p>
+            <p className="text-red-400 font-medium mb-4">{error || `${isCampaign ? 'Campaign' : 'Project'} not found`}</p>
             <Button variant="hero" onClick={() => navigate('/dashboard')}>
               Back to Dashboard
             </Button>
@@ -345,7 +433,9 @@ export const VideoResults = () => {
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-4">
-              <h1 className="text-sm font-semibold text-off-white">{project.title}</h1>
+              <h1 className="text-sm font-semibold text-off-white">
+                {isCampaign ? project.campaign_name : project.title}
+              </h1>
             </div>
           </div>
         </div>
@@ -369,7 +459,9 @@ export const VideoResults = () => {
                     <CheckCircle2 className="w-5 h-5 text-gold" />
                   </div>
                   <div>
-                    <h2 className="text-lg sm:text-xl font-bold text-off-white">{project.title}</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-off-white">
+                      {isCampaign ? project.campaign_name : project.title}
+                    </h2>
                     <div className="flex items-center gap-2 mt-1">
                       {useLocalStorage && (
                         <div className="flex items-center gap-1 px-2 py-0.5 bg-olive-700/30 rounded text-xs text-muted-gray border border-olive-600">
@@ -399,7 +491,7 @@ export const VideoResults = () => {
                 {videoUrl ? (
                   <VideoPlayer
                     videoUrl={videoUrl}
-                    title={project.title}
+                    title={isCampaign ? project.campaign_name : project.title}
                     aspect={aspect}
                     onDownload={() => handleDownload(aspect)}
                   />
@@ -431,7 +523,7 @@ export const VideoResults = () => {
                   )}
                 </Button>
                 
-                {storageUsage > 0 && !isFinalized && (
+                {!isCampaign && storageUsage > 0 && !isFinalized && (
                   <Button
                     variant="outline"
                     onClick={handleFinalizeVideo}
@@ -450,6 +542,12 @@ export const VideoResults = () => {
                       </>
                     )}
                   </Button>
+                )}
+                {isCampaign && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 rounded text-xs text-emerald-400 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Finalized
+                  </div>
                 )}
               </div>
 
@@ -472,8 +570,19 @@ export const VideoResults = () => {
                 onClick={() => navigate('/dashboard')}
                 className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
               >
-                Back to Projects
+                Back to {isCampaign ? 'Dashboard' : 'Projects'}
               </Button>
+              {isCampaign && project?.perfume_id && (
+                <Button
+                  variant="hero"
+                  onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                  className="gap-2 transition-transform duration-200 hover:scale-105"
+                >
+                  <Play className="w-4 h-4" />
+                  Back to Perfume
+                </Button>
+              )}
+              {!isCampaign && (
               <Button
                 variant="hero"
                 onClick={() => navigate('/create')}
@@ -482,6 +591,7 @@ export const VideoResults = () => {
                 <Play className="w-4 h-4" />
                 Create Another
               </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleDeleteProject}

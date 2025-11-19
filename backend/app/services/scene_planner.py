@@ -738,7 +738,7 @@ Brand: {brand_name}
 Perfume Name: {perfume_name}
 Brand Description: {brand_description or 'Luxury perfume brand'}
 Target Audience: {target_audience}
-{f"Brand Guidelines: {brand_guidelines[:300]}" if brand_guidelines else ""}
+{f"Brand Guidelines: {str(brand_guidelines)[:300]}" if brand_guidelines else ""}
 {gender_guidance}
 
 🎨 CREATIVE VISION

@@ -142,7 +142,7 @@ export const Onboarding = () => {
       // Refresh brand data and redirect to dashboard on success
       // Small delay to ensure brand data is synced
       setTimeout(() => {
-        navigate('/dashboard')
+      navigate('/dashboard')
       }, 500)
     } catch (err: any) {
       // Handle 409 Conflict - brand already exists
@@ -153,7 +153,7 @@ export const Onboarding = () => {
           navigate('/dashboard')
         }, 1500)
       } else {
-        setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
+      setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
       }
     } finally {
       setIsSubmitting(false)
