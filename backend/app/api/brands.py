@@ -14,10 +14,25 @@ from app.database import crud
 from app.api.auth import get_current_user_id, get_current_brand_id
 from app.models.schemas import BrandDetail, BrandCreate
 from app.utils.s3_utils import upload_brand_logo, upload_brand_guidelines
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/debug/s3-config")
+async def get_s3_config():
+    """
+    Debug endpoint to check S3 configuration.
+    Returns S3 bucket name and region without exposing credentials.
+    """
+    return {
+        "s3_bucket_name": settings.s3_bucket_name,
+        "aws_region": settings.aws_region,
+        "aws_access_key_configured": bool(settings.aws_access_key_id),
+        "aws_secret_key_configured": bool(settings.aws_secret_access_key),
+    }
 
 
 @router.post(
@@ -129,11 +144,21 @@ async def onboard_brand(
         logger.info(f"💾 Creating brand {brand_id} in database")
         brand = crud.create_brand(
             db=db,
+            brand_id=brand_id,  # Pass the brand_id so S3 paths match database
             user_id=user_id,
             brand_name=brand_name,
             brand_logo_url=logo_url,
             brand_guidelines_url=guidelines_url
         )
+        
+        # Verify brand was created with correct brand_id
+        if brand.brand_id != brand_id:
+            logger.error(f"❌ CRITICAL: Brand created with wrong brand_id! Expected {brand_id}, got {brand.brand_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Brand created with incorrect brand_id. Expected {brand_id}, got {brand.brand_id}"
+            )
+        logger.info(f"✅ Verified brand {brand.brand_id} created with correct brand_id")
         
         logger.info(f"✅ Brand onboarding completed: {brand.brand_id}")
         return BrandDetail.model_validate(brand)

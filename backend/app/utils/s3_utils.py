@@ -216,6 +216,75 @@ def get_s3_file_url(s3_key: str) -> str:
     return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
 
 
+def parse_s3_url(s3_url: str) -> tuple[str, str]:
+    """
+    Parse S3 URL to extract bucket name and S3 key.
+    
+    Supports multiple S3 URL formats:
+    - https://bucket.s3.region.amazonaws.com/key
+    - https://s3.region.amazonaws.com/bucket/key
+    - https://s3.amazonaws.com/bucket/key
+    
+    **Arguments:**
+    - s3_url: S3 URL string
+    
+    **Returns:**
+    - tuple: (bucket_name, s3_key)
+    
+    **Raises:**
+    - ValueError: If URL format is not recognized
+    """
+    from urllib.parse import urlparse
+    
+    parsed = urlparse(s3_url)
+    
+    # Format 1: https://bucket.s3.region.amazonaws.com/key
+    if '.s3.' in parsed.netloc:
+        # Extract bucket from netloc (first part before .s3.)
+        bucket_name = parsed.netloc.split('.')[0]
+        s3_key = parsed.path.lstrip('/')
+        return bucket_name, s3_key
+    
+    # Format 2: https://s3.region.amazonaws.com/bucket/key
+    # Format 3: https://s3.amazonaws.com/bucket/key
+    if 's3' in parsed.netloc:
+        path_parts = parsed.path.lstrip('/').split('/', 1)
+        if len(path_parts) >= 2:
+            bucket_name = path_parts[0]
+            s3_key = path_parts[1]
+            return bucket_name, s3_key
+    
+    raise ValueError(f"Unrecognized S3 URL format: {s3_url}")
+
+
+def download_from_s3(s3_url: str, output_path: str) -> None:
+    """
+    Download file from S3 URL to local path.
+    
+    **Arguments:**
+    - s3_url: S3 URL of the file
+    - output_path: Local file path to save the file
+    
+    **Raises:**
+    - RuntimeError: If download fails
+    """
+    try:
+        bucket_name, s3_key = parse_s3_url(s3_url)
+        
+        s3 = get_s3_client()
+        s3.download_file(
+            Bucket=bucket_name,
+            Key=s3_key,
+            Filename=output_path
+        )
+        
+        logger.info(f"✅ Downloaded from S3: {s3_key} → {output_path}")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to download from S3 {s3_url}: {e}")
+        raise RuntimeError(f"Failed to download from S3: {str(e)}")
+
+
 # ============================================================================
 # PHASE 2: B2B SaaS S3 Hierarchy Functions
 # New hierarchy: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/
@@ -291,12 +360,16 @@ async def upload_brand_logo(
         if not settings.s3_bucket_name:
             raise RuntimeError("S3_BUCKET_NAME not configured in .env")
         
+        bucket_name = settings.s3_bucket_name
+        logger.info(f"📦 Using S3 bucket: {bucket_name}")
+        
         # Determine file extension and normalize to PNG
         file_ext = os.path.splitext(filename)[1].lower()
         if file_ext not in [".png", ".jpg", ".jpeg", ".webp"]:
             file_ext = ".png"
         
         s3_key = f"brands/{brand_id}/brand_logo{file_ext}"
+        logger.info(f"📤 Uploading to S3: s3://{bucket_name}/{s3_key} ({len(file_content)} bytes)")
         
         # Prepare S3 tags
         tags = {
@@ -307,27 +380,34 @@ async def upload_brand_logo(
         
         # Upload to S3
         s3 = get_s3_client()
-        s3.put_object(
-            Bucket=settings.s3_bucket_name,
-            Key=s3_key,
-            Body=file_content,
-            ContentType=get_content_type(file_ext),
-            Tagging=_format_s3_tags(tags)
-        )
+        try:
+            response = s3.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file_content,
+                ContentType=get_content_type(file_ext),
+                Tagging=_format_s3_tags(tags)
+            )
+            logger.info(f"✅ S3 upload response: {response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'unknown')}")
+        except Exception as upload_error:
+            logger.error(f"❌ S3 put_object failed: {upload_error}", exc_info=True)
+            raise
         
         s3_url = get_s3_file_url(s3_key)
         
-        logger.info(f"✅ Uploaded brand logo: {s3_key}")
+        logger.info(f"✅ Uploaded brand logo to s3://{bucket_name}/{s3_key}")
+        logger.info(f"✅ Public URL: {s3_url}")
         
         return {
             "url": s3_url,
             "s3_key": s3_key,
+            "bucket": bucket_name,
             "size_bytes": len(file_content),
             "filename": f"brand_logo{file_ext}"
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to upload brand logo: {e}")
+        logger.error(f"❌ Failed to upload brand logo: {e}", exc_info=True)
         raise RuntimeError(f"Failed to upload brand logo: {str(e)}")
 
 
@@ -359,12 +439,16 @@ async def upload_brand_guidelines(
         if not settings.s3_bucket_name:
             raise RuntimeError("S3_BUCKET_NAME not configured in .env")
         
+        bucket_name = settings.s3_bucket_name
+        logger.info(f"📦 Using S3 bucket: {bucket_name}")
+        
         # Determine file extension and normalize to PDF
         file_ext = os.path.splitext(filename)[1].lower()
         if file_ext not in [".pdf", ".docx"]:
             file_ext = ".pdf"
         
         s3_key = f"brands/{brand_id}/brand_guidelines{file_ext}"
+        logger.info(f"📤 Uploading to S3: s3://{bucket_name}/{s3_key} ({len(file_content)} bytes)")
         
         # Prepare S3 tags
         tags = {
@@ -375,27 +459,34 @@ async def upload_brand_guidelines(
         
         # Upload to S3
         s3 = get_s3_client()
-        s3.put_object(
-            Bucket=settings.s3_bucket_name,
-            Key=s3_key,
-            Body=file_content,
-            ContentType=get_content_type(file_ext),
-            Tagging=_format_s3_tags(tags)
-        )
+        try:
+            response = s3.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file_content,
+                ContentType=get_content_type(file_ext),
+                Tagging=_format_s3_tags(tags)
+            )
+            logger.info(f"✅ S3 upload response: {response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'unknown')}")
+        except Exception as upload_error:
+            logger.error(f"❌ S3 put_object failed: {upload_error}", exc_info=True)
+            raise
         
         s3_url = get_s3_file_url(s3_key)
         
-        logger.info(f"✅ Uploaded brand guidelines: {s3_key}")
+        logger.info(f"✅ Uploaded brand guidelines to s3://{bucket_name}/{s3_key}")
+        logger.info(f"✅ Public URL: {s3_url}")
         
         return {
             "url": s3_url,
             "s3_key": s3_key,
+            "bucket": bucket_name,
             "size_bytes": len(file_content),
             "filename": f"brand_guidelines{file_ext}"
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to upload brand guidelines: {e}")
+        logger.error(f"❌ Failed to upload brand guidelines: {e}", exc_info=True)
         raise RuntimeError(f"Failed to upload brand guidelines: {str(e)}")
 
 
@@ -500,7 +591,7 @@ async def upload_draft_video(
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "brands/.../variations/variation_0/draft/scene_1_bg.mp4",
+        "s3_key": "brands/.../variation_0/draft/scene_1_bg.mp4",
         "size_bytes": 12345,
         "filename": "scene_1_bg.mp4"
       }
@@ -520,7 +611,7 @@ async def upload_draft_video(
         if scene_index < 1 or scene_index > 4:
             raise ValueError("scene_index must be between 1 and 4")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variations/variation_{variation_index}/draft/scene_{scene_index}_bg.mp4"
+        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/scene_{scene_index}_bg.mp4"
         
         # Prepare S3 tags
         tags = {
@@ -581,7 +672,7 @@ async def upload_draft_music(
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "brands/.../variations/variation_0/draft/music.mp3",
+        "s3_key": "brands/.../variation_0/draft/music.mp3",
         "size_bytes": 12345,
         "filename": "music.mp3"
       }
@@ -597,7 +688,7 @@ async def upload_draft_music(
         if variation_index not in [0, 1, 2]:
             raise ValueError("variation_index must be 0, 1, or 2")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variations/variation_{variation_index}/draft/music.mp3"
+        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/music.mp3"
         
         # Prepare S3 tags
         tags = {
@@ -658,7 +749,7 @@ async def upload_final_video(
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "brands/.../variations/variation_0/final_video.mp4",
+        "s3_key": "brands/.../variation_0/final/final_video.mp4",
         "size_bytes": 12345,
         "filename": "final_video.mp4"
       }
@@ -674,7 +765,7 @@ async def upload_final_video(
         if variation_index not in [0, 1, 2]:
             raise ValueError("variation_index must be 0, 1, or 2")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variations/variation_{variation_index}/final_video.mp4"
+        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/final/final_video.mp4"
         
         # Prepare S3 tags
         tags = {

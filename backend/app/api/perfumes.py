@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from app.database.connection import get_db
 from app.database import crud
-from app.api.auth import get_current_brand_id, verify_perfume_ownership
+from app.api.auth import get_current_brand_id, get_current_user_id, verify_perfume_ownership
 from app.models.schemas import PerfumeDetail, PerfumeCreate, PaginatedPerfumes, PerfumeGender
 from app.utils.s3_utils import upload_perfume_image
 
@@ -36,6 +36,7 @@ async def create_perfume(
     left_image: Optional[UploadFile] = File(None, description="Left image (optional)"),
     right_image: Optional[UploadFile] = File(None, description="Right image (optional)"),
     brand_id: UUID = Depends(get_current_brand_id),
+    user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ) -> PerfumeDetail:
     """
@@ -106,6 +107,23 @@ async def create_perfume(
             
             return angle
         
+        # Log brand_id being used for verification
+        logger.info(f"🔍 Using brand_id {brand_id} for perfume creation (user_id from token)")
+        
+        # Verify brand exists and belongs to user
+        brand = crud.get_brand_by_id(db, brand_id)
+        if not brand:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Brand not found"
+            )
+        if brand.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Brand does not belong to authenticated user"
+            )
+        logger.info(f"✅ Verified brand {brand_id} belongs to user {user_id}")
+        
         # Generate perfume_id
         from uuid import uuid4
         perfume_id = uuid4()
@@ -116,7 +134,7 @@ async def create_perfume(
         front_image.file.seek(0)
         
         # Upload front image (required)
-        logger.info(f"📤 Uploading front image for perfume {perfume_id}")
+        logger.info(f"📤 Uploading front image for perfume {perfume_id} to brand {brand_id}")
         front_result = await upload_perfume_image(str(brand_id), str(perfume_id), "front", front_content, front_image.filename)
         front_url = front_result["url"]
         logger.info(f"✅ Front image uploaded: {front_url}")
@@ -163,9 +181,10 @@ async def create_perfume(
             logger.info(f"✅ Right image uploaded: {right_url}")
         
         # Create perfume in database
-        logger.info(f"💾 Creating perfume {perfume_id} in database")
+        logger.info(f"💾 Creating perfume {perfume_id} in database with brand_id {brand_id}")
         perfume = crud.create_perfume(
             db=db,
+            perfume_id=perfume_id,  # Pass the perfume_id so S3 paths match database
             brand_id=brand_id,
             perfume_name=perfume_name,
             perfume_gender=perfume_gender,
@@ -176,10 +195,25 @@ async def create_perfume(
             right_image_url=right_url
         )
         
+        # Verify perfume was created with correct IDs
+        if perfume.perfume_id != perfume_id:
+            logger.error(f"❌ CRITICAL: Perfume created with wrong perfume_id! Expected {perfume_id}, got {perfume.perfume_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Perfume created with incorrect perfume_id. Expected {perfume_id}, got {perfume.perfume_id}"
+            )
+        if perfume.brand_id != brand_id:
+            logger.error(f"❌ CRITICAL: Perfume created with wrong brand_id! Expected {brand_id}, got {perfume.brand_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Perfume created with incorrect brand_id. Expected {brand_id}, got {perfume.brand_id}"
+            )
+        logger.info(f"✅ Verified perfume {perfume.perfume_id} created with correct brand_id {brand_id}")
+        
         # Get campaigns count
         campaigns_count = crud.get_perfume_campaigns_count(db, perfume.perfume_id)
         
-        logger.info(f"✅ Perfume created: {perfume.perfume_id}")
+        logger.info(f"✅ Perfume created: {perfume.perfume_id} for brand {brand_id}")
         
         # Convert to response model
         perfume_detail = PerfumeDetail.model_validate(perfume)

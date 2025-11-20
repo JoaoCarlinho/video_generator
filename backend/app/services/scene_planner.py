@@ -574,7 +574,7 @@ Plan the scene now!"""
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=3000,
+                max_completion_tokens=3000,
                 temperature=0.8,  # Higher creativity
                 messages=[
                     {
@@ -848,7 +848,7 @@ Return ONLY valid JSON array with {scene_count} scene objects:
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=4000,
+                max_completion_tokens=4000,
                 temperature=0.5,  # Lower temperature for stricter grammar compliance
                 messages=[
                     {
@@ -1167,7 +1167,7 @@ Choose wisely. Return ONLY the style ID."""
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=10,
+                max_completion_tokens=10,
             )
             
             chosen_style = response.choices[0].message.content.strip().lower()
@@ -1229,7 +1229,7 @@ Respond with ONLY the tone descriptor, nothing else."""
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=20,
+                max_completion_tokens=20,
             )
             
             tone = response.choices[0].message.content.strip().lower()
@@ -1299,7 +1299,7 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1000,
+                max_completion_tokens=1000,
                 temperature=0.7,
                 messages=[
                     {

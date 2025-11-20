@@ -63,8 +63,22 @@ async def create_campaign(
                     detail=f"Campaign name '{data.campaign_name}' already exists for this perfume"
                 )
         
+        # Verify perfume exists and get it to ensure correct IDs
+        perfume = crud.get_perfume_by_id(db, data.perfume_id)
+        if not perfume:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfume not found"
+            )
+        if perfume.brand_id != brand_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Perfume does not belong to authenticated brand"
+            )
+        logger.info(f"🔍 Verified perfume {perfume.perfume_id} belongs to brand {brand_id}")
+        
         # Create campaign
-        logger.info(f"💾 Creating campaign '{data.campaign_name}' for perfume {data.perfume_id}")
+        logger.info(f"💾 Creating campaign '{data.campaign_name}' for perfume {data.perfume_id} (brand {brand_id})")
         campaign = crud.create_campaign(
             db=db,
             perfume_id=data.perfume_id,
@@ -76,7 +90,20 @@ async def create_campaign(
             num_variations=data.num_variations
         )
         
-        logger.info(f"✅ Campaign created: {campaign.campaign_id}")
+        # Verify campaign was created with correct IDs
+        if campaign.perfume_id != data.perfume_id:
+            logger.error(f"❌ CRITICAL: Campaign created with wrong perfume_id! Expected {data.perfume_id}, got {campaign.perfume_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Campaign created with incorrect perfume_id. Expected {data.perfume_id}, got {campaign.perfume_id}"
+            )
+        if campaign.brand_id != brand_id:
+            logger.error(f"❌ CRITICAL: Campaign created with wrong brand_id! Expected {brand_id}, got {campaign.brand_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Campaign created with incorrect brand_id. Expected {brand_id}, got {campaign.brand_id}"
+            )
+        logger.info(f"✅ Verified campaign {campaign.campaign_id} created with correct perfume_id {campaign.perfume_id} and brand_id {campaign.brand_id}")
         return CampaignDetail.model_validate(campaign)
     
     except HTTPException:

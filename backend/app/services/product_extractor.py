@@ -113,24 +113,28 @@ class ProductExtractor:
             parsed_url = urlparse(url_or_path)
             
             # Check if it's an S3 URL (format: https://bucket.s3.region.amazonaws.com/key)
-            if 's3.amazonaws.com' in parsed_url.netloc or 's3-' in parsed_url.netloc:
-                # Extract bucket and key from S3 URL
-                # Format: https://bucket.s3.region.amazonaws.com/path/to/file
-                bucket_name = parsed_url.netloc.split('.')[0]
-                s3_key = parsed_url.path.lstrip('/')
+            if 's3.amazonaws.com' in parsed_url.netloc or '.s3.' in parsed_url.netloc:
+                from app.utils.s3_utils import parse_s3_url
                 
-                logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
-                
-                # Download from S3 using credentials
+                # Parse S3 URL to get bucket and key
+                # Parse S3 URL to get bucket and key
                 try:
-                    response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-                    image_data = response['Body'].read()
-                    logger.info(f"✅ Downloaded {len(image_data)} bytes from S3")
-                    return image_data
-                except ClientError as e:
-                    logger.error(f"S3 download failed: {e}")
+                    bucket_name, s3_key = parse_s3_url(url_or_path)
+                    
+                    logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
+                    
+                    # Download from S3 using credentials
+                    try:
+                        response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+                        image_data = response['Body'].read()
+                        logger.info(f"✅ Downloaded {len(image_data)} bytes from S3")
+                        return image_data
+                    except ClientError as e:
+                        logger.error(f"S3 download failed: {e}")
+                        return None
+                except ValueError as e:
+                    logger.error(f"Failed to parse S3 URL: {e}")
                     return None
-            else:
                 # Regular HTTP(S) URL - use aiohttp
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url_or_path, timeout=aiohttp.ClientTimeout(total=30)) as resp:

@@ -570,23 +570,21 @@ async def download_video(
                 detail=f"Video not available for aspect ratio {aspect_ratio}"
             )
         
-        # Extract S3 bucket and key from URL
-        # URL format: https://bucket.s3.amazonaws.com/key or https://s3.amazonaws.com/bucket/key
-        if '.s3.' in video_url:
-            # Format: https://bucket.s3.region.amazonaws.com/key
-            parts = video_url.split('/')
-            bucket = parts[2].split('.')[0]
-            key = '/'.join(parts[3:])
-        else:
-            # Fallback: assume it's a direct S3 URL
-            raise HTTPException(status_code=400, detail="Invalid S3 URL format")
-        
-        # Download from S3
-        s3_client = boto3.client('s3')
+        # Parse S3 URL and download from S3
+        from app.utils.s3_utils import parse_s3_url, get_s3_client
         
         try:
-            response = s3_client.get_object(Bucket=bucket, Key=key)
+            bucket_name, s3_key = parse_s3_url(video_url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid S3 URL format: {str(e)}")
+        
+        # Download from S3 using configured credentials
+        s3_client = get_s3_client()
+        
+        try:
+            response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
             video_stream = response['Body'].read()
+            logger.info(f"✅ Downloaded video from S3: {s3_key}")
         except s3_client.exceptions.NoSuchKey:
             raise HTTPException(status_code=404, detail="Video file not found in S3")
         except Exception as e:

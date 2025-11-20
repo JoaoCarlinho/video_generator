@@ -140,28 +140,20 @@ class BrandGuidelineExtractor:
     async def _download_file(self, url: str, output_path: Path):
         """Download file from S3."""
         try:
-            # Extract S3 key from URL
-            # Supports formats:
-            # - https://bucket.s3.region.amazonaws.com/key
-            # - https://s3.amazonaws.com/bucket/key
-            if f"s3.{self.aws_region}.amazonaws.com" in url:
-                s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
-            elif f"s3.amazonaws.com/{self.s3_bucket_name}/" in url:
-                s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
-            else:
-                # Assume last part after bucket name
-                parts = url.split("/")
-                s3_key = "/".join(parts[4:])  # Skip https://bucket.s3.region.amazonaws.com
+            from app.utils.s3_utils import parse_s3_url
             
-            logger.debug(f"Downloading S3 key: {s3_key}")
+            # Parse S3 URL to get bucket and key
+            bucket_name, s3_key = parse_s3_url(url)
+            
+            logger.debug(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
             
             # Download from S3
             self.s3_client.download_file(
-                self.s3_bucket_name,
+                bucket_name,
                 s3_key,
                 str(output_path)
             )
-            logger.debug(f"Downloaded to: {output_path}")
+            logger.info(f"✅ Downloaded guidelines from S3: {s3_key} → {output_path}")
             
         except Exception as e:
             logger.error(f"Error downloading file from S3: {e}")

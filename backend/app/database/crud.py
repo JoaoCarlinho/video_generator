@@ -680,7 +680,8 @@ def create_brand(
     user_id: UUID,
     brand_name: str,
     brand_logo_url: str,
-    brand_guidelines_url: str
+    brand_guidelines_url: str,
+    brand_id: Optional[UUID] = None
 ) -> Brand:
     """
     Create a new brand for a user.
@@ -691,6 +692,7 @@ def create_brand(
         brand_name: Brand name (must be unique)
         brand_logo_url: S3 URL of brand logo
         brand_guidelines_url: S3 URL of brand guidelines PDF
+        brand_id: Optional brand_id to use (if not provided, will be auto-generated)
     
     Returns:
         Brand: Created brand object
@@ -700,6 +702,7 @@ def create_brand(
     """
     try:
         brand = Brand(
+            brand_id=brand_id,  # Use provided brand_id or None (will use model default)
             user_id=user_id,
             brand_name=brand_name,
             brand_logo_url=brand_logo_url,
@@ -721,19 +724,35 @@ def get_brand_by_user_id(db: Session, user_id: UUID) -> Optional[Brand]:
     """
     Get brand by user ID.
     
+    In Phase 2 B2B SaaS, each user should have exactly one brand (1:1 relationship).
+    If multiple brands exist, returns the most recently created one and logs a warning.
+    
     Args:
         db: Database session
         user_id: User ID
     
     Returns:
         Brand: Brand object if found, None otherwise
+    
+    Raises:
+        Exception: If database query fails
     """
     try:
-        brand = db.query(Brand).filter(Brand.user_id == user_id).first()
-        if brand:
-            logger.debug(f"✅ Retrieved brand {brand.brand_id} for user {user_id}")
-        else:
+        brands = db.query(Brand).filter(Brand.user_id == user_id).order_by(Brand.created_at.desc()).all()
+        
+        if not brands:
             logger.debug(f"⚠️ No brand found for user {user_id}")
+            return None
+        
+        if len(brands) > 1:
+            logger.warning(
+                f"⚠️ Multiple brands found for user {user_id} ({len(brands)} brands). "
+                f"Using most recent brand {brands[0].brand_id}. "
+                f"This should not happen in Phase 2 B2B SaaS (1 user = 1 brand)."
+            )
+        
+        brand = brands[0]
+        logger.debug(f"✅ Retrieved brand {brand.brand_id} for user {user_id}")
         return brand
     except Exception as e:
         logger.error(f"❌ Failed to get brand for user {user_id}: {e}")
@@ -841,7 +860,8 @@ def create_perfume(
     back_image_url: Optional[str] = None,
     top_image_url: Optional[str] = None,
     left_image_url: Optional[str] = None,
-    right_image_url: Optional[str] = None
+    right_image_url: Optional[str] = None,
+    perfume_id: Optional[UUID] = None
 ) -> Perfume:
     """
     Create a new perfume for a brand.
@@ -856,12 +876,14 @@ def create_perfume(
         top_image_url: S3 URL of top image (optional)
         left_image_url: S3 URL of left image (optional)
         right_image_url: S3 URL of right image (optional)
+        perfume_id: Optional perfume_id to use (if not provided, will be auto-generated)
     
     Returns:
         Perfume: Created perfume object
     """
     try:
         perfume = Perfume(
+            perfume_id=perfume_id,  # Use provided perfume_id or None (will use model default)
             brand_id=brand_id,
             perfume_name=perfume_name,
             perfume_gender=perfume_gender,
