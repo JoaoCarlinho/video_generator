@@ -45,6 +45,8 @@ export const VideoResults = () => {
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
 
+  const handleBackToDashboard = () => navigate('/dashboard', { replace: true })
+
   /**
    * Helper function to extract the display video path from project/campaign data.
    * Handles both single video (string) and multi-variation (array) cases.
@@ -527,20 +529,20 @@ export const VideoResults = () => {
   if (error || !project) {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
-        <nav className="border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <nav className="border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+          <div className="max-w-5xl mx-auto w-full px-4 py-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate('/dashboard')}
-                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
+                onClick={handleBackToDashboard}
+                className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
               >
-                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
+                <ArrowLeft className="h-5 w-5 text-muted-gray" />
               </button>
               <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </div>
           </div>
         </nav>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
             <p className="text-red-400 font-medium mb-4">{error || `${isCampaign ? 'Campaign' : 'Project'} not found`}</p>
             <Button variant="hero" onClick={() => navigate('/dashboard')}>
@@ -553,52 +555,44 @@ export const VideoResults = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
+        <div className="absolute -top-32 -right-32 w-72 h-72 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-gold-silky/10 rounded-full blur-3xl"></div>
         <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+        <div className="max-w-5xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-gold rounded-lg shadow-gold">
-                  <Sparkles className="h-5 w-5 text-gold-foreground" />
-                </div>
-                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+            <button
+              onClick={handleBackToDashboard}
+              className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-muted-gray" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-gold rounded-lg shadow-gold">
+                <Sparkles className="h-5 w-5 text-gold-foreground" />
               </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-4">
-              <h1 className="text-sm font-semibold text-off-white">
-                {isCampaign ? project.campaign_name : project.title}
-              </h1>
+              <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </div>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <div className="relative z-10">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-5xl">
-          <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]">
-            {/* Main Video Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-              className="w-full bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
-            >
+      <main className="relative z-10 flex-1 w-full max-w-5xl mx-auto px-4 py-6">
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] gap-6">
+          {/* Main Video Card */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
+          >
               {/* Header */}
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
@@ -609,46 +603,22 @@ export const VideoResults = () => {
                     <h2 className="text-lg sm:text-xl font-bold text-off-white">
                       {isCampaign ? project.campaign_name : project.title}
                     </h2>
-                    <div className="flex items-center gap-2 mt-1">
-                      {useLocalStorage && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 bg-olive-700/30 rounded text-xs text-muted-gray border border-olive-600">
-                          <HardDrive className="w-3 h-3" />
-                          Local
-                        </div>
-                      )}
-                      {!useLocalStorage && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 bg-olive-700/30 rounded text-xs text-muted-gray border border-olive-600">
-                          <Cloud className="w-3 h-3" />
-                          S3
-                        </div>
-                      )}
-                      {isFinalized && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 rounded text-xs text-emerald-400 border border-emerald-500/30">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Finalized
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Video Player */}
               <div className="mb-4">
-                {videoUrl ? (
-                  <>
-                    <div className="mb-2 text-xs text-muted-gray">
-                      Video URL: {videoUrl.substring(0, 100)}...
-                    </div>
+                {videoUrl ? 
                   <VideoPlayer
                     videoUrl={videoUrl}
                     title={isCampaign ? project.campaign_name : project.title}
                     aspect={aspect}
                     onDownload={() => handleDownload(aspect)}
                     isLoading={isVideoFetching}
+                    size="standard"
                   />
-                  </>
-                ) : (
+                 : (
                   <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
                     <p className="text-muted-gray">No video available</p>
                     {error && (
@@ -659,7 +629,7 @@ export const VideoResults = () => {
               </div>
 
               {/* Action Buttons Row */}
-              <div className="flex items-center gap-3 pt-4 border-t border-olive-600/50">
+              <div className="flex items-center gap-3 pt-4 border-t border-charcoal-800/70">
                 <Button
                   variant="hero"
                   onClick={() => handleDownload(aspect)}
@@ -708,7 +678,7 @@ export const VideoResults = () => {
               </div>
 
               {isFinalized && (
-                <div className="pt-4 border-t border-olive-600/50">
+                <div className="pt-4 border-t border-charcoal-800/70">
                   <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                     <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4" />
@@ -717,28 +687,28 @@ export const VideoResults = () => {
                   </div>
                 </div>
               )}
-            </motion.div>
+          </motion.div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 mt-6 flex-wrap justify-center">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/dashboard')}
+              className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
+            >
+              Back to {isCampaign ? 'Dashboard' : 'Projects'}
+            </Button>
+            {isCampaign && project?.perfume_id && (
               <Button
-                variant="outline"
-                onClick={() => navigate('/dashboard')}
-                className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
+                variant="hero"
+                onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                className="gap-2 transition-transform duration-200 hover:scale-105"
               >
-                Back to {isCampaign ? 'Dashboard' : 'Projects'}
+                <Play className="w-4 h-4" />
+                Back to Perfume
               </Button>
-              {isCampaign && project?.perfume_id && (
-                <Button
-                  variant="hero"
-                  onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
-                  className="gap-2 transition-transform duration-200 hover:scale-105"
-                >
-                  <Play className="w-4 h-4" />
-                  Back to Perfume
-                </Button>
-              )}
-              {!isCampaign && (
+            )}
+            {!isCampaign && (
               <Button
                 variant="hero"
                 onClick={() => navigate('/create')}
@@ -747,29 +717,28 @@ export const VideoResults = () => {
                 <Play className="w-4 h-4" />
                 Create Another
               </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleDeleteProject}
+              disabled={deleting}
+              className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 transition-transform duration-200 hover:scale-105"
+            >
+              {deleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </>
               )}
-              <Button
-                variant="outline"
-                onClick={handleDeleteProject}
-                disabled={deleting}
-                className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 transition-transform duration-200 hover:scale-105"
-              >
-                {deleting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin mr-2" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </>
-                )}
-              </Button>
-            </div>
+            </Button>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

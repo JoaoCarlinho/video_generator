@@ -84,25 +84,32 @@ export const CampaignDashboard = () => {
     visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
   }
 
+  const handleBackToDashboard = () => {
+    navigate('/dashboard', { replace: true })
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
+        <div className="absolute -top-32 -right-32 w-72 h-72 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-gold-silky/10 rounded-full blur-3xl"></div>
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+        <div className="max-w-6xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link to="/dashboard" className="flex items-center gap-2">
-                <ArrowLeft className="w-5 h-5 text-muted-gray hover:text-gold transition-colors" />
-                <span className="text-muted-gray hover:text-gold transition-colors">Back to Dashboard</span>
-              </Link>
-              <div className="hidden md:block ml-6 pl-6 border-l border-olive-600/50">
+              <button
+                type="button"
+                onClick={handleBackToDashboard}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-muted-gray" />
+                <span className="text-muted-gray">Back to Dashboard</span>
+              </button>
+              <div className="hidden md:block ml-4 pl-4 border-l border-charcoal-800/60">
                 <h1 className="text-sm font-semibold text-off-white">Campaign Dashboard</h1>
               </div>
             </div>
@@ -115,7 +122,7 @@ export const CampaignDashboard = () => {
               </Link>
               <button
                 onClick={() => logout()}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-muted-gray hover:text-gold transition-colors rounded-lg hover:bg-olive-800/50"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-muted-gray hover:text-gold transition-colors rounded-lg hover:bg-charcoal-800/60"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Sign Out</span>
@@ -126,25 +133,24 @@ export const CampaignDashboard = () => {
       </nav>
 
       {/* Main Content */}
-      <div className="relative z-10">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-          <motion.div
-            className="space-y-8 sm:space-y-12"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-          >
+      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-6">
+        <motion.div
+          className="space-y-6"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
             {/* Perfume Header */}
             {perfumeLoading ? (
-              <div className="h-48 bg-olive-800/30 rounded-xl border border-olive-600 animate-pulse" />
+              <div className="h-40 bg-charcoal-900/60 rounded-xl border border-charcoal-800/70 animate-pulse" />
             ) : perfume ? (
               <motion.div
                 variants={itemVariants}
-                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-xl p-6 sm:p-8"
+                className="bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-xl p-6"
               >
                 <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
                   {/* Perfume Image */}
-                  <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-lg border-2 border-gold overflow-hidden bg-slate-800 flex-shrink-0">
+                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-lg border-2 border-gold overflow-hidden bg-charcoal-800 flex-shrink-0">
                     {perfume.front_image_url ? (
                       <img
                         src={perfume.front_image_url}
@@ -209,11 +215,11 @@ export const CampaignDashboard = () => {
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-64 bg-olive-800/30 rounded-xl border border-olive-600 animate-pulse" />
+                    <div key={i} className="h-56 bg-charcoal-900/60 rounded-xl border border-charcoal-800/70 animate-pulse" />
                   ))}
                 </div>
               ) : error ? (
-                <div className="p-8 bg-red-500/10 border border-red-500/30 rounded-xl text-center backdrop-blur-sm">
+                <div className="p-6 bg-red-500/10 border border-red-500/30 rounded-xl text-center backdrop-blur-sm">
                   <p className="text-red-400 font-medium mb-4">{error}</p>
                   <Button
                     variant="outline"
@@ -226,7 +232,7 @@ export const CampaignDashboard = () => {
                 </div>
               ) : campaigns.length === 0 ? (
                 <motion.div
-                  className="text-center py-20 px-4"
+                  className="text-center py-16 px-4"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5 }}
@@ -277,8 +283,7 @@ export const CampaignDashboard = () => {
               )}
             </motion.div>
           </motion.div>
-        </div>
-      </div>
+      </main>
     </div>
   )
 }

@@ -321,139 +321,127 @@ export function VideoSelection() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
+        <div className="absolute -top-32 -right-32 w-72 h-72 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-gold-silky/10 rounded-full blur-3xl"></div>
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+        <div className="max-w-6xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  if (isCampaign) {
-                    navigate(`/campaigns/${id}/results`)
-                  } else {
-                    navigate(`/projects/${id}/results`)
-                  }
-                }}
-                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-gold rounded-lg shadow-gold">
-                  <Sparkles className="h-5 w-5 text-gold-foreground" />
-                </div>
-                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-muted-gray" />
+              <span className="text-muted-gray">Back to Dashboard</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-gold rounded-lg shadow-gold">
+                <Sparkles className="h-5 w-5 text-gold-foreground" />
               </div>
+              <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </div>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <div className="relative z-10">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-12 text-center"
-          >
-            <h1 className="text-4xl font-bold text-white mb-2">
-              Choose Your Favorite
-            </h1>
-            <p className="text-muted-gray">
-              {numVariations} variations generated. Select the one you like best.
-            </p>
-          </motion.div>
+      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <h1 className="text-3xl font-bold text-off-white mb-2">
+            Choose Your Favorite
+          </h1>
+          <p className="text-muted-gray">
+            {numVariations} variations generated. Select the one you like best.
+          </p>
+        </motion.div>
 
-          {/* Video Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {videoUrls.map((videoUrl, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+        {/* Video Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8 auto-rows-fr">
+          {videoUrls.map((videoUrl, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card
+                className={`h-full flex flex-col cursor-pointer transition-all duration-200 ${
+                  selectedIndex === index
+                    ? 'ring-2 ring-gold shadow-gold-lg'
+                    : 'hover:ring-2 hover:ring-gold/20 hover:shadow-gold'
+                }`}
+                onClick={() => handleSelect(index)}
               >
-                <Card
-                  className={`cursor-pointer transition-all duration-200 ${selectedIndex === index
-                      ? 'ring-2 ring-gold shadow-gold-lg'
-                      : 'hover:ring-2 hover:ring-accent-neutral hover:shadow-lg'
-                    }`}
-                  onClick={() => handleSelect(index)}
-                >
-                  <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden mb-4">
-                    {/* Video Preview */}
-                    <VideoPlayer
-                      videoUrl={videoUrl}
-                      aspect="9:16"
-                      title={`Option ${index + 1}`}
-                    />
-
-                    {/* Selection Indicator */}
-                    {selectedIndex === index && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute top-3 right-3 bg-gold text-gold-foreground rounded-full w-10 h-10 flex items-center justify-center shadow-gold-lg z-10"
-                      >
-                        <CheckCircle2 className="w-6 h-6" />
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* Option Label */}
-                  <div className="p-4 pt-0">
-                    <p className="text-white font-semibold text-lg mb-1">
-                      Option {index + 1}
-                    </p>
-                    <p className="text-muted-gray text-sm">
-                      {selectedIndex === index ? 'Selected' : 'Click to select this version'}
-                    </p>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Action Buttons */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="flex gap-4 justify-center"
-          >
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (isCampaign) {
-                  navigate(`/campaigns/${id}/results`)
-                } else {
-                  navigate(`/projects/${id}/results`)
-                }
-              }}
-              className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="default"
-              disabled={selectedIndex === null || selecting}
-              onClick={handleNext}
-              className="bg-gold text-gold-foreground hover:bg-accent-gold-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {selecting ? 'Selecting...' : 'Next: Review Selected Video'}
-            </Button>
-          </motion.div>
+                <div className="relative flex-1 flex items-center justify-center p-4">
+                  <VideoPlayer
+                    videoUrl={videoUrl}
+                    aspect="9:16"
+                    title={`Option ${index + 1}`}
+                    size="compact"
+                  />
+                  {selectedIndex === index && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute top-4 right-4 bg-gold text-gold-foreground rounded-full w-9 h-9 flex items-center justify-center shadow-gold-lg z-10"
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                    </motion.div>
+                  )}
+                </div>
+                <div className="px-4 pb-4">
+                  <p className="text-off-white font-semibold text-base">
+                    Option {index + 1}
+                  </p>
+                  <p className="text-muted-gray text-sm">
+                    {selectedIndex === index ? 'Selected' : 'Tap to select this version'}
+                  </p>
+                </div>
+              </Card>
+            </motion.div>
+          ))}
         </div>
-      </div>
+
+        {/* Action Buttons */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex gap-4 justify-center flex-wrap"
+        >
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (isCampaign) {
+                navigate(`/campaigns/${id}/results`)
+              } else {
+                navigate(`/projects/${id}/results`)
+              }
+            }}
+            className="border-charcoal-700 text-muted-gray hover:text-gold hover:border-gold"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="default"
+            disabled={selectedIndex === null || selecting}
+            onClick={handleNext}
+            className="bg-gold text-gold-foreground hover:bg-accent-gold-dark disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {selecting ? 'Selecting...' : 'Next: Review Selected Video'}
+          </Button>
+        </motion.div>
+      </main>
     </div>
   )
 }

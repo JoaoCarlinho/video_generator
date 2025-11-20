@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   aspect: '9:16' | '1:1' | '16:9'
   onDownload?: () => void
   isLoading?: boolean
+  size?: 'compact' | 'standard' | 'wide'
 }
 
 export const VideoPlayer = ({
@@ -17,6 +18,7 @@ export const VideoPlayer = ({
   aspect,
   onDownload,
   isLoading = false,
+  size = 'standard',
 }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -146,10 +148,28 @@ export const VideoPlayer = ({
     '16:9': 'Horizontal',
   }
 
-  const maxWidthClasses = {
-    '9:16': 'max-w-sm sm:max-w-md',
-    '1:1': 'max-w-md sm:max-w-lg',
-    '16:9': 'max-w-2xl sm:max-w-3xl',
+  const maxWidthClasses: Record<'compact' | 'standard' | 'wide', Record<'9:16' | '1:1' | '16:9', string>> = {
+    compact: {
+      '9:16': 'max-w-[180px] sm:max-w-[210px]',
+      '1:1': 'max-w-[220px] sm:max-w-[260px]',
+      '16:9': 'max-w-md',
+    },
+    standard: {
+      '9:16': 'max-w-[240px] sm:max-w-[300px]',
+      '1:1': 'max-w-[320px] sm:max-w-[380px]',
+      '16:9': 'max-w-2xl',
+    },
+    wide: {
+      '9:16': 'max-w-sm sm:max-w-md',
+      '1:1': 'max-w-md sm:max-w-lg',
+      '16:9': 'max-w-3xl sm:max-w-4xl',
+    },
+  }
+
+  const heightLimitClasses: Record<'compact' | 'standard' | 'wide', string> = {
+    compact: 'max-h-[360px]',
+    standard: 'max-h-[520px]',
+    wide: 'max-h-[640px]',
   }
 
   return (
@@ -162,10 +182,10 @@ export const VideoPlayer = ({
       {/* Player Container */}
       <div 
         ref={containerRef}
-        className={`bg-olive-900 overflow-hidden border border-olive-600/50 shadow-gold-lg ${
+        className={`bg-charcoal-900 overflow-hidden border border-charcoal-700/70 shadow-gold-lg ${
           isFullscreen 
             ? 'fixed inset-0 z-50 rounded-none border-0 w-screen h-screen' 
-            : `rounded-xl ${aspectRatios[aspect]} w-full ${maxWidthClasses[aspect]} mx-auto`
+            : `rounded-xl ${aspectRatios[aspect]} w-full ${maxWidthClasses[size][aspect]} ${heightLimitClasses[size]} mx-auto`
         }`}
       >
         {videoUrl ? (
