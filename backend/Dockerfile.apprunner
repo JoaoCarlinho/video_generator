@@ -1,9 +1,12 @@
 # AWS App Runner Docker image for FastAPI backend
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
-# Install system dependencies
+# Install system dependencies including OpenCV requirements
 RUN apt-get update && \
-    apt-get install -y wget tar xz-utils gcc g++ cmake make libgl1 && \
+    apt-get install -y \
+        wget tar xz-utils gcc g++ cmake make \
+        libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 \
+        libgthread-2.0-0 libgtk2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
