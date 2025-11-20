@@ -729,98 +729,129 @@ This is a UNISEX perfume. Apply these visual characteristics:
 - **Atmosphere**: Contemporary luxury, inclusive elegance, modern sophistication
 """
         
-        # Build perfume-specific prompt with STRICT grammar
-        prompt = f"""You are a LUXURY PERFUME COMMERCIAL DIRECTOR creating a TikTok vertical video (9:16).
+        # Build VEO S3 perfume-specific prompt with USER-FIRST philosophy
+        prompt = f"""You are a world-class PERFUME COMMERCIAL DIRECTOR working with Google's Veo S3 model.
 
-🎯 PERFUME INFORMATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 YOUR MISSION: Bring the user's creative vision to life with stunning execution
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORITY HIERARCHY (CRITICAL):
+1. USER'S CREATIVE PROMPT (PRIMARY) - The story, concept, emotion they want
+2. PERFUME VISUAL LANGUAGE (SECONDARY) - The cinematography style and execution quality
+3. VEO S3 TECHNICAL CAPABILITIES (TOOLS) - How to achieve the vision
+
+🚨 GOLDEN RULE:
+If user prompt says "underwater scene with dolphins", you create that underwater scene 
+with perfume ad cinematography (NOT force it into "silk fabric" just because that's in the grammar).
+
+The perfume shot grammar is a VISUAL LANGUAGE LIBRARY, not a strict rulebook.
+Use it to inform HOW you shoot scenes, not WHAT scenes to create.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 USER'S CREATIVE VISION (PRIMARY - THIS DRIVES THE STORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{creative_prompt}
+
 Brand: {brand_name}
-Perfume Name: {perfume_name}
-Brand Description: {brand_description or 'Luxury perfume brand'}
-Target Audience: {target_audience}
+Perfume: {perfume_name}
+{f"Brand Description: {brand_description}" if brand_description else ""}
 {f"Brand Guidelines: {str(brand_guidelines)[:300]}" if brand_guidelines else ""}
 {gender_guidance}
 
-🎨 CREATIVE VISION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{creative_prompt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎬 VEO S3 ADVANCED CINEMATOGRAPHY CAPABILITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎬 PLATFORM & STYLE CONSTRAINTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Platform: TikTok Vertical (9:16, 1080×1920)
-Video Style: {chosen_style}
-Duration: ~{target_duration}s
-Scene Count: EXACTLY {scene_count} scenes
-Aspect Ratio: Always 9:16 (portrait mode only)
-{f"Gender: {perfume_gender.upper()}" if perfume_gender else ""}
+CAMERA MOVEMENTS:
+- Dolly in/out, crane up/down, tracking shot, gimbal smooth, slow pan
+- Rack focus (product to background), shallow/deep DOF, selective focus
+- Rule of thirds, golden ratio, negative space, symmetry, leading lines
+- Low angle (power), high angle (intimacy), Dutch angle (tension), POV shots
 
-🔒 CRITICAL - PERFUME SHOT GRAMMAR (YOU MUST FOLLOW EXACTLY)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You MUST use ONLY these allowed shot types. DO NOT invent new types.
+LIGHTING TECHNIQUES (Advanced):
+- Rembrandt lighting, split lighting, rim lighting, three-point lighting
+- Volumetric fog/haze, god rays, lens flares, bokeh, caustics
+- Golden hour warmth, blue hour cool, neon glow, candlelight flicker
+- Light painting, moving shadows, dappled light through objects
 
+MOTION & PHYSICS:
+- Silk flowing in wind, fabric billowing, draping, rippling
+- Perfume spray mist, water droplets, pouring liquid, surface tension
+- Dust motes in light, glitter falling, smoke wisps, petal shower
+- Hair movement, breath visible in cold air, steam rising
+
+PRODUCT INTEGRATION (when use_product=True):
+- Natural placement: On pedestal, held by hand, reflected in mirror, underwater,
+  suspended in air, among flowers, on silk fabric, in beam of light
+- Interactions: Casting shadow, reflecting light, causing ripples, touching water,
+  surrounded by particles, creating bokeh, center of composition
+- Movement: Rotating slowly, rising from liquid, descending on crane shot,
+  revealed through rack focus, emerging from fog
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 PERFUME VISUAL LANGUAGE LIBRARY (Use as Reference, Not Rules)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COMMON PERFUME AD ELEMENTS (Adapt to User's Concept):
 {chr(10).join(shot_descriptions)}
 
-📋 MANDATORY RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Generate EXACTLY {scene_count} scenes (no more, no less)
-2. FIRST scene must be: {flow_rules.get('first_scene_must_be', ['macro_bottle', 'atmospheric'])} shot type
-3. LAST scene must be: {flow_rules.get('last_scene_must_be', ['brand_moment'])} shot type
-4. Product must appear in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
-5. Total duration should be ±{int(target_duration * 0.15)}s from {target_duration}s
-6. ALL scenes must use ONLY transitions: {', '.join(flow_rules.get('transition_rules', {}).get('allowed_transitions', ['fade', 'cut']))}
-7. FINAL scene MUST include text with perfume name "{perfume_name}" + brand name "{brand_name}"
-8. ALL scenes must match style: {chosen_style}
-9. **CRITICAL**: Use the PERFUME NAME "{perfume_name}" (not brand name) in scene descriptions and text overlays when referring to the product
-10. **CRITICAL**: Apply gender-specific visual language ({perfume_gender.upper() if perfume_gender else 'UNISEX'}) to all scene descriptions - colors, lighting, mood, textures, camera movements, and atmosphere must reflect the gender aesthetic
+💡 USE THESE TO INFORM EXECUTION STYLE, NOT TO DICTATE CONTENT
+- If user wants "midnight garden" → create midnight garden with perfume cinematography
+- If user wants "ocean waves" → create ocean scene with luxury execution
+- If user wants "abstract light" → create abstract light with elegant production
 
-✅ PERFUME SHOT TYPE REQUIREMENTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Each scene MUST have:
-- shot_type: (MUST be one of the allowed IDs above)
-- shot_variation: (MUST be from the allowed variations for that type)
-- role: (hook, showcase, cta, etc.)
-- duration: (within allowed range)
-- background_prompt: (detailed visual description using {chosen_style} aesthetic)
-- use_product: (true/false based on shot type)
-- camera_movement: (from allowed movements)
-- transition_to_next: (fade or cut only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 TECHNICAL REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Platform: TikTok Vertical (9:16, 1080×1920)
+Style: {chosen_style}
+Duration: ~{target_duration}s
+Scene Count: {scene_count} scenes
+{f"Gender: {perfume_gender.upper()}" if perfume_gender else ""}
 
-⚠️ CRITICAL VALIDATION RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✓ EVERY shot_type MUST be EXACTLY one of these IDs: {', '.join(allowed_ids)}
-✓ DO NOT use dictionary keys like 'macro_bottle_shots' - use the ID 'macro_bottle' instead
-✓ EVERY shot_variation must be in the allowed list for that type
-✓ NO shot types that are not in the allowed list above
-✓ NO "generic" or invented shot types
-✓ Product positioning: ONLY in macro_bottle, human_silhouette, brand_moment
-✓ NO multi-product scenes (perfume bottles only)
-✓ NO conflicting rules (follow grammar EXACTLY)
+MANDATORY STRUCTURE:
+1. FIRST scene: {flow_rules.get('first_scene_must_be', ['macro_bottle', 'atmospheric'])} shot type
+2. LAST scene: {flow_rules.get('last_scene_must_be', ['brand_moment'])} shot type
+3. Product appears in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
+4. Final scene includes perfume name "{perfume_name}" + brand "{brand_name}"
+5. Total duration: ±{int(target_duration * 0.15)}s from {target_duration}s
 
-🚨 EXACT SHOT TYPE IDs YOU MUST USE:
-{', '.join([f"'{id}'" for id in allowed_ids])}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 YOUR WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-DO NOT USE THESE (they are wrong):
-- 'macro_bottle_shots' → USE 'macro_bottle'
-- 'luxury_aesthetic_broll' → USE 'aesthetic_broll'
-- 'atmospheric_scenes' → USE 'atmospheric'
-- 'final_brand_moment' → USE 'brand_moment'
+STEP 1: Read user's creative prompt → Understand their vision
+STEP 2: Design scenes → Realize THEIR concept (not grammar templates)
+STEP 3: Apply perfume cinematography → Make it luxurious with advanced techniques
+STEP 4: Use Veo S3 tools → Achieve cinematic quality
 
-📄 OUTPUT FORMAT (STRICT JSON)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE FORMULA:
+User's Concept (WHAT to show) + Perfume Cinematography (HOW to show it) = Perfect Scene
+
+EXAMPLES:
+✓ User: "Midnight garden with fireflies" → Create midnight garden + cinematic execution
+✓ User: "Ocean waves and freedom" → Create ocean scene + perfume lighting
+✓ User: "Abstract light painting" → Create abstract light + luxury production
+✗ User: "Midnight garden" → DON'T force "silk fabric" (grammar override)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 OUTPUT FORMAT (JSON)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Return ONLY valid JSON array with {scene_count} scene objects:
 
 [
   {{
     "scene_id": 0,
-    "shot_type": "macro_bottle",
+    "shot_type": "{allowed_ids[0]}",
     "shot_variation": "extreme_closeup_cap",
     "role": "hook",
     "duration": 6,
-    "background_prompt": "Extreme close-up of perfume bottle cap with engraved logo, soft golden rim lighting, black background, premium commercial aesthetic",
+    "background_prompt": "Cinematic opening that brings USER'S CONCEPT to life with dolly-in camera, volumetric fog, rim lighting, bokeh, and {chosen_style} aesthetic. Describe USER'S vision enhanced with perfume commercial techniques.",
     "use_product": true,
     "product_position": "center",
     "product_scale": 0.6,
-    "camera_movement": "slow_zoom_in",
+    "camera_movement": "dolly_in",
     "transition_to_next": "fade",
     "overlay": {{
       "text": "{perfume_name}",
@@ -834,16 +865,13 @@ Return ONLY valid JSON array with {scene_count} scene objects:
   ...
 ]
 
-⚠️ DO NOT DEVIATE FROM GRAMMAR
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-❌ DO NOT use shot types not in the list
-❌ DO NOT use variations not in the shot type
-❌ DO NOT ignore scene count requirement
-❌ DO NOT mix styles or aesthetics
-❌ DO NOT create more than {scene_count} scenes
-❌ DO NOT create fewer than {scene_count} scenes
+⚠️ REMEMBER:
+- shot_type must be one of: {', '.join(allowed_ids)}
+- User's creative vision = PRIMARY (honor their concept)
+- Grammar = SECONDARY (inform execution style, not content)
+- Apply advanced cinematography to make it stunning
 
-✅ FOLLOW GRAMMAR RULES EXACTLY AND GENERATE NOW"""
+✅ GENERATE NOW - BRING USER'S VISION TO LIFE!"""
         
         try:
             response = await self.client.chat.completions.create(
@@ -853,19 +881,28 @@ Return ONLY valid JSON array with {scene_count} scene objects:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"""You are a luxury perfume commercial director. You MUST follow perfume shot grammar constraints EXACTLY.
+                        "content": f"""You are a world-class perfume commercial director working with Veo S3.
 
-CRITICAL RULES:
+VEO S3 USER-FIRST PHILOSOPHY:
+1. User's creative prompt = PRIMARY (honor their vision and concept)
+2. Perfume visual language = SECONDARY (inform HOW to execute, not WHAT to create)
+3. Grammar provides cinematography techniques, not content restrictions
+
+CRITICAL TECHNICAL RULES:
 1. Use ONLY these exact shot_type IDs: {', '.join(allowed_ids)}
 2. DO NOT use dictionary keys like 'macro_bottle_shots' - use 'macro_bottle' instead
 3. DO NOT invent new shot types
 4. Every scene MUST have a shot_type field with one of the exact IDs above
 5. Output only valid JSON arrays
 
-Example CORRECT shot_type: "macro_bottle"
-Example WRONG shot_type: "macro_bottle_shots" (this is a dictionary key, not the ID)
+BALANCE: Realize user's creative concept + Apply perfume cinematography = Perfect execution
 
-Follow the grammar rules EXACTLY."""
+Example CORRECT approach:
+- User: "Underwater scene" → Create underwater scene + perfume lighting/cinematography
+Example WRONG approach:
+- User: "Underwater scene" → Force "silk fabric" (ignoring user's concept)
+
+Follow user's vision FIRST, grammar rules SECOND."""
                     },
                     {
                         "role": "user",

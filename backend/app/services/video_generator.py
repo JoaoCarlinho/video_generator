@@ -1,7 +1,11 @@
 """Video Generator Service - Scene background video generation.
 
-This service uses ByteDance SeedAnce-1-Pro model for high-quality text-to-video
-generation via HTTP API (no SDK dependency).
+VEO S3 MIGRATION READY (November 2025):
+This service is prepared for Google Veo S3 image-to-video model migration.
+Currently uses ByteDance SeedAnce-1-Pro as temporary solution.
+
+CURRENT: ByteDance SeedAnce-1-Pro (text-to-video)
+FUTURE: Google Veo S3 (image-to-video with product/text integration)
 
 Uses HTTP API directly for:
 - Better compatibility (works with all Python versions)
@@ -11,6 +15,12 @@ Uses HTTP API directly for:
 
 Model: bytedance/seedance-1-pro (high-quality production model)
 Optimized for: Professional ad video generation
+
+VEO S3 READINESS:
+- Enhanced prompts from ScenePlanner (user-first + cinematography)
+- Support for style overrides
+- Prepared for image reference inputs (product/logo)
+- Text integration instructions ready
 """
 
 import logging
@@ -67,9 +77,16 @@ class VideoGenerator:
     ) -> str:
         """
         Generate background video for a scene via HTTP API (TikTok vertical 9:16).
+        
+        VEO S3 MIGRATION READY:
+        This method receives enhanced prompts from ScenePlanner with:
+        - User-first creative concepts
+        - Advanced cinematography vocabulary
+        - Perfume visual language applied to user's vision
+        - Ready for Veo S3 image-to-video integration
 
         Args:
-            prompt: Scene description prompt
+            prompt: Enhanced scene description prompt (from ScenePlanner with Veo S3 optimizations)
             style_spec_dict: Style specification dict with visual guidelines
             duration: Video duration in seconds (typical: 2-5 seconds)
             seed: Random seed for reproducibility (optional, not used by SeedAnce)
@@ -78,6 +95,11 @@ class VideoGenerator:
 
         Returns:
             URL of generated video from Replicate
+            
+        Future Veo S3 Integration:
+            - Will accept product_image_url for natural integration
+            - Will accept logo_image_url for brand moments
+            - Will accept text_instructions for embedded text generation
         """
         logger.info(f"Generating TikTok vertical background video: {prompt[:60]}...")
 

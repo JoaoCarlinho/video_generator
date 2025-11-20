@@ -28,15 +28,18 @@
 - **Async:** asyncio + aiohttp
 
 ### AI Services
-- **Video Generation:** Replicate API (Wān model: `minimax/video-01`)
+- **Video Generation:** 
+  - Current: ByteDance SeedAnce-1-Pro via Replicate API
+  - Future: Google Veo S3 (image-to-video with product/text integration)
 - **Music Generation:** Replicate API (MusicGen)
-- **Scene Planning:** OpenAI GPT-4o-mini
-- **Product Extraction:** rembg (local processing)
+- **Scene Planning:** OpenAI GPT-4o-mini (enhanced with Veo S3 prompts)
+- **Product Extraction:** rembg (local processing, may be simplified for Veo)
 
 ### Processing Libraries
-- **Compositing:** OpenCV + PIL (Pillow)
-- **Rendering:** FFmpeg (subprocess)
+- **Compositing:** OpenCV + PIL (DEPRECATED - being removed for Veo S3)
+- **Rendering:** FFmpeg (subprocess) - for final video concatenation only
 - **Audio:** pydub
+- **Text Overlay:** FFmpeg drawtext (DEPRECATED - being removed, Veo handles text)
 
 ### Infrastructure
 - **Frontend Hosting:** Vercel
