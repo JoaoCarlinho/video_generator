@@ -24,12 +24,12 @@ class Settings(BaseSettings):
     s3_bucket_name: Optional[str] = None
     aws_region: str = "us-east-1"
 
-    # Supabase
+    # Supabase (for authentication only)
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
     supabase_service_role_key: Optional[str] = None
     supabase_anon_key: Optional[str] = None
-    
+
     # App Config
     environment: str = "development"
     debug: bool = True

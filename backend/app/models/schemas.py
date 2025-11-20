@@ -424,3 +424,4 @@ class AdProject(BaseModel):
     video_settings: VideoSettings
     audio_settings: AudioSettings
     render_status: Optional[str] = None
+    video_metadata: Optional[Dict[str, Any]] = None  # For storing additional metadata like selectedStyle

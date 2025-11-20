@@ -73,8 +73,8 @@ def init_db():
         if is_local:
             connect_args['sslmode'] = 'disable'
 
-        # Using Supabase transaction pooler for IPv4 compatibility
-        logger.info("🔧 Connecting to database via Supabase pooler")
+        # Connect to AWS RDS PostgreSQL database
+        logger.info("🔧 Connecting to database")
 
         engine = create_engine(
             db_url,

@@ -51,7 +51,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Log Lambda context
     logger.info(f"Function name: {context.function_name}")
     logger.info(f"Function version: {context.function_version}")
-    logger.info(f"Request ID: {context.request_id}")
+    logger.info(f"Request ID: {context.aws_request_id}")
     logger.info(f"Memory limit: {context.memory_limit_in_mb} MB")
     logger.info(f"Time remaining: {context.get_remaining_time_in_millis()} ms")
 

@@ -23,7 +23,7 @@ class UploadResponse(BaseModel):
     file_path: str
     file_url: str  # For backwards compatibility, returns local path
 
-@router.post("/upload-asset", response_model=UploadResponse, summary="Upload asset file to local filesystem")
+@router.post("/upload-asset", response_model=UploadResponse, summary="Upload asset file to S3")
 async def upload_asset(
     file: UploadFile = File(...),
     asset_type: str = Form(...),  # 'product', 'logo', 'guidelines'
@@ -31,51 +31,56 @@ async def upload_asset(
     authorization: Optional[str] = Header(None)
 ):
     """
-    Upload an asset file (product image, logo, or guidelines) to local filesystem.
-    
-    Files are stored in: /tmp/genads/{user_id}/{project_id or 'temp'}/{asset_type}/
-    
+    Upload an asset file (product image, logo, or guidelines) to S3.
+
+    Files are uploaded to: s3://bucket/projects/{project_id}/input/{asset_type}/
+
     Args:
         file: The file to upload
         asset_type: Type of asset ('product', 'logo', 'guidelines')
         project_id: Optional project ID (if not provided, uses 'temp')
-        authorization: JWT token from Supabase
-    
+        authorization: JWT token for authentication
+
     Returns:
-        Local file path where the file was saved
+        S3 URL where the file was saved
     """
     try:
+        from app.utils.s3_utils import upload_to_project_folder
+
         # Get user ID from auth token
         user_id = get_current_user_id(authorization)
-        
+
         # Validate asset type
         if asset_type not in ['product', 'logo', 'guidelines']:
             raise HTTPException(status_code=400, detail=f"Invalid asset_type: {asset_type}")
-        
-        # Create directory structure: /tmp/genads/{user_id}/{project_id}/{asset_type}/
-        proj_id = project_id if project_id else "temp"
-        upload_dir = UPLOAD_BASE_DIR / str(user_id) / proj_id / asset_type
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        # Read file contents
+        contents = await file.read()
+        logger.info(f"Uploading {asset_type} file ({len(contents)} bytes) to S3")
+
         # Generate unique filename
         file_extension = Path(file.filename).suffix if file.filename else ""
         unique_filename = f"{uuid.uuid4().hex}{file_extension}"
-        file_path = upload_dir / unique_filename
-        
-        # Save file to disk
-        logger.info(f"Saving {asset_type} file to {file_path}")
-        contents = await file.read()
-        
-        with open(file_path, "wb") as f:
-            f.write(contents)
-        
-        logger.info(f"✅ Saved {len(contents)} bytes to {file_path}")
-        
-        return UploadResponse(
-            file_path=str(file_path),
-            file_url=str(file_path)  # Return local path
+
+        # Upload to S3
+        # Map asset types to S3 subfolders
+        subfolder = f"input/{asset_type}"
+        proj_id = project_id if project_id else user_id  # Use user_id for temp uploads
+
+        s3_result = await upload_to_project_folder(
+            file_content=contents,
+            project_id=str(proj_id),
+            subfolder=subfolder,
+            filename=unique_filename
         )
-        
+
+        logger.info(f"✅ Uploaded {len(contents)} bytes to S3: {s3_result['s3_key']}")
+
+        return UploadResponse(
+            file_path=s3_result['s3_key'],  # S3 key
+            file_url=s3_result['url']  # S3 URL
+        )
+
     except Exception as e:
         logger.error(f"Failed to upload file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")

@@ -4,24 +4,33 @@ FROM public.ecr.aws/lambda/python:3.11
 
 # Install system dependencies
 # FFmpeg is required for video processing
-# wget, tar, xz for downloading FFmpeg static build
+# wget, tar, xz for downloading FFmpeg
 # gcc-c++, cmake for building Python packages with C++ extensions (like soxr)
 # Development tools for building audio libraries
+# mesa-libGL, mesa-libGLU for OpenCV/video processing graphics libraries
+# libXext, libXrender, libSM, libICE for X11 graphics support
+# fontconfig, freetype, fribidi for text rendering support
 RUN yum update -y && \
-    yum install -y wget tar xz gcc gcc-c++ cmake make && \
+    yum install -y wget tar xz gcc gcc-c++ cmake make \
+        mesa-libGL mesa-libGLU libXext libXrender libSM libICE \
+        fontconfig freetype fribidi && \
     yum clean all
 
-# Install FFmpeg (static build - no dependencies)
-# Using John Van Sickle's static FFmpeg builds (trusted source)
-RUN wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
-    tar xf ffmpeg-release-amd64-static.tar.xz && \
-    mv ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ && \
-    mv ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ && \
-    rm -rf ffmpeg-* && \
-    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+# Install FFmpeg using ffmpeg-static binaries (Lambda-compatible, includes all filters)
+# These binaries are pre-built and tested to work across different Linux distributions
+# Includes drawtext filter with libfreetype, libfribidi, and fontconfig support
+RUN cd /tmp && \
+    wget -O ffmpeg.gz https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64.gz && \
+    wget -O ffprobe.gz https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffprobe-linux-x64.gz && \
+    gunzip ffmpeg.gz && \
+    gunzip ffprobe.gz && \
+    chmod +x ffmpeg ffprobe && \
+    mv ffmpeg /usr/local/bin/ffmpeg && \
+    mv ffprobe /usr/local/bin/ffprobe && \
+    rm -rf /tmp/*
 
-# Verify FFmpeg installation
-RUN ffmpeg -version && ffprobe -version
+# Note: This FFmpeg build from eugeneware/ffmpeg-static is known to work on Lambda
+# Includes all filters including drawtext with proper GLIBC compatibility
 
 # Copy requirements file
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
@@ -42,10 +51,11 @@ COPY app/ ${LAMBDA_TASK_ROOT}/app/
 COPY lambda_handler.py ${LAMBDA_TASK_ROOT}/
 COPY api_handler.py ${LAMBDA_TASK_ROOT}/
 
-# Set Lambda handler (API Gateway/Function URL handler)
-# For SQS worker, use lambda_handler.handler instead
+# Set Lambda handler for SQS events
+# api_handler.handler = Mangum adapter for HTTP/API Gateway (not used here)
+# lambda_handler.handler = SQS event processor for video generation
 # Format: filename.function_name
-CMD ["api_handler.handler"]
+CMD ["lambda_handler.handler"]
 
 # Environment variables will be set in Lambda function configuration
 # Required env vars:

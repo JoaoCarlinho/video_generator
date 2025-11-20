@@ -26,19 +26,18 @@ async def get_preview_video(
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
-    """Get preview video from local storage (NOT S3).
-    
-    Used during preview phase before finalization.
-    Streams video from local disk instead of S3.
-    Returns the generated video regardless of aspect ratio.
-    
+    """Get preview video from S3 or local storage.
+
+    Tries S3 first (output_videos field), falls back to local storage if needed.
+    Returns a redirect to S3 URL for efficient video delivery.
+
     **Path Parameters:**
     - project_id: UUID of the project
-    
-    **Response:** 
-    - Content-Type: video/mp4
-    - Video file from local storage
-    
+
+    **Response:**
+    - 307 Redirect to S3 URL OR
+    - Content-Type: video/mp4 (streamed from local if S3 unavailable)
+
     **Errors:**
     - 404: Project not found or video not available
     - 403: Not authorized
@@ -46,21 +45,29 @@ async def get_preview_video(
     try:
         init_db()
         user_id = get_current_user_id(authorization)
-        
+
         # Get project and verify ownership
         project = get_project_by_user(db, project_id, user_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        
-        # Check if videos are in local storage
+
+        # PRIORITY 1: Check S3 URLs (output_videos field)
+        s3_video_urls = project.output_videos or {}
+        if s3_video_urls:
+            # Get the first available S3 URL
+            s3_url = next((url for url in s3_video_urls.values() if url), None)
+            if s3_url:
+                logger.info(f"✅ Redirecting to S3 preview: {s3_url}")
+                # Return 307 redirect to S3 URL
+                from fastapi.responses import RedirectResponse
+                return RedirectResponse(url=s3_url, status_code=307)
+
+        # FALLBACK: Check local storage
         local_video_paths = project.local_video_paths or {}
-        
-        # Get the first (and only) video since we only generate one
         local_video_path = next(iter(local_video_paths.values()), None) if local_video_paths else None
-        
-        # If local file exists, stream from local disk
+
         if local_video_path and LocalStorageManager.file_exists(local_video_path):
-            logger.info(f"✅ Streaming preview from local storage: {local_video_path}")
+            logger.info(f"✅ Streaming preview from local storage (S3 not available): {local_video_path}")
             return FileResponse(
                 local_video_path,
                 media_type="video/mp4",
@@ -69,13 +76,13 @@ async def get_preview_video(
                     "Cache-Control": "no-cache"
                 }
             )
-        
-        # No video found in local storage
+
+        # No video found anywhere
         raise HTTPException(
             status_code=404,
             detail=f"Preview video not available"
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
