@@ -6,6 +6,7 @@ from sqlalchemy.pool import NullPool
 from app.config import settings
 import logging
 import ssl
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,11 @@ def init_db():
                 # Only add sslmode if not already specified
                 # Determine if this is a local or remote database
                 # Treat VPC private IPs (10.0.x.x) as local since proxy doesn't handle SSL
-                # Check for hostname patterns, not just 'postgres' which matches username
-                is_local = ('localhost' in db_url or '127.0.0.1' in db_url or
-                           '@postgres/' in db_url or '@postgres:' in db_url or '10.0.' in db_url)
+                # Extract hostname to check (avoid matching username/password)
+                hostname_match = re.search(r'@([^/:]+)[:/]', db_url)
+                hostname = hostname_match.group(1) if hostname_match else ''
+                is_local = (hostname in ['localhost', '127.0.0.1', 'postgres'] or
+                           hostname.startswith('10.0.'))
 
                 # Add appropriate SSL mode
                 if is_local:
@@ -62,8 +65,11 @@ def init_db():
                 logger.debug("📌 Using explicitly configured sslmode from DATABASE_URL")
         
         # Configure connection arguments
-        is_local = ('localhost' in db_url or '127.0.0.1' in db_url or
-                   '@postgres/' in db_url or '@postgres:' in db_url or '10.0.' in db_url)
+        # Use same hostname extraction as above
+        hostname_match = re.search(r'@([^/:]+)[:/]', db_url)
+        hostname = hostname_match.group(1) if hostname_match else ''
+        is_local = (hostname in ['localhost', '127.0.0.1', 'postgres'] or
+                   hostname.startswith('10.0.'))
 
         connect_args = {
             'connect_timeout': 10,
