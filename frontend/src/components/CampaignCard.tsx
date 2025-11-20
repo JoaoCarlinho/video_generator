@@ -40,7 +40,33 @@ const formatCost = (cost: number | string | null | undefined): string => {
 
 export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
   // Get video thumbnail from campaign_json if available
-  const thumbnailUrl = campaign.campaign_json?.variationPaths?.[0]?.final_video_url || null
+  // Backend stores as object: {"variation_0": {"aspectExports": {"9:16": "url"}}, ...}
+  // Handle case where campaign_json might be a string (JSONB serialization)
+  let campaignJson = campaign.campaign_json || {}
+  if (typeof campaignJson === 'string') {
+    try {
+      campaignJson = JSON.parse(campaignJson)
+    } catch (e) {
+      console.error('❌ Failed to parse campaign_json:', e)
+      campaignJson = {}
+    }
+  }
+  const variationPaths = campaignJson?.variationPaths || {}
+  let thumbnailUrl: string | null = null
+  
+  // Handle both object format (from backend) and array format (legacy)
+  if (Array.isArray(variationPaths) && variationPaths.length > 0) {
+    // Legacy array format
+    thumbnailUrl = variationPaths[0]?.final_video_url || variationPaths[0]?.video_url || null
+  } else if (typeof variationPaths === 'object' && Object.keys(variationPaths).length > 0) {
+    // Current object format
+    const firstVariationKey = Object.keys(variationPaths).sort()[0]
+    const firstVariation = variationPaths[firstVariationKey]
+    thumbnailUrl = firstVariation?.aspectExports?.['9:16'] 
+      || firstVariation?.final_video_url 
+      || firstVariation?.video_url 
+      || null
+  }
 
   return (
     <motion.div

@@ -37,6 +37,9 @@ export const VideoResults = () => {
   const [deleting, setDeleting] = useState(false)
   
   const [videoUrl, setVideoUrl] = useState<string>('')
+  const [selectedVariationIndex, setSelectedVariationIndex] = useState<number>(0)
+  const [campaignBlobUrl, setCampaignBlobUrl] = useState<string>('')
+  const [isVideoFetching, setIsVideoFetching] = useState<boolean>(false)
   const [storageUsage, setStorageUsage] = useState<number>(0)
   const [isFinalized, setIsFinalized] = useState(false)
   const [isFinalizing, setIsFinalizing] = useState(false)
@@ -46,44 +49,96 @@ export const VideoResults = () => {
    * Helper function to extract the display video path from project/campaign data.
    * Handles both single video (string) and multi-variation (array) cases.
    */
-  const getDisplayVideo = (data: any, aspectRatio: '9:16' | '1:1' | '16:9'): string | null => {
+  const getDisplayVideo = (
+    data: any,
+    aspectRatio: '9:16' | '1:1' | '16:9'
+  ): { url: string | null; selectedIndex: number } => {
     if (isCampaign) {
       // Campaign structure: campaign_json.variationPaths
-      const campaignJson = data?.campaign_json || {}
-      const variationPaths = campaignJson?.variationPaths || []
+      // Backend stores as object: {"variation_0": {"aspectExports": {"9:16": "url"}}, ...}
+      // Handle case where campaign_json might be a string (JSONB serialization)
+      let campaignJson = data?.campaign_json || {}
+      if (typeof campaignJson === 'string') {
+        try {
+          campaignJson = JSON.parse(campaignJson)
+        } catch (e) {
+          console.error('❌ Failed to parse campaign_json:', e)
+          return null
+        }
+      }
+      const variationPaths = campaignJson?.variationPaths || {}
       
-      if (variationPaths.length === 0) {
-        return null
+      console.log('🔍 getDisplayVideo - variationPaths:', variationPaths)
+      console.log('🔍 getDisplayVideo - variationPaths type:', typeof variationPaths)
+      console.log('🔍 getDisplayVideo - isArray:', Array.isArray(variationPaths))
+      
+      // Handle both object format (from backend) and array format (legacy)
+      let variations: any[] = []
+      
+      if (Array.isArray(variationPaths)) {
+        // Legacy array format
+        console.log('📋 Using array format (legacy)')
+        variations = variationPaths
+      } else if (typeof variationPaths === 'object' && variationPaths !== null) {
+        // Current object format: convert to array
+        console.log('📋 Using object format, converting to array')
+        const keys = Object.keys(variationPaths).sort() // Ensure variation_0, variation_1, variation_2 order
+        console.log('📋 Variation keys:', keys)
+        variations = keys.map(key => {
+          const variation = variationPaths[key]
+          console.log(`📋 Variation ${key}:`, variation)
+          return variation
+        })
+      }
+      
+      console.log('📋 Final variations array:', variations)
+      
+      if (variations.length === 0) {
+        console.warn('⚠️ No variations found')
+        return { url: null, selectedIndex: 0 }
       }
       
       // Use selected_variation_index if set, otherwise default to 0
       const selectedIndex = data?.selected_variation_index ?? 0
-      const variation = variationPaths[selectedIndex] || variationPaths[0]
+      console.log('📋 Selected index:', selectedIndex)
+      const variation = variations[selectedIndex] || variations[0]
+      console.log('📋 Selected variation:', variation)
       
-      // Get video URL for the aspect ratio (campaigns use 9:16 by default)
-      return variation?.final_video_url || variation?.video_url || null
+      // Get video URL - check both new format (aspectExports) and legacy format (final_video_url/video_url)
+      if (variation?.aspectExports) {
+        console.log('📋 aspectExports found:', variation.aspectExports)
+        const url = variation.aspectExports[aspectRatio]
+        console.log(`📋 URL for ${aspectRatio}:`, url)
+        if (url) {
+          return { url, selectedIndex }
+        }
+      }
+      // Fallback to legacy format
+      const legacyUrl = variation?.final_video_url || variation?.video_url || null
+      console.log('📋 Legacy URL:', legacyUrl)
+      return { url: legacyUrl, selectedIndex }
     } else {
       // Project structure: ad_project_json.local_video_paths or local_video_paths
       const videoPaths = data?.ad_project_json?.local_video_paths?.[aspectRatio] 
         || data?.local_video_paths?.[aspectRatio]
     
+    const selectedIndex = data?.selected_variation_index ?? 0
     if (!videoPaths) {
-      return null
+      return { url: null, selectedIndex }
     }
     
     // If array (multi-variation case)
     if (Array.isArray(videoPaths)) {
-      // Use selected_variation_index if set, otherwise default to 0
-        const selectedIndex = data?.selected_variation_index ?? 0
-      return videoPaths[selectedIndex] || videoPaths[0] || null
+      const url = videoPaths[selectedIndex] || videoPaths[0] || null
+      return { url, selectedIndex }
     }
     
     // If string (single video case)
     if (typeof videoPaths === 'string') {
-      return videoPaths
+      return { url: videoPaths, selectedIndex }
     }
     
-    return null
+    return { url: null, selectedIndex }
     }
   }
 
@@ -114,6 +169,42 @@ export const VideoResults = () => {
     return path
   }
 
+  const fetchCampaignVideoBlob = async (
+    campaignData: any,
+    aspectRatio: '9:16' | '1:1' | '16:9',
+    variationIndex: number
+  ) => {
+    if (!campaignData?.campaign_id) {
+      setError('Invalid campaign data')
+      return
+    }
+    try {
+      setIsVideoFetching(true)
+      const response = await api.get(
+        `/api/generation/campaigns/${campaignData.campaign_id}/stream/${aspectRatio}`,
+        {
+          responseType: 'blob',
+          params: { variation_index: variationIndex },
+        }
+      )
+      if (campaignBlobUrl) {
+        URL.revokeObjectURL(campaignBlobUrl)
+      }
+      const blobUrl = URL.createObjectURL(response.data)
+      setCampaignBlobUrl(blobUrl)
+      setVideoUrl(blobUrl)
+      setUseLocalStorage(false)
+      setError(null)
+    } catch (err) {
+      console.error('Failed to fetch campaign video blob:', err)
+      const message = err instanceof Error ? err.message : 'Failed to load campaign video'
+      setError(message)
+      setVideoUrl('')
+    } finally {
+      setIsVideoFetching(false)
+    }
+  }
+
   useEffect(() => {
     const loadProjectAndVideos = async () => {
       try {
@@ -132,21 +223,71 @@ export const VideoResults = () => {
         setAspect(aspectRatio as '9:16' | '1:1' | '16:9')
         
         // Get the display video path (handles multi-variation selection)
-        const displayVideoPath = getDisplayVideo(data, aspectRatio as '9:16' | '1:1' | '16:9')
+        const { url: displayVideoPath, selectedIndex } = getDisplayVideo(
+          data,
+          aspectRatio as '9:16' | '1:1' | '16:9'
+        )
+        setSelectedVariationIndex(selectedIndex)
+        
+        console.log('🔍 Campaign data:', data)
+        console.log('🔍 Campaign JSON:', data?.campaign_json)
+        console.log('🔍 Display video path:', displayVideoPath)
+        console.log('🔍 Aspect ratio:', aspectRatio)
         
         if (isCampaign) {
           // Campaigns: videos are in S3, use the URL directly
           if (displayVideoPath) {
-            setVideoUrl(displayVideoPath)
-            setUseLocalStorage(false)
+            console.log('✅ Using display video path (S3):', displayVideoPath)
+            await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex)
           } else {
+            console.warn('⚠️ No display video path, trying fallback')
             // Fallback: try to get from campaign_json
-            const campaignJson = data?.campaign_json || {}
-            const variationPaths = campaignJson?.variationPaths || []
-            if (variationPaths.length > 0) {
-              const variation = variationPaths[data?.selected_variation_index ?? 0] || variationPaths[0]
-              setVideoUrl(variation?.final_video_url || variation?.video_url || '')
-              setUseLocalStorage(false)
+            let campaignJson = data?.campaign_json || {}
+            // Handle case where campaign_json might be a string (JSONB serialization)
+            if (typeof campaignJson === 'string') {
+              try {
+                campaignJson = JSON.parse(campaignJson)
+              } catch (e) {
+                console.error('❌ Failed to parse campaign_json:', e)
+                campaignJson = {}
+              }
+            }
+            const variationPaths = campaignJson?.variationPaths || {}
+            
+            // Handle both object format (from backend) and array format (legacy)
+            let variations: any[] = []
+            if (Array.isArray(variationPaths)) {
+              variations = variationPaths
+            } else if (typeof variationPaths === 'object') {
+              variations = Object.keys(variationPaths)
+                .sort()
+                .map(key => variationPaths[key])
+            }
+            
+            if (variations.length > 0) {
+              const selectedIndex = data?.selected_variation_index ?? 0
+              const variation = variations[selectedIndex] || variations[0]
+              
+              console.log('🔍 Selected variation:', variation)
+              console.log('🔍 Variation aspectExports:', variation?.aspectExports)
+              
+              // Get video URL - check both new format (aspectExports) and legacy format
+            const videoUrl = variation?.aspectExports?.[aspectRatio] 
+                || variation?.final_video_url 
+                || variation?.video_url 
+                || ''
+              
+              console.log('🔍 Extracted video URL:', videoUrl)
+              
+              if (videoUrl) {
+              await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex)
+              } else {
+                console.error('❌ No video URL found in variation')
+                setError('Video URL not found in campaign data')
+              }
+            } else {
+              console.error('❌ No variations found in campaign_json')
+              setError('No video variations found')
             }
           }
           setStorageUsage(0) // Campaigns don't use local storage
@@ -187,6 +328,14 @@ export const VideoResults = () => {
       loadProjectAndVideos()
     }
   }, [id, isCampaign, getProject, getCampaign])
+
+  useEffect(() => {
+    return () => {
+      if (campaignBlobUrl) {
+        URL.revokeObjectURL(campaignBlobUrl)
+      }
+    }
+  }, [campaignBlobUrl])
   
   useEffect(() => {
     const loadVideoForAspect = async () => {
@@ -194,12 +343,10 @@ export const VideoResults = () => {
       
       try {
         if (isCampaign) {
-          // Campaigns: videos are in S3, aspect ratio is always 9:16
-          const displayVideoPath = getDisplayVideo(project, aspect)
-          if (displayVideoPath) {
-            setVideoUrl(displayVideoPath)
-            setUseLocalStorage(false)
-          }
+          // Campaigns: fetch video via backend stream to avoid S3 CORS
+          const { selectedIndex } = getDisplayVideo(project, aspect)
+          setSelectedVariationIndex(selectedIndex)
+          await fetchCampaignVideoBlob(project, aspect, selectedIndex)
         } else {
           // Projects: Try IndexedDB first (for videos stored locally in browser)
           const localVideoUrl = await getVideoURL(id, aspect)
@@ -208,7 +355,7 @@ export const VideoResults = () => {
           setUseLocalStorage(true)
         } else {
           // Get the display video path (handles multi-variation selection)
-          const displayVideoPath = getDisplayVideo(project, aspect)
+          const { url: displayVideoPath } = getDisplayVideo(project, aspect)
           
           if (displayVideoPath) {
             // Use the path from project data (could be local file path or S3 URL)
@@ -244,8 +391,8 @@ export const VideoResults = () => {
       let videoUrlToDownload: string
       
       if (isCampaign) {
-        // Campaigns: videos are in S3, download directly from URL
-        const displayVideoPath = getDisplayVideo(project, aspectRatio)
+        // Campaigns: videos are stored in S3 - use direct URL for download
+        const { url: displayVideoPath } = getDisplayVideo(project, aspectRatio)
         videoUrlToDownload = displayVideoPath || ''
         
         if (!videoUrlToDownload) {
@@ -489,15 +636,24 @@ export const VideoResults = () => {
               {/* Video Player */}
               <div className="mb-4">
                 {videoUrl ? (
+                  <>
+                    <div className="mb-2 text-xs text-muted-gray">
+                      Video URL: {videoUrl.substring(0, 100)}...
+                    </div>
                   <VideoPlayer
                     videoUrl={videoUrl}
                     title={isCampaign ? project.campaign_name : project.title}
                     aspect={aspect}
                     onDownload={() => handleDownload(aspect)}
+                    isLoading={isVideoFetching}
                   />
+                  </>
                 ) : (
                   <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
                     <p className="text-muted-gray">No video available</p>
+                    {error && (
+                      <p className="text-red-400 mt-2 text-sm">{error}</p>
+                    )}
                   </div>
                 )}
               </div>

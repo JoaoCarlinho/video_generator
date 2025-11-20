@@ -216,6 +216,40 @@ def get_s3_file_url(s3_key: str) -> str:
     return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
 
 
+def get_presigned_video_url(s3_key: str, expiration: int = 3600) -> str:
+    """
+    Generate presigned URL for S3 video file.
+    Presigned URLs bypass CORS restrictions and allow temporary access.
+    
+    **Arguments:**
+    - s3_key: S3 object key
+    - expiration: URL expiration time in seconds (default: 1 hour)
+    
+    **Returns:**
+    - str: Presigned HTTPS URL that can be accessed from frontend
+    
+    **Raises:**
+    - RuntimeError: If AWS credentials not configured
+    """
+    try:
+        s3 = get_s3_client()
+        presigned_url = s3.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': settings.s3_bucket_name,
+                'Key': s3_key
+            },
+            ExpiresIn=expiration
+        )
+        logger.info(f"✅ Generated presigned URL for {s3_key} (expires in {expiration}s)")
+        return presigned_url
+    except Exception as e:
+        logger.error(f"❌ Failed to generate presigned URL for {s3_key}: {e}")
+        # Fallback to public URL if presigned URL generation fails
+        logger.warning(f"⚠️ Falling back to public URL for {s3_key}")
+        return get_s3_file_url(s3_key)
+
+
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
     """
     Parse S3 URL to extract bucket name and S3 key.
@@ -224,9 +258,10 @@ def parse_s3_url(s3_url: str) -> tuple[str, str]:
     - https://bucket.s3.region.amazonaws.com/key
     - https://s3.region.amazonaws.com/bucket/key
     - https://s3.amazonaws.com/bucket/key
+    - Presigned URLs: https://bucket.s3.region.amazonaws.com/key?X-Amz-Algorithm=...
     
     **Arguments:**
-    - s3_url: S3 URL string
+    - s3_url: S3 URL string (can be presigned URL with query parameters)
     
     **Returns:**
     - tuple: (bucket_name, s3_key)
@@ -790,12 +825,14 @@ async def upload_final_video(
                 Tagging=_format_s3_tags(tags)
             )
         
-        s3_url = get_s3_file_url(s3_key)
+        # Generate presigned URL for frontend access (bypasses CORS)
+        # Presigned URLs are valid for 7 days (604800 seconds)
+        presigned_url = get_presigned_video_url(s3_key, expiration=604800)
         
         logger.info(f"✅ Uploaded final video: {s3_key}")
         
         return {
-            "url": s3_url,
+            "url": presigned_url,  # Use presigned URL instead of public URL
             "s3_key": s3_key,
             "size_bytes": len(file_content),
             "filename": "final_video.mp4"

@@ -204,7 +204,23 @@ async def get_campaign(
                 detail="Campaign not found"
             )
         
-        return CampaignDetail.model_validate(campaign)
+        # Log campaign_json for debugging
+        logger.info(f"🔍 Campaign {campaign_id} campaign_json type: {type(campaign.campaign_json)}")
+        logger.info(f"🔍 Campaign {campaign_id} campaign_json value: {campaign.campaign_json}")
+        if isinstance(campaign.campaign_json, dict):
+            logger.info(f"🔍 Campaign {campaign_id} variationPaths: {campaign.campaign_json.get('variationPaths', 'NOT FOUND')}")
+        
+        # Note: We no longer replace S3 URLs with backend proxy URLs
+        # The S3 URLs are presigned and should work directly from the frontend.
+        # This avoids issues where <video src="..."> requests don't send auth headers
+        # and thus fail against the protected backend proxy endpoint.
+        
+        campaign_detail = CampaignDetail.model_validate(campaign)
+        
+        logger.info(f"🔍 CampaignDetail campaign_json type: {type(campaign_detail.campaign_json)}")
+        logger.info(f"🔍 CampaignDetail campaign_json value: {campaign_detail.campaign_json}")
+        
+        return campaign_detail
     
     except HTTPException:
         raise

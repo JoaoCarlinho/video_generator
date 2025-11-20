@@ -176,17 +176,20 @@ export const VideoPlayer = ({
               className={`${isFullscreen ? 'w-full h-full object-contain' : 'w-full h-full'}`}
               preload="metadata"
               playsInline
+              crossOrigin="anonymous"
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={() => setIsPlaying(false)}
               onError={(e) => {
-                console.error('Video loading error:', e)
-                console.error('Video URL:', videoUrl)
+                console.error('❌ Video loading error:', e)
+                console.error('❌ Video URL:', videoUrl)
+                console.error('❌ Video URL type:', typeof videoUrl)
+                console.error('❌ Video URL length:', videoUrl?.length)
                 const video = e.currentTarget
-                console.error('Video error code:', video.error?.code)
-                console.error('Video error message:', video.error?.message)
-                console.error('Video network state:', video.networkState)
-                console.error('Video ready state:', video.readyState)
+                console.error('❌ Video error code:', video.error?.code)
+                console.error('❌ Video error message:', video.error?.message)
+                console.error('❌ Video network state:', video.networkState)
+                console.error('❌ Video ready state:', video.readyState)
                 setIsVideoReady(false)
               }}
               onLoadStart={() => {

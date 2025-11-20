@@ -1486,8 +1486,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                                     animation=getattr(overlay_obj, 'animation', 'fade_in'),
                                 ) if (overlay_obj := getattr(scene_item, 'overlay', None)) else None
                             )
-                        )
                     )
+                )
             
             # Create a temporary ad_project with this variation's scenes
             variation_ad_project = AdProject(
@@ -1668,6 +1668,14 @@ BRAND GUIDELINES (extracted from guidelines document):
             if isinstance(campaign_json, str):
                 import json
                 campaign_json = json.loads(campaign_json)
+            elif campaign_json is None:
+                campaign_json = {}
+            elif not isinstance(campaign_json, dict):
+                logger.warning(f"⚠️ campaign_json is not a dict, got {type(campaign_json)}, initializing as empty dict")
+                campaign_json = {}
+            
+            logger.info(f"🔍 Current campaign_json before update: {campaign_json}")
+            logger.info(f"🔍 Final videos to store: {final_videos}")
             
             # Store S3 URLs in variationPaths with correct structure for API
             # Format: {"variation_0": {"aspectExports": {"9:16": "url"}}, ...}
@@ -1680,6 +1688,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 }
             
             campaign_json["variationPaths"] = variation_paths
+            
+            logger.info(f"🔍 Updated campaign_json with variationPaths: {campaign_json}")
             
             # Clean up legacy local path fields to ensure S3 usage
             if "local_video_paths" in campaign_json:
@@ -1695,6 +1705,16 @@ BRAND GUIDELINES (extracted from guidelines document):
                 campaign_json=campaign_json,
                 selected_variation_index=None  # User hasn't selected yet
             )
+            
+            # Verify the update was successful
+            updated_campaign = get_campaign_by_id(self.db, self.campaign_id)
+            if updated_campaign:
+                verify_json = updated_campaign.campaign_json
+                if isinstance(verify_json, str):
+                    import json
+                    verify_json = json.loads(verify_json)
+                logger.info(f"✅ Verified campaign_json after update: {verify_json}")
+                logger.info(f"✅ variationPaths keys: {list(verify_json.get('variationPaths', {}).keys())}")
             
             logger.info(f"Updated campaign with {num_variations} variations (S3 URLs)")
             

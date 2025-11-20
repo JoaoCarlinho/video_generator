@@ -1226,6 +1226,10 @@ def update_campaign(
         for key, value in updates.items():
             if hasattr(campaign, key):
                 setattr(campaign, key, value)
+                # Explicitly mark JSONB fields as modified so SQLAlchemy detects changes
+                if key == 'campaign_json':
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(campaign, 'campaign_json')
         
         db.commit()
         db.refresh(campaign)

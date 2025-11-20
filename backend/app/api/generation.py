@@ -1,7 +1,8 @@
 """API endpoints for generation control."""
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from pydantic import BaseModel, Field
+from typing import Optional
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -15,6 +16,7 @@ from app.database import crud
 from app.models.schemas import GenerationProgressResponse, CampaignStatus
 from app.jobs.worker import create_worker
 from app.api.auth import get_current_brand_id, verify_campaign_ownership
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -498,10 +500,187 @@ async def cancel_generation(
         raise HTTPException(status_code=500, detail=f"Failed to cancel generation: {str(e)}")
 
 
+@router.get("/campaigns/{campaign_id}/stream/{aspect_ratio}")
+async def stream_video(
+    campaign_id: UUID,
+    aspect_ratio: str,
+    variation_index: Optional[int] = Query(None),
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream a video file for playback in the browser (with CORS support).
+    
+    This endpoint streams the video file from S3 through the backend,
+    adding proper CORS headers to allow frontend video players to access it.
+    
+    **Path Parameters:**
+    - campaign_id: UUID of the campaign
+    - aspect_ratio: Video aspect ratio ('9:16', '1:1', '16:9')
+    
+    **Query Parameters:**
+    - variation_index: Optional variation index (0, 1, 2) to stream specific variation. 
+                      If not provided, streams the campaign's selected variation (or 0).
+    
+    **Headers:**
+    - Authorization: Bearer {token} (optional in development)
+    - Range: Optional byte range for video seeking (e.g., "bytes=0-1023")
+    
+    **Response:** 
+    - Content-Type: video/mp4
+    - Video file as binary stream with CORS headers
+    
+    **Errors:**
+    - 404: Campaign not found or video not available
+    - 403: Not authorized
+    - 401: Missing or invalid authorization
+    - 400: Invalid aspect ratio
+    """
+    from fastapi import Request
+    from fastapi.responses import Response
+    
+    try:
+        # Validate aspect ratio
+        if aspect_ratio not in ['9:16', '1:1', '16:9']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid aspect ratio: {aspect_ratio}. Must be: 9:16, 1:1, or 16:9"
+            )
+        
+        init_db()
+        
+        # Get campaign and verify ownership (done via dependency)
+        campaign = crud.get_campaign_by_id(db, campaign_id)
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Construct S3 key directly to avoid issues with stored URLs
+        # Use provided variation_index, or selected variation, or default to 0
+        if variation_index is not None:
+            target_variation = variation_index
+        elif campaign.selected_variation_index is not None:
+            target_variation = campaign.selected_variation_index
+        else:
+            target_variation = 0
+            
+        # Validate target variation
+        if target_variation < 0:
+             raise HTTPException(status_code=400, detail="Invalid variation index")
+        
+        # Construct path based on hierarchy: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{i}/final/final_video.mp4
+        # Note: currently only 9:16 is generated as 'final_video.mp4'
+        # In future phases, we might have final_1_1.mp4 etc.
+        filename = "final_video.mp4"
+        if aspect_ratio != '9:16':
+            # For now, we only support 9:16 as per Phase 2 implementation
+            # If other aspect ratios are requested, we check if they exist or fail
+            # TODO: Support other aspect ratios in filenames (e.g., final_1_1.mp4)
+            pass
+            
+        s3_key = f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/variation_{target_variation}/final/{filename}"
+        
+        logger.info(f"🎬 Streaming video from S3: {s3_key} (variation {target_variation})")
+        
+        if not settings.s3_bucket_name:
+             raise HTTPException(status_code=500, detail="S3 bucket not configured")
+             
+        bucket_name = settings.s3_bucket_name
+        
+        # Download from S3 using configured credentials
+        from app.utils.s3_utils import get_s3_client
+        s3_client = get_s3_client()
+        
+        try:
+            # Get object metadata first
+            head_response = s3_client.head_object(Bucket=bucket_name, Key=s3_key)
+            content_length = head_response['ContentLength']
+            content_type = head_response.get('ContentType', 'video/mp4')
+            etag = head_response.get('ETag', '').strip('"')
+            
+            # Handle range requests for video seeking
+            range_header = None
+            # Note: FastAPI doesn't expose Request headers directly in this context
+            # We'll stream the full video for now, but add CORS headers
+            
+            response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+            video_stream = response['Body'].read()
+            logger.info(f"✅ Streamed video from S3: {s3_key} ({len(video_stream)} bytes)")
+        except s3_client.exceptions.NoSuchKey:
+            logger.warning(f"⚠️ Video file not found at exact path: {s3_key}")
+            
+            # Fallback: Search for any final video in the campaign folder
+            # This handles cases where variation index might be mismatched or path structure slightly different
+            try:
+                campaign_prefix = f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/"
+                logger.info(f"🔍 Searching for fallback video in: {campaign_prefix}")
+                
+                objects = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=campaign_prefix)
+                
+                found_fallback = None
+                if 'Contents' in objects:
+                    # Look for any mp4 in a 'final' folder
+                    for obj in objects['Contents']:
+                        key = obj['Key']
+                        if '/final/' in key and key.endswith('.mp4'):
+                            logger.info(f"✅ Found fallback video: {key}")
+                            found_fallback = key
+                            # If we requested a specific variation, try to match it loosely
+                            if f"variation_{target_variation}" in key:
+                                break # Found best match
+                            
+                if found_fallback:
+                    logger.warning(f"⚠️ Using fallback video: {found_fallback}")
+                    head_response = s3_client.head_object(Bucket=bucket_name, Key=found_fallback)
+                    content_length = head_response['ContentLength']
+                    content_type = head_response.get('ContentType', 'video/mp4')
+                    etag = head_response.get('ETag', '').strip('"')
+                    
+                    response = s3_client.get_object(Bucket=bucket_name, Key=found_fallback)
+                    video_stream = response['Body'].read()
+                else:
+                    # Log all files found to help debugging
+                    files_found = [o['Key'] for o in objects.get('Contents', [])]
+                    logger.error(f"❌ No video files found. Files in campaign: {files_found}")
+                    raise HTTPException(status_code=404, detail=f"Video file not found in S3. Searched: {campaign_prefix}")
+            except Exception as e:
+                if isinstance(e, HTTPException):
+                    raise
+                logger.error(f"❌ Fallback search failed: {e}")
+                raise HTTPException(status_code=404, detail=f"Video file not found in S3: {s3_key}")
+        except Exception as e:
+            logger.error(f"❌ Failed to stream video from S3: {e}")
+            raise HTTPException(status_code=500, detail="Failed to stream video from S3")
+        
+        # Stream the video file to client with CORS headers
+        return StreamingResponse(
+            iter([video_stream]),
+            media_type=content_type,
+            headers={
+                "Content-Length": str(content_length),
+                "Content-Type": content_type,
+                "Accept-Ranges": "bytes",
+                "ETag": f'"{etag}"',
+                "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "Range, Content-Range, Content-Type",
+                "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to stream video: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stream video: {str(e)}")
+
+
 @router.get("/campaigns/{campaign_id}/download/{aspect_ratio}")
 async def download_video(
     campaign_id: UUID,
     aspect_ratio: str,
+    variation_index: Optional[int] = Query(None),
     _: bool = Depends(verify_campaign_ownership),
     db: Session = Depends(get_db)
 ):
@@ -514,6 +693,9 @@ async def download_video(
     **Path Parameters:**
     - campaign_id: UUID of the campaign
     - aspect_ratio: Video aspect ratio ('9:16', '1:1', '16:9')
+    
+    **Query Parameters:**
+    - variation_index: Optional variation index (0, 1, 2)
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
@@ -544,41 +726,27 @@ async def download_video(
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Get video URL from campaign_json variationPaths
-        campaign_json = campaign.campaign_json or {}
-        if isinstance(campaign_json, str):
-            import json
-            campaign_json = json.loads(campaign_json)
+        # Construct S3 key directly
+        if variation_index is not None:
+            target_variation = variation_index
+        elif campaign.selected_variation_index is not None:
+            target_variation = campaign.selected_variation_index
+        else:
+            target_variation = 0
         
-        # Get selected variation index (default to 0)
-        selected_variation = campaign.selected_variation_index if campaign.selected_variation_index is not None else 0
-        variation_paths = campaign_json.get('variationPaths', {})
-        variation_key = f"variation_{selected_variation}"
+        filename = "final_video.mp4"
+        if aspect_ratio != '9:16':
+            pass # Future support
+            
+        s3_key = f"brands/{campaign.brand_id}/perfumes/{campaign.perfume_id}/campaigns/{campaign_id}/variation_{target_variation}/final/{filename}"
         
-        if variation_key not in variation_paths:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Variation {selected_variation} not found for campaign"
-            )
-        
-        variation_data = variation_paths[variation_key]
-        video_url = variation_data.get('aspectExports', {}).get(aspect_ratio)
-        
-        if not video_url:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Video not available for aspect ratio {aspect_ratio}"
-            )
-        
-        # Parse S3 URL and download from S3
-        from app.utils.s3_utils import parse_s3_url, get_s3_client
-        
-        try:
-            bucket_name, s3_key = parse_s3_url(video_url)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid S3 URL format: {str(e)}")
+        if not settings.s3_bucket_name:
+             raise HTTPException(status_code=500, detail="S3 bucket not configured")
+             
+        bucket_name = settings.s3_bucket_name
         
         # Download from S3 using configured credentials
+        from app.utils.s3_utils import get_s3_client
         s3_client = get_s3_client()
         
         try:
@@ -586,18 +754,23 @@ async def download_video(
             video_stream = response['Body'].read()
             logger.info(f"✅ Downloaded video from S3: {s3_key}")
         except s3_client.exceptions.NoSuchKey:
+            logger.warning(f"⚠️ Video file not found in S3: {s3_key}")
             raise HTTPException(status_code=404, detail="Video file not found in S3")
         except Exception as e:
             logger.error(f"❌ Failed to download video from S3: {e}")
             raise HTTPException(status_code=500, detail="Failed to download video from S3")
         
-        # Stream the video file to client
+        # Stream the video file to client with CORS headers
         return StreamingResponse(
             iter([video_stream]),
             media_type="video/mp4",
             headers={
                 "Content-Disposition": f"inline; filename=video-{aspect_ratio}.mp4",
-                "Cache-Control": "public, max-age=3600"
+                "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "Range",
+                "Accept-Ranges": "bytes"
             }
         )
     

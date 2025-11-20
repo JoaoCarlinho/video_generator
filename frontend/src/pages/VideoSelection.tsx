@@ -5,6 +5,7 @@ import { VideoPlayer } from '@/components/PageComponents/VideoPlayer'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useProjects } from '@/hooks/useProjects'
+import { useCampaigns } from '@/hooks/useCampaigns'
 import { useGeneration } from '@/hooks/useGeneration'
 import { ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react'
 import { getVideoURL } from '@/services/videoStorage'
@@ -13,10 +14,15 @@ import { getVideoURL } from '@/services/videoStorage'
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export function VideoSelection() {
-  const { projectId = '' } = useParams<{ projectId: string }>()
+  const { projectId, campaignId } = useParams<{ projectId?: string; campaignId?: string }>()
   const navigate = useNavigate()
   const { getProject } = useProjects()
+  const { getCampaign } = useCampaigns()
   const { selectVariation } = useGeneration()
+  
+  // Use campaignId if available, otherwise fall back to projectId (legacy)
+  const id = campaignId || projectId || ''
+  const isCampaign = !!campaignId
 
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -25,50 +31,99 @@ export function VideoSelection() {
   const [selecting, setSelecting] = useState(false)
   const [videoUrls, setVideoUrls] = useState<string[]>([])
 
-  // Load project and videos
+  // Load project/campaign and videos
   useEffect(() => {
     const loadProject = async () => {
-      if (!projectId) return
+      if (!id) return
 
       try {
         setLoading(true)
-        const data = await getProject(projectId)
+        let data: any
+        if (isCampaign) {
+          data = await getCampaign(id)
+        } else {
+          data = await getProject(id)
+        }
         setProject(data)
 
-        // Check if project has multiple variations
+        // Check if project/campaign has multiple variations
         const numVariations = data.num_variations || 1
 
         if (numVariations === 1) {
           // Single variation - redirect to results
-          navigate(`/projects/${projectId}/results`)
+          if (isCampaign) {
+            navigate(`/campaigns/${id}/results`)
+          } else {
+            navigate(`/projects/${id}/results`)
+          }
           return
         }
 
         // Load video URLs for all variations
-        // Videos are stored in local_video_paths["9:16"] as array when num_variations > 1
+        let videoPaths: any = null
+        
+        if (isCampaign) {
+          // Campaign structure: campaign_json.variationPaths
+          // Backend stores as object: {"variation_0": {"aspectExports": {"9:16": "url"}}, ...}
+          // Handle case where campaign_json might be a string (JSONB serialization)
+          let campaignJson = data?.campaign_json || {}
+          if (typeof campaignJson === 'string') {
+            try {
+              campaignJson = JSON.parse(campaignJson)
+            } catch (e) {
+              console.error('❌ Failed to parse campaign_json:', e)
+              campaignJson = {}
+            }
+          }
+          const variationPaths = campaignJson?.variationPaths || {}
+          
+          console.log('🔍 Campaign JSON:', campaignJson)
+          console.log('🔍 Variation Paths:', variationPaths)
+          console.log('🔍 Variation Paths type:', typeof variationPaths)
+          console.log('🔍 Variation Paths keys:', Object.keys(variationPaths))
+          
+          // Convert object format to array of URLs
+          if (typeof variationPaths === 'object' && variationPaths !== null && Object.keys(variationPaths).length > 0) {
+            videoPaths = Object.keys(variationPaths)
+              .sort() // Ensure variation_0, variation_1, variation_2 order
+              .map(key => {
+                const variation = variationPaths[key]
+                console.log(`🔍 Processing variation ${key}:`, variation)
+                const url = variation?.aspectExports?.['9:16'] || variation?.final_video_url || variation?.video_url || null
+                console.log(`🔍 Extracted URL for ${key}:`, url)
+                return url
+              })
+              .filter(url => url !== null) // Remove nulls
+            
+            console.log('🔍 Final videoPaths array:', videoPaths)
+          } else {
+            console.warn('⚠️ variationPaths is not a valid object or is empty')
+          }
+        } else {
+          // Project structure: local_video_paths["9:16"] as array when num_variations > 1
         // OR in ad_project_json.local_video_paths["9:16"] 
-        const videoPaths = data.local_video_paths?.['9:16'] || data.ad_project_json?.local_video_paths?.['9:16']
+          videoPaths = data.local_video_paths?.['9:16'] || data.ad_project_json?.local_video_paths?.['9:16']
+        }
 
-        console.log('📹 Video paths from project:', videoPaths)
+        console.log('📹 Video paths from', isCampaign ? 'campaign' : 'project', ':', videoPaths)
         console.log('📊 Number of variations:', numVariations)
 
         if (Array.isArray(videoPaths)) {
-          // Multiple variations - videos are stored as file paths
-          // Convert file paths to URLs using the preview endpoint with variation query parameter
+          // Multiple variations - videos are stored as URLs (campaigns) or file paths (projects)
           const urls: string[] = []
           for (let i = 0; i < videoPaths.length; i++) {
             const path = videoPaths[i]
             if (typeof path === 'string' && path.trim()) {
-              // If path is already a URL (http/https), use it directly
+              // If path is already a URL (http/https), use it directly (campaigns)
               if (path.startsWith('http://') || path.startsWith('https://')) {
                 urls.push(path)
               } else {
-                // File path - use preview endpoint with variation query parameter
+                // File path - use preview endpoint with variation query parameter (projects)
                 // Backend endpoint: /api/local-generation/projects/{id}/preview?variation={index}
                 // Use absolute URL for proper CORS and video loading
                 // Add timestamp to prevent caching
                 const timestamp = new Date().getTime()
-                const previewUrl = `${API_BASE_URL}/api/local-generation/projects/${projectId}/preview?variation=${i}&t=${timestamp}`
+                const previewUrl = `${API_BASE_URL}/api/local-generation/projects/${id}/preview?variation=${i}&t=${timestamp}`
                 urls.push(previewUrl)
                 console.log(`✅ Created preview URL for variation ${i}: ${previewUrl}`)
               }
@@ -80,7 +135,11 @@ export function VideoSelection() {
             setVideoUrls(urls)
           } else {
             console.warn('⚠️ No valid video paths found in array')
-            navigate(`/projects/${projectId}/results`)
+            if (isCampaign) {
+              navigate(`/campaigns/${id}/results`)
+            } else {
+              navigate(`/projects/${id}/results`)
+            }
             return
           }
         } else if (videoPaths && typeof videoPaths === 'string') {
@@ -89,14 +148,19 @@ export function VideoSelection() {
             setVideoUrls([videoPaths])
           } else {
             // File path - use preview endpoint without variation (defaults to 0)
-            setVideoUrls([`${API_BASE_URL}/api/local-generation/projects/${projectId}/preview`])
+            if (isCampaign) {
+              setVideoUrls([`${API_BASE_URL}/api/generation/campaigns/${id}/download/9:16`])
+            } else {
+              setVideoUrls([`${API_BASE_URL}/api/local-generation/projects/${id}/preview`])
+            }
           }
         } else {
-          // Fallback: try to get from local storage (IndexedDB)
+          // Fallback: try to get from local storage (IndexedDB) - only for projects
+          if (!isCampaign) {
           const urls: string[] = []
           for (let i = 0; i < numVariations; i++) {
             try {
-              const url = await getVideoURL(projectId, '9:16')
+                const url = await getVideoURL(id, '9:16')
               if (url && !urls.includes(url)) {
                 urls.push(url)
               }
@@ -107,37 +171,68 @@ export function VideoSelection() {
 
           if (urls.length === 0) {
             console.warn('No videos found, redirecting to results')
-            navigate(`/projects/${projectId}/results`)
+              navigate(`/projects/${id}/results`)
             return
           }
 
           setVideoUrls(urls)
+          } else {
+            // Campaigns: no local storage fallback, redirect to results
+            console.warn('No videos found in campaign_json, redirecting to results')
+            navigate(`/campaigns/${id}/results`)
+            return
+          }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load project'
+        const message = err instanceof Error ? err.message : `Failed to load ${isCampaign ? 'campaign' : 'project'}`
         setError(message)
-        console.error('Error loading project:', err)
+        console.error(`Error loading ${isCampaign ? 'campaign' : 'project'}:`, err)
       } finally {
         setLoading(false)
       }
     }
 
     loadProject()
-  }, [projectId, getProject, navigate])
+  }, [id, isCampaign, getProject, getCampaign, navigate])
 
   const handleSelect = (index: number) => {
     setSelectedIndex(index)
   }
 
   const handleNext = async () => {
-    if (selectedIndex === null || !projectId) return
+    if (selectedIndex === null || !id) return
 
     try {
       setSelecting(true)
-      await selectVariation(projectId, selectedIndex)
+      
+      if (isCampaign) {
+        // For campaigns, update selected_variation_index via generation API
+        const response = await fetch(`${API_BASE_URL}/api/generation/campaigns/${id}/select-variation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            variation_index: selectedIndex
+          })
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Failed to select variation' }))
+          throw new Error(errorData.detail || 'Failed to select variation')
+        }
+      } else {
+        // For projects, use the existing selectVariation hook
+        await selectVariation(id, selectedIndex)
+      }
 
       // Navigate to results page
-      navigate(`/projects/${projectId}/results`)
+      if (isCampaign) {
+        navigate(`/campaigns/${id}/results`)
+      } else {
+        navigate(`/projects/${id}/results`)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to select variation'
       setError(message)
@@ -163,7 +258,13 @@ export function VideoSelection() {
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
-          <Button onClick={() => navigate(`/projects/${projectId}/results`)}>
+          <Button onClick={() => {
+            if (isCampaign) {
+              navigate(`/campaigns/${id}/results`)
+            } else {
+              navigate(`/projects/${id}/results`)
+            }
+          }}>
             Go to Results
           </Button>
         </div>
@@ -175,7 +276,11 @@ export function VideoSelection() {
 
   if (numVariations === 1 || videoUrls.length === 0) {
     // Shouldn't happen, but redirect to results
-    navigate(`/projects/${projectId}/results`)
+    if (isCampaign) {
+      navigate(`/campaigns/${id}/results`)
+    } else {
+      navigate(`/projects/${id}/results`)
+    }
     return null
   }
 
@@ -193,7 +298,13 @@ export function VideoSelection() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate(`/projects/${projectId}/results`)}
+                onClick={() => {
+                  if (isCampaign) {
+                    navigate(`/campaigns/${id}/results`)
+                  } else {
+                    navigate(`/projects/${id}/results`)
+                  }
+                }}
                 className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
               >
                 <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
@@ -285,7 +396,13 @@ export function VideoSelection() {
           >
             <Button
               variant="outline"
-              onClick={() => navigate(`/projects/${projectId}/results`)}
+              onClick={() => {
+                if (isCampaign) {
+                  navigate(`/campaigns/${id}/results`)
+                } else {
+                  navigate(`/projects/${id}/results`)
+                }
+              }}
               className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold"
             >
               Cancel
