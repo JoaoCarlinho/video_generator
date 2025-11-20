@@ -242,22 +242,10 @@ export function VideoSelection() {
       setSelecting(true)
       
       if (isCampaign) {
-        // For campaigns, update selected_variation_index via generation API
-        const response = await fetch(`${API_BASE_URL}/api/generation/campaigns/${id}/select-variation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
-            variation_index: selectedIndex
-          })
+        // For campaigns, update selected_variation_index via generation API (auth handled by api client)
+        await api.post(`/api/generation/campaigns/${id}/select-variation`, {
+          variation_index: selectedIndex,
         })
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'Failed to select variation' }))
-          throw new Error(errorData.detail || 'Failed to select variation')
-        }
       } else {
         // For projects, use the existing selectVariation hook
         await selectVariation(id, selectedIndex)
