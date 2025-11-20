@@ -92,7 +92,7 @@ export const useProjects = () => {
   const getProject = useCallback(async (projectId: string) => {
     if (!projectId) throw new Error('Project ID is required')
     try {
-      const response = await apiClient.get(`/api/projects/${projectId}/`)
+      const response = await apiClient.get(`/api/projects/${projectId}`)
       return response.data
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch project'
@@ -108,7 +108,7 @@ export const useProjects = () => {
       setError(null)
 
       try {
-        const response = await apiClient.put(`/api/projects/${projectId}/`, updates)
+        const response = await apiClient.put(`/api/projects/${projectId}`, updates)
         const updated = response.data
 
         setProjects((prev) =>
@@ -132,7 +132,7 @@ export const useProjects = () => {
     setError(null)
 
     try {
-      await apiClient.delete(`/api/projects/${projectId}/`)
+      await apiClient.delete(`/api/projects/${projectId}`)
       setProjects((prev) => prev.filter((p) => p.id !== projectId))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete project'

@@ -17,22 +17,31 @@ logger = logging.getLogger(__name__)
 def get_s3_client():
     """
     Get S3 client configured with AWS credentials.
-    
+
+    Uses explicit credentials from environment if available,
+    otherwise falls back to AWS default credential chain
+    (IAM role, instance profile, etc.)
+
     **Returns:**
     - boto3.client: Configured S3 client
-    
-    **Raises:**
-    - RuntimeError: If AWS credentials not configured
+
+    **Note:**
+    - In Lambda/EC2: Uses IAM role credentials automatically
+    - In local dev: Uses explicit AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
     """
-    if not settings.aws_access_key_id or not settings.aws_secret_access_key:
-        raise RuntimeError("AWS credentials not configured in .env")
-    
-    return boto3.client(
-        "s3",
-        region_name=settings.aws_region,
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key
-    )
+    # If explicit credentials are provided, use them
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        logger.debug("🔑 Using explicit AWS credentials from environment")
+        return boto3.client(
+            "s3",
+            region_name=settings.aws_region,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key
+        )
+    else:
+        # Use default credential chain (IAM role, instance profile, etc.)
+        logger.debug("🔑 Using AWS default credential chain (IAM role)")
+        return boto3.client("s3", region_name=settings.aws_region)
 
 
 async def upload_product_image(
