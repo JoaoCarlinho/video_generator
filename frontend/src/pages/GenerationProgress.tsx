@@ -7,8 +7,6 @@ import { ProgressTracker } from '@/components/PageComponents'
 import { useProgressPolling } from '@/hooks/useProgressPolling'
 import { useGeneration } from '@/hooks/useGeneration'
 import { ArrowLeft } from 'lucide-react'
-import { storeVideo, formatBytes, getStorageUsage } from '@/services/videoStorage'
-import { api } from '@/services/api'
 
 export const GenerationProgress = () => {
   const { projectId = '' } = useParams()
@@ -80,42 +78,13 @@ export const GenerationProgress = () => {
     onComplete: async () => {
       // Clear sessionStorage when generation completes
       sessionStorage.removeItem(storageKey)
-      
-      // Download video to IndexedDB for preview
-      try {
-        console.log('📥 Downloading video to local storage...')
-        
-        // Fetch project to get the aspect_ratio that was generated
-        const projectResponse = await api.get(`/api/projects/${projectId}`)
-        const project = projectResponse.data
-        const projectAspectRatio = project.aspect_ratio || '16:9'
-        
-        console.log(`📐 Project aspect ratio: ${projectAspectRatio}`)
-        
-        try {
-          // Get video from local disk (NOT S3!)
-          const response = await api.get(`/api/projects/${projectId}/preview`, {
-            responseType: 'blob'
-          })
-          
-          if (response.data) {
-            await storeVideo(projectId, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
-            console.log(`✅ Downloaded video from local storage`)
-          }
-        } catch (err) {
-          console.error(`⚠️ Failed to download video:`, err)
-        }
-        
-        const usage = await getStorageUsage(projectId)
-        console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
-      } catch (err) {
-        console.error('⚠️ Failed to download video to local storage:', err)
-      }
-      
-      // Redirect to results page after download completes
+
+      console.log('✅ Video generation complete, redirecting to results...')
+
+      // Redirect to results page
       setTimeout(() => {
         navigate(`/projects/${projectId}/results`)
-      }, 1000)
+      }, 500)
     },
     onError: (error) => {
       console.error('Generation error:', error)
