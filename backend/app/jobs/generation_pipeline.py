@@ -278,22 +278,39 @@ class GenerationPipeline:
             logger.info(f"✅ Pipeline complete! Total cost: ${self.total_cost:.2f}")
             logger.info(f"💰 Cost breakdown: {self.step_costs}")
 
-            # ===== LOCAL-FIRST: Final videos already saved locally by renderer =====
-            logger.info("✅ Final videos already saved to local storage by renderer")
-            # Renderer now returns local paths directly, not S3 URLs
+            # ===== UPLOAD TO S3: Upload final videos to S3 for preview =====
+            logger.info("📤 Uploading final videos to S3...")
+            from app.utils.s3_utils import upload_video_to_s3
+
+            # Renderer returns local paths, upload each to S3
             local_video_paths = final_videos
+            s3_video_urls = {}
+
+            for aspect_ratio, local_path in local_video_paths.items():
+                try:
+                    s3_result = upload_video_to_s3(
+                        local_video_path=local_path,
+                        project_id=str(self.project_id),
+                        aspect_ratio=aspect_ratio
+                    )
+                    s3_video_urls[aspect_ratio] = s3_result["url"]
+                    logger.info(f"✅ Uploaded {aspect_ratio} video to S3: {s3_result['s3_key']}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to upload {aspect_ratio} video to S3: {e}")
+                    # Continue with local path if S3 upload fails
+                    s3_video_urls[aspect_ratio] = None
 
             # Calculate local storage size
             storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
             logger.info(f"📊 Total local storage: {format_storage_size(storage_size)}")
 
-            # Update project with local paths (NOT S3 URLs!)
-            # output_videos stays empty until user finalizes
+            # Update project with both local paths and S3 URLs
             project.local_video_paths = local_video_paths
-            project.status = 'COMPLETED'  # Changed from auto-upload
+            project.output_videos = s3_video_urls  # S3 URLs for serving
+            project.status = 'COMPLETED'
             self.db.commit()
 
-            logger.info(f"✅ Project ready for preview. Videos stored locally.")
+            logger.info(f"✅ Project ready for preview. Videos uploaded to S3.")
 
             # Update legacy output_videos field for backward compatibility
             update_project_output(

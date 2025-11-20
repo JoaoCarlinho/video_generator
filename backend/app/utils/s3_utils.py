@@ -73,8 +73,7 @@ async def upload_product_image(
             Bucket=settings.s3_bucket_name,
             Key=s3_key,
             Body=file_content,
-            ContentType=get_content_type(file_ext),
-            ACL="public-read"
+            ContentType=get_content_type(file_ext)
         )
         
         # Generate public URL
@@ -97,10 +96,10 @@ async def upload_product_image(
 def get_content_type(file_ext: str) -> str:
     """
     Get MIME type for file extension.
-    
+
     **Arguments:**
     - file_ext: File extension including dot (e.g., ".jpg")
-    
+
     **Returns:**
     - str: MIME type
     """
@@ -109,7 +108,10 @@ def get_content_type(file_ext: str) -> str:
         ".jpeg": "image/jpeg",
         ".png": "image/png",
         ".webp": "image/webp",
-        ".gif": "image/gif"
+        ".gif": "image/gif",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+        ".avi": "video/x-msvideo"
     }
     return mime_types.get(file_ext, "application/octet-stream")
 
@@ -309,8 +311,7 @@ async def upload_to_project_folder(
             Bucket=settings.s3_bucket_name,
             Key=s3_key,
             Body=file_content,
-            ContentType=get_content_type(os.path.splitext(filename)[1]),
-            ACL="public-read"
+            ContentType=get_content_type(os.path.splitext(filename)[1])
         )
         
         # Generate URL
@@ -399,6 +400,76 @@ async def delete_project_folder(project_id: str) -> bool:
     except Exception as e:
         logger.error(f"❌ Failed to delete project folder {project_id}: {e}")
         return False
+
+
+def upload_video_to_s3(
+    local_video_path: str,
+    project_id: str,
+    aspect_ratio: str
+) -> dict:
+    """
+    Upload a generated video file to S3 preview folder.
+
+    Uploads video to: s3://bucket/projects/{project_id}/preview/video_{aspect_ratio}.mp4
+
+    **Arguments:**
+    - local_video_path: Local filesystem path to video file
+    - project_id: Project UUID (as string)
+    - aspect_ratio: Aspect ratio (e.g., "16:9", "9:16", "1:1")
+
+    **Returns:**
+    - dict: {
+        "url": "https://...",
+        "s3_key": "projects/.../preview/video_16-9.mp4",
+        "size_bytes": 12345,
+        "aspect_ratio": "16:9"
+      }
+
+    **Raises:**
+    - RuntimeError: If upload fails
+    - FileNotFoundError: If local video file doesn't exist
+    """
+    try:
+        if not settings.s3_bucket_name:
+            raise RuntimeError("S3_BUCKET_NAME not configured in .env")
+
+        # Check if file exists
+        if not os.path.exists(local_video_path):
+            raise FileNotFoundError(f"Video file not found: {local_video_path}")
+
+        # Read video file
+        with open(local_video_path, 'rb') as f:
+            file_content = f.read()
+
+        # Generate S3 key (replace : with - for aspect ratio)
+        aspect_safe = aspect_ratio.replace(':', '-')
+        filename = f"video_{aspect_safe}.mp4"
+        s3_key = f"projects/{project_id}/preview/{filename}"
+
+        # Upload to S3
+        s3 = get_s3_client()
+        s3.put_object(
+            Bucket=settings.s3_bucket_name,
+            Key=s3_key,
+            Body=file_content,
+            ContentType='video/mp4'
+        )
+
+        # Generate URL
+        s3_url = get_s3_file_url(s3_key)
+
+        logger.info(f"✅ Uploaded video to S3: {s3_key} ({len(file_content) / (1024*1024):.1f} MB)")
+
+        return {
+            "url": s3_url,
+            "s3_key": s3_key,
+            "size_bytes": len(file_content),
+            "aspect_ratio": aspect_ratio
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to upload video to S3: {e}")
+        raise RuntimeError(f"Video upload failed: {str(e)}")
 
 
 async def get_project_folder_stats(project_id: str) -> dict:
