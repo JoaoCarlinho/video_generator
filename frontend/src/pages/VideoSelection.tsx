@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { useProjects } from '@/hooks/useProjects'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { useGeneration } from '@/hooks/useGeneration'
+import { api } from '@/services/api'
 import { ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react'
 import { getVideoURL } from '@/services/videoStorage'
 
@@ -30,6 +31,41 @@ export function VideoSelection() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [selecting, setSelecting] = useState(false)
   const [videoUrls, setVideoUrls] = useState<string[]>([])
+  const [campaignBlobUrls, setCampaignBlobUrls] = useState<string[]>([])
+
+  const fetchCampaignVariationBlobs = async (
+    campaignData: any,
+    variationIndices: number[]
+  ) => {
+    if (!campaignData?.campaign_id) {
+      throw new Error('Invalid campaign data')
+    }
+    
+    if (variationIndices.length === 0) {
+      throw new Error('No variations available for campaign')
+    }
+    
+    const blobUrls: string[] = []
+    try {
+      for (const variationIndex of variationIndices) {
+        const response = await api.get(
+          `/api/generation/campaigns/${campaignData.campaign_id}/stream/9:16`,
+          {
+            responseType: 'blob',
+            params: { variation_index: variationIndex },
+          }
+        )
+        const blobUrl = URL.createObjectURL(response.data)
+        blobUrls.push(blobUrl)
+      }
+      
+      setCampaignBlobUrls(blobUrls)
+      setVideoUrls(blobUrls)
+    } catch (err) {
+      blobUrls.forEach(url => URL.revokeObjectURL(url))
+      throw err
+    }
+  }
 
   // Load project/campaign and videos
   useEffect(() => {
@@ -82,23 +118,21 @@ export function VideoSelection() {
           console.log('🔍 Variation Paths type:', typeof variationPaths)
           console.log('🔍 Variation Paths keys:', Object.keys(variationPaths))
           
-          // Convert object format to array of URLs
-          if (typeof variationPaths === 'object' && variationPaths !== null && Object.keys(variationPaths).length > 0) {
-            videoPaths = Object.keys(variationPaths)
-              .sort() // Ensure variation_0, variation_1, variation_2 order
-              .map(key => {
-                const variation = variationPaths[key]
-                console.log(`🔍 Processing variation ${key}:`, variation)
-                const url = variation?.aspectExports?.['9:16'] || variation?.final_video_url || variation?.video_url || null
-                console.log(`🔍 Extracted URL for ${key}:`, url)
-                return url
-              })
-              .filter(url => url !== null) // Remove nulls
-            
-            console.log('🔍 Final videoPaths array:', videoPaths)
-          } else {
-            console.warn('⚠️ variationPaths is not a valid object or is empty')
+          const variationKeys = Object.keys(variationPaths || {}).sort()
+          if (variationKeys.length === 0) {
+            console.warn('⚠️ No variation paths found, redirecting to results')
+            navigate(`/campaigns/${id}/results`)
+            return
           }
+          
+          const variationIndices = variationKeys.map((key, idx) => {
+            const parts = key.split('_')
+            const parsed = parseInt(parts[parts.length - 1], 10)
+            return Number.isNaN(parsed) ? idx : parsed
+          })
+          
+          await fetchCampaignVariationBlobs(data, variationIndices)
+          return
         } else {
           // Project structure: local_video_paths["9:16"] as array when num_variations > 1
         // OR in ad_project_json.local_video_paths["9:16"] 
@@ -148,11 +182,7 @@ export function VideoSelection() {
             setVideoUrls([videoPaths])
           } else {
             // File path - use preview endpoint without variation (defaults to 0)
-            if (isCampaign) {
-              setVideoUrls([`${API_BASE_URL}/api/generation/campaigns/${id}/download/9:16`])
-            } else {
-              setVideoUrls([`${API_BASE_URL}/api/local-generation/projects/${id}/preview`])
-            }
+            setVideoUrls([`${API_BASE_URL}/api/local-generation/projects/${id}/preview`])
           }
         } else {
           // Fallback: try to get from local storage (IndexedDB) - only for projects
@@ -194,6 +224,12 @@ export function VideoSelection() {
 
     loadProject()
   }, [id, isCampaign, getProject, getCampaign, navigate])
+
+  useEffect(() => {
+    return () => {
+      campaignBlobUrls.forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [campaignBlobUrls])
 
   const handleSelect = (index: number) => {
     setSelectedIndex(index)
