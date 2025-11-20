@@ -6,7 +6,7 @@ and uploads the result to S3 for use in compositing.
 
 import logging
 import io
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from PIL import Image
 from urllib.parse import urlparse
 import aiohttp
@@ -113,24 +113,28 @@ class ProductExtractor:
             parsed_url = urlparse(url_or_path)
             
             # Check if it's an S3 URL (format: https://bucket.s3.region.amazonaws.com/key)
-            if 's3.amazonaws.com' in parsed_url.netloc or 's3-' in parsed_url.netloc:
-                # Extract bucket and key from S3 URL
-                # Format: https://bucket.s3.region.amazonaws.com/path/to/file
-                bucket_name = parsed_url.netloc.split('.')[0]
-                s3_key = parsed_url.path.lstrip('/')
+            if 's3.amazonaws.com' in parsed_url.netloc or '.s3.' in parsed_url.netloc:
+                from app.utils.s3_utils import parse_s3_url
                 
-                logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
-                
-                # Download from S3 using credentials
+                # Parse S3 URL to get bucket and key
+                # Parse S3 URL to get bucket and key
                 try:
-                    response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-                    image_data = response['Body'].read()
-                    logger.info(f"✅ Downloaded {len(image_data)} bytes from S3")
-                    return image_data
-                except ClientError as e:
-                    logger.error(f"S3 download failed: {e}")
+                    bucket_name, s3_key = parse_s3_url(url_or_path)
+                    
+                    logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
+                    
+                    # Download from S3 using credentials
+                    try:
+                        response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+                        image_data = response['Body'].read()
+                        logger.info(f"✅ Downloaded {len(image_data)} bytes from S3")
+                        return image_data
+                    except ClientError as e:
+                        logger.error(f"S3 download failed: {e}")
+                        return None
+                except ValueError as e:
+                    logger.error(f"Failed to parse S3 URL: {e}")
                     return None
-            else:
                 # Regular HTTP(S) URL - use aiohttp
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url_or_path, timeout=aiohttp.ClientTimeout(total=30)) as resp:
@@ -211,4 +215,56 @@ class ProductExtractor:
         except Exception as e:
             logger.error(f"Error getting product dimensions: {e}")
             return (0, 0)
+
+    def get_perfume_image(self, perfume: Any, angle: str) -> str:
+        """
+        Get perfume image URL for a specific angle with fallback to front image.
+        
+        Args:
+            perfume: Perfume database object with image URLs
+            angle: Image angle ('front', 'back', 'top', 'left', 'right')
+            
+        Returns:
+            Image URL (falls back to front image if angle not available)
+        """
+        if angle == "front":
+            return perfume.front_image_url
+        elif angle == "back" and perfume.back_image_url:
+            return perfume.back_image_url
+        elif angle == "top" and perfume.top_image_url:
+            return perfume.top_image_url
+        elif angle == "left" and perfume.left_image_url:
+            return perfume.left_image_url
+        elif angle == "right" and perfume.right_image_url:
+            return perfume.right_image_url
+        else:
+            logger.warning(f"Perfume {perfume.perfume_id} missing {angle} image, falling back to front")
+            return perfume.front_image_url
+
+    async def extract_perfume_for_campaign(self, campaign: Any, perfume: Any) -> str:
+        """
+        Extract perfume product from front image for a campaign.
+        
+        Args:
+            campaign: Campaign database object
+            perfume: Perfume database object
+            
+        Returns:
+            Local file path of extracted product PNG with transparent background
+        """
+        # Use front image (required) for extraction
+        front_image_url = self.get_perfume_image(perfume, "front")
+        
+        if not front_image_url:
+            raise ValueError(f"Perfume {perfume.perfume_id} missing required front image")
+        
+        logger.info(f"Extracting perfume product from front image: {front_image_url}")
+        
+        # Extract product using existing method
+        product_url = await self.extract_product(
+            image_url=front_image_url,
+            project_id=str(campaign.campaign_id),  # LocalStorageManager uses project_id naming
+        )
+        
+        return product_url
 

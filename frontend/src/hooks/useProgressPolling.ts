@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGeneration, type GenerationProgress } from './useGeneration'
 
 interface UseProgressPollingOptions {
-  projectId: string
+  projectId?: string
+  campaignId?: string
   enabled?: boolean
   interval?: number
   onComplete?: () => void
@@ -11,12 +12,15 @@ interface UseProgressPollingOptions {
 
 export const useProgressPolling = ({
   projectId,
+  campaignId,
   enabled = true,
   interval = 2000,
   onComplete,
   onError,
 }: UseProgressPollingOptions) => {
-  const { getProgress } = useGeneration()
+  const { getProgress, getCampaignProgress } = useGeneration()
+  const id = campaignId || projectId || ''
+  const isCampaign = !!campaignId
   const [progress, setProgress] = useState<GenerationProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
@@ -36,7 +40,7 @@ export const useProgressPolling = ({
   }, [onComplete, onError])
 
   const poll = useCallback(async () => {
-    if (!enabled || !projectId) return
+    if (!enabled || !id) return
 
     // Cancel any pending request
     if (abortControllerRef.current) {
@@ -48,7 +52,9 @@ export const useProgressPolling = ({
 
     try {
       setLoading(true)
-      const data = await getProgress(projectId, abortControllerRef.current.signal)
+      const data = isCampaign
+        ? await getCampaignProgress(id, abortControllerRef.current.signal)
+        : await getProgress(id, abortControllerRef.current.signal)
       
       // Reset error counter on success
       consecutiveErrorsRef.current = 0
@@ -111,11 +117,11 @@ export const useProgressPolling = ({
       setLoading(false)
       abortControllerRef.current = null
     }
-  }, [projectId, enabled, getProgress])
+  }, [id, enabled, isCampaign, getProgress, getCampaignProgress])
 
-  // Start polling on mount or when projectId changes
+  // Start polling on mount or when id changes
   useEffect(() => {
-    if (!enabled || !projectId) {
+    if (!enabled || !id) {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
         pollIntervalRef.current = null
@@ -149,7 +155,7 @@ export const useProgressPolling = ({
       }
       setIsPolling(false)
     }
-  }, [projectId, enabled, interval]) // Removed 'poll' from dependencies to prevent re-creation
+  }, [id, enabled, interval, poll]) // Added poll to dependencies
 
   // Manual stop polling
   const stopPolling = useCallback(() => {

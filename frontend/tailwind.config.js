@@ -14,18 +14,18 @@ export default {
       white: '#ffffff',
       black: '#000000',
       transparent: 'transparent',
-      // Luxury Dark Palette
       charcoal: {
-        950: '#050608', // Main background
-        900: '#0B0D10', // Secondary background
+        950: '#111A2E', // New midnight background
+        900: '#162035',
+        800: '#1B2742',
+        700: '#233050',
       },
-      // Luxury Silky Olive Green Palette
       olive: {
-        950: '#2a3328', // Deep olive - main background (lighter, more visible)
-        900: '#354033', // Dark olive - secondary background
-        800: '#3f4a3d', // Medium olive - cards
-        700: '#4d5a4a', // Lighter olive - raised surfaces
-        600: '#5d6b5a', // Border/divider olive
+        950: '#111A2E',
+        900: '#162035',
+        800: '#1B2742',
+        700: '#233050',
+        600: '#5E6A7C', // Neutral divider
       },
       slate: {
         50: '#f8fafc',
@@ -57,36 +57,6 @@ export default {
       'off-white': '#E5E7EB', // Body text
       'muted-gray': '#9CA3AF', // Secondary text
       'muted-dark': '#6B7280', // Tertiary text
-      indigo: {
-        50: '#eef2ff',
-        100: '#e0e7ff',
-        200: '#c7d2fe',
-        300: '#a5b4fc',
-        400: '#818cf8',
-        500: '#6366f1',
-        600: '#4f46e5',
-        700: '#4338ca',
-        800: '#3730a3',
-        900: '#312e81',
-      },
-      purple: {
-        400: '#c084fc',
-        500: '#a855f7',
-        600: '#9333ea',
-        700: '#7e22ce',
-        800: '#6b21a8',
-      },
-      cyan: {
-        300: '#06d6d6',
-        400: '#06b6d4',
-        500: '#06b6d4',
-        600: '#0891b2',
-        700: '#0e7490',
-      },
-      pink: {
-        500: '#ec4899',
-        600: '#db2777',
-      },
       emerald: {
         500: '#10b981',
         600: '#059669',
@@ -172,22 +142,21 @@ export default {
       full: '9999px',
     },
     
-    backgroundColor: (theme) => ({
+      backgroundColor: (theme) => ({
       ...theme('colors'),
-      gradient: 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
-      'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      'gradient-hero': 'linear-gradient(135deg, #2a3328 0%, #354033 50%, #3f4a3d 100%)',
+      gradient: 'linear-gradient(135deg, #111a2e 0%, #1b2742 100%)',
+      'gradient-dark': 'linear-gradient(135deg, #111a2e 0%, #18233d 100%)',
+      'gradient-hero': 'linear-gradient(135deg, #111a2e 0%, #18233d 50%, #1f2d4a 100%)',
       'gradient-primary': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
       'gradient-gold': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
-      'gradient-olive': 'linear-gradient(135deg, #1a1f1a 0%, #232823 50%, #2d332d 100%)',
+      'gradient-olive': 'linear-gradient(135deg, #07090c 0%, #0f141b 50%, #151b26 100%)',
       'gradient-silky-gold': 'linear-gradient(135deg, #C9A86A 0%, #B8965A 50%, #A6854A 100%)',
     }),
     
     backgroundImage: {
       'gradient-to-br': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
-      'gradient-indigo-purple': 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
-      'gradient-dark': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      'gradient-hero': 'linear-gradient(135deg, #2a3328 0%, #354033 50%, #3f4a3d 100%)',
+      'gradient-dark': 'linear-gradient(135deg, #050608 0%, #0B0D10 100%)',
+      'gradient-hero': 'linear-gradient(135deg, #050608 0%, #0B0D10 45%, #11141B 100%)',
       'gradient-primary': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
       'gradient-gold': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
       'gradient-olive': 'linear-gradient(135deg, #1a1f1a 0%, #232823 50%, #2d332d 100%)',

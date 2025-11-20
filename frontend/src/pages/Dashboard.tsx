@@ -2,67 +2,63 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
-import { ProjectCard } from '@/components/PageComponents'
+import { PerfumeCard } from '@/components/PerfumeCard'
 import { useAuth } from '@/hooks/useAuth'
-import { useProjects } from '@/hooks/useProjects'
-import { Plus, TrendingUp, Video, Zap, Sparkles, LogOut, User } from 'lucide-react'
+import { useBrand } from '@/hooks/useBrand'
+import { usePerfumes } from '@/hooks/usePerfumes'
+import { Plus, TrendingUp, Sparkles, LogOut, User, Package } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const Dashboard = () => {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { projects, loading, error, fetchProjects, deleteProject } = useProjects()
+  const { brand, stats } = useBrand()
+  const { perfumes, loading, error, fetchPerfumes, deletePerfume } = usePerfumes()
 
   useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
+    fetchPerfumes()
+  }, [fetchPerfumes])
 
-  const handleCreateProject = () => {
-    navigate('/create')
+  const handleAddPerfume = () => {
+    navigate('/perfumes/add')
   }
 
-  const handleViewProject = (projectId: string) => {
-    const project = projects.find((p) => p.id === projectId)
-    const isReady = project?.status === 'ready' || project?.status === 'COMPLETED'
-    if (isReady) {
-      navigate(`/projects/${projectId}/results`)
-    } else {
-      navigate(`/projects/${projectId}/progress`)
-    }
+  const handleViewPerfume = (perfumeId: string) => {
+    navigate(`/perfumes/${perfumeId}`)
   }
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleDeletePerfume = async (perfumeId: string) => {
     if (
       confirm(
-        'Are you sure you want to delete this project? This cannot be undone.'
+        'Are you sure you want to delete this perfume? All campaigns for this perfume will also be deleted. This cannot be undone.'
       )
     ) {
       try {
-        await deleteProject(projectId)
+        await deletePerfume(perfumeId)
       } catch (err) {
-        console.error('Failed to delete project:', err)
+        console.error('Failed to delete perfume:', err)
       }
     }
   }
 
-  const stats = [
+  const dashboardStats = [
     {
-      label: 'Total Projects',
-      value: projects.length,
-      icon: Video,
+      label: 'Total Perfumes',
+      value: perfumes.length,
+      icon: Package,
       gradient: 'from-gold/20 to-gold-silky/10',
       iconBg: 'bg-gold/20',
     },
     {
-      label: 'In Progress',
-      value: projects.filter((p) => p.status === 'generating').length,
-      icon: Zap,
+      label: 'Total Campaigns',
+      value: stats?.total_campaigns || 0,
+      icon: TrendingUp,
       gradient: 'from-gold-silky/20 to-gold/10',
       iconBg: 'bg-gold-silky/20',
     },
     {
-      label: 'Completed',
-      value: projects.filter((p) => p.status === 'ready' || p.status === 'COMPLETED').length,
+      label: 'Total Spent',
+      value: `$${(stats?.total_cost || 0).toFixed(2)}`,
       icon: TrendingUp,
       gradient: 'from-gold/20 to-gold-silky/20',
       iconBg: 'bg-gold/20',
@@ -138,11 +134,14 @@ export const Dashboard = () => {
             {/* Welcome Section */}
             <motion.div variants={itemVariants} className="space-y-3">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-off-white">
-                Welcome back,{' '}
-                <span className="text-gradient-gold">{user?.email?.split('@')[0]}</span>
+                Your Perfumes
               </h1>
               <p className="text-lg sm:text-xl text-muted-gray max-w-2xl">
-                Create, manage, and track your AI-generated video projects
+                {brand?.brand_name ? (
+                  <>Manage your perfume collection for <span className="text-gold font-semibold">{brand.brand_name}</span></>
+                ) : (
+                  'Create, manage, and track your perfume collection'
+                )}
               </p>
             </motion.div>
 
@@ -151,7 +150,7 @@ export const Dashboard = () => {
               variants={itemVariants}
               className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6"
             >
-              {stats.map((stat, index) => {
+              {dashboardStats.map((stat, index) => {
                 const Icon = stat.icon
                 return (
                   <motion.div
@@ -179,26 +178,26 @@ export const Dashboard = () => {
               })}
             </motion.div>
 
-            {/* Projects Section */}
+            {/* Perfumes Section */}
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-off-white mb-2">My Projects</h2>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-off-white mb-2">Your Perfumes</h2>
                   <p className="text-muted-gray text-sm">
-                    {projects.length} project{projects.length !== 1 ? 's' : ''} total
+                    {perfumes.length} perfume{perfumes.length !== 1 ? 's' : ''} total
                   </p>
                 </div>
                 <Button
                   variant="hero"
-                  onClick={handleCreateProject}
+                  onClick={handleAddPerfume}
                   className="gap-2 transition-transform duration-200 hover:scale-105"
                 >
                   <Plus className="w-5 h-5" />
-                  New Project
+                  Add Perfume
                 </Button>
               </div>
 
-              {/* Projects Grid */}
+              {/* Perfumes Grid */}
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {[1, 2, 3, 4].map((i) => (
@@ -211,13 +210,13 @@ export const Dashboard = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fetchProjects()}
+                    onClick={() => fetchPerfumes()}
                     className="gap-2"
                   >
                     Try Again
                   </Button>
                 </div>
-              ) : projects.length === 0 ? (
+              ) : perfumes.length === 0 ? (
                 <motion.div 
                   className="text-center py-20 px-4"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -225,21 +224,21 @@ export const Dashboard = () => {
                   transition={{ duration: 0.5 }}
                 >
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-gold/10 rounded-full mb-6">
-                    <Video className="w-10 h-10 text-gold" />
+                    <Package className="w-10 h-10 text-gold" />
                   </div>
                   <h3 className="text-2xl font-bold text-off-white mb-3">
-                    No projects yet
+                    No perfumes yet
                   </h3>
                   <p className="text-muted-gray mb-8 max-w-md mx-auto">
-                    Create your first project to generate amazing video ads with AI
+                    Add your first perfume to start creating ad campaigns
                   </p>
                   <Button
                     variant="hero"
-                    onClick={handleCreateProject}
+                    onClick={handleAddPerfume}
                     className="gap-2 transition-transform duration-200 hover:scale-105"
                   >
                     <Plus className="w-5 h-5" />
-                    Create Your First Project
+                    Add Your First Perfume
                   </Button>
                 </motion.div>
               ) : (
@@ -249,17 +248,11 @@ export const Dashboard = () => {
                   initial="hidden"
                   animate="visible"
                 >
-                  {projects.map((project) => (
-                    <motion.div key={project.id} variants={itemVariants} className="aspect-square">
-                      <ProjectCard
-                        title={project.title}
-                        brief={project.brief}
-                        status={project.status}
-                        progress={project.status === 'generating' ? 50 : 100}
-                        createdAt={project.created_at}
-                        costEstimate={project.cost_estimate}
-                        onView={() => handleViewProject(project.id)}
-                        onDelete={() => handleDeleteProject(project.id)}
+                  {perfumes.map((perfume) => (
+                    <motion.div key={perfume.perfume_id} variants={itemVariants}>
+                      <PerfumeCard
+                        perfume={perfume}
+                        onClick={() => handleViewPerfume(perfume.perfume_id)}
                       />
                     </motion.div>
                   ))}

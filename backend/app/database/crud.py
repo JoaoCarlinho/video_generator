@@ -1,15 +1,15 @@
-"""Database CRUD operations for projects."""
+"""Database CRUD operations for projects, brands, perfumes, and campaigns."""
 
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from app.database.models import Project
+from sqlalchemy import desc, func
+from app.database.models import Project, Brand, Perfume, Campaign, AuthUser  # AuthUser needed for FK resolution
 from app.models.schemas import (
     CreateProjectRequest,
     ProjectResponse,
     ProjectDetailResponse
 )
 from uuid import UUID
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -668,6 +668,608 @@ def get_projects_without_s3_paths(
         return projects
     except Exception as e:
         logger.error(f"❌ Failed to get projects without S3 paths: {e}")
+        raise
+
+
+# ============================================================================
+# Brand CRUD Operations (Phase 2 B2B SaaS)
+# ============================================================================
+
+def create_brand(
+    db: Session,
+    user_id: UUID,
+    brand_name: str,
+    brand_logo_url: str,
+    brand_guidelines_url: str,
+    brand_id: Optional[UUID] = None
+) -> Brand:
+    """
+    Create a new brand for a user.
+    
+    Args:
+        db: Database session
+        user_id: User ID (must be unique - one brand per user)
+        brand_name: Brand name (must be unique)
+        brand_logo_url: S3 URL of brand logo
+        brand_guidelines_url: S3 URL of brand guidelines PDF
+        brand_id: Optional brand_id to use (if not provided, will be auto-generated)
+    
+    Returns:
+        Brand: Created brand object
+    
+    Raises:
+        Exception: If brand creation fails (e.g., duplicate name or user_id)
+    """
+    try:
+        brand = Brand(
+            brand_id=brand_id,  # Use provided brand_id or None (will use model default)
+            user_id=user_id,
+            brand_name=brand_name,
+            brand_logo_url=brand_logo_url,
+            brand_guidelines_url=brand_guidelines_url,
+            onboarding_completed=True
+        )
+        db.add(brand)
+        db.commit()
+        db.refresh(brand)
+        logger.info(f"✅ Created brand {brand.brand_id} for user {user_id}")
+        return brand
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create brand: {e}")
+        raise
+
+
+def get_brand_by_user_id(db: Session, user_id: UUID) -> Optional[Brand]:
+    """
+    Get brand by user ID.
+    
+    In Phase 2 B2B SaaS, each user should have exactly one brand (1:1 relationship).
+    If multiple brands exist, returns the most recently created one and logs a warning.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+    
+    Returns:
+        Brand: Brand object if found, None otherwise
+    
+    Raises:
+        Exception: If database query fails
+    """
+    try:
+        brands = db.query(Brand).filter(Brand.user_id == user_id).order_by(Brand.created_at.desc()).all()
+        
+        if not brands:
+            logger.debug(f"⚠️ No brand found for user {user_id}")
+            return None
+        
+        if len(brands) > 1:
+            logger.warning(
+                f"⚠️ Multiple brands found for user {user_id} ({len(brands)} brands). "
+                f"Using most recent brand {brands[0].brand_id}. "
+                f"This should not happen in Phase 2 B2B SaaS (1 user = 1 brand)."
+            )
+        
+        brand = brands[0]
+        logger.debug(f"✅ Retrieved brand {brand.brand_id} for user {user_id}")
+        return brand
+    except Exception as e:
+        logger.error(f"❌ Failed to get brand for user {user_id}: {e}")
+        raise
+
+
+def get_brand_by_id(db: Session, brand_id: UUID) -> Optional[Brand]:
+    """
+    Get brand by brand ID.
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+    
+    Returns:
+        Brand: Brand object if found, None otherwise
+    """
+    try:
+        brand = db.query(Brand).filter(Brand.brand_id == brand_id).first()
+        if brand:
+            logger.debug(f"✅ Retrieved brand {brand_id}")
+        else:
+            logger.debug(f"⚠️ Brand {brand_id} not found")
+        return brand
+    except Exception as e:
+        logger.error(f"❌ Failed to get brand {brand_id}: {e}")
+        raise
+
+
+def update_brand(
+    db: Session,
+    brand_id: UUID,
+    **updates
+) -> Optional[Brand]:
+    """
+    Update brand fields.
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+        **updates: Fields to update (brand_name, brand_logo_url, etc.)
+    
+    Returns:
+        Brand: Updated brand object if successful, None if not found
+    """
+    try:
+        brand = db.query(Brand).filter(Brand.brand_id == brand_id).first()
+        if not brand:
+            logger.warning(f"⚠️ Brand {brand_id} not found for update")
+            return None
+        
+        for key, value in updates.items():
+            if hasattr(brand, key):
+                setattr(brand, key, value)
+        
+        db.commit()
+        db.refresh(brand)
+        logger.info(f"✅ Updated brand {brand_id}: {list(updates.keys())}")
+        return brand
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update brand {brand_id}: {e}")
+        raise
+
+
+def get_brand_stats(db: Session, brand_id: UUID) -> Dict[str, Any]:
+    """
+    Get brand statistics (perfumes count, campaigns count, total cost).
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+    
+    Returns:
+        Dict with statistics
+    """
+    try:
+        perfumes_count = db.query(Perfume).filter(Perfume.brand_id == brand_id).count()
+        campaigns_count = db.query(Campaign).filter(Campaign.brand_id == brand_id).count()
+        total_cost = db.query(func.sum(Campaign.cost)).filter(Campaign.brand_id == brand_id).scalar() or 0
+        
+        stats = {
+            "total_perfumes": perfumes_count,
+            "total_campaigns": campaigns_count,
+            "total_cost": float(total_cost)
+        }
+        
+        logger.debug(f"✅ Generated stats for brand {brand_id}: {stats}")
+        return stats
+    except Exception as e:
+        logger.error(f"❌ Failed to get stats for brand {brand_id}: {e}")
+        raise
+
+
+# ============================================================================
+# Perfume CRUD Operations (Phase 2 B2B SaaS)
+# ============================================================================
+
+def create_perfume(
+    db: Session,
+    brand_id: UUID,
+    perfume_name: str,
+    perfume_gender: str,
+    front_image_url: str,
+    back_image_url: Optional[str] = None,
+    top_image_url: Optional[str] = None,
+    left_image_url: Optional[str] = None,
+    right_image_url: Optional[str] = None,
+    perfume_id: Optional[UUID] = None
+) -> Perfume:
+    """
+    Create a new perfume for a brand.
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+        perfume_name: Perfume name (unique within brand)
+        perfume_gender: Perfume gender ('masculine', 'feminine', 'unisex')
+        front_image_url: S3 URL of front image (required)
+        back_image_url: S3 URL of back image (optional)
+        top_image_url: S3 URL of top image (optional)
+        left_image_url: S3 URL of left image (optional)
+        right_image_url: S3 URL of right image (optional)
+        perfume_id: Optional perfume_id to use (if not provided, will be auto-generated)
+    
+    Returns:
+        Perfume: Created perfume object
+    """
+    try:
+        perfume = Perfume(
+            perfume_id=perfume_id,  # Use provided perfume_id or None (will use model default)
+            brand_id=brand_id,
+            perfume_name=perfume_name,
+            perfume_gender=perfume_gender,
+            front_image_url=front_image_url,
+            back_image_url=back_image_url,
+            top_image_url=top_image_url,
+            left_image_url=left_image_url,
+            right_image_url=right_image_url
+        )
+        db.add(perfume)
+        db.commit()
+        db.refresh(perfume)
+        logger.info(f"✅ Created perfume {perfume.perfume_id} for brand {brand_id}")
+        return perfume
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create perfume: {e}")
+        raise
+
+
+def get_perfumes_by_brand(
+    db: Session,
+    brand_id: UUID,
+    page: int = 1,
+    limit: int = 20
+) -> Tuple[List[Perfume], int]:
+    """
+    Get perfumes for a brand with pagination.
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+        page: Page number (1-indexed)
+        limit: Items per page
+    
+    Returns:
+        Tuple of (list of perfumes, total count)
+    """
+    try:
+        offset = (page - 1) * limit
+        perfumes = db.query(Perfume)\
+            .filter(Perfume.brand_id == brand_id)\
+            .order_by(desc(Perfume.created_at))\
+            .offset(offset)\
+            .limit(limit)\
+            .all()
+        
+        total = db.query(Perfume).filter(Perfume.brand_id == brand_id).count()
+        
+        logger.debug(f"✅ Retrieved {len(perfumes)} perfumes for brand {brand_id} (page {page})")
+        return perfumes, total
+    except Exception as e:
+        logger.error(f"❌ Failed to get perfumes for brand {brand_id}: {e}")
+        raise
+
+
+def get_perfume_by_id(db: Session, perfume_id: UUID) -> Optional[Perfume]:
+    """
+    Get perfume by ID.
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+    
+    Returns:
+        Perfume: Perfume object if found, None otherwise
+    """
+    try:
+        perfume = db.query(Perfume).filter(Perfume.perfume_id == perfume_id).first()
+        if perfume:
+            logger.debug(f"✅ Retrieved perfume {perfume_id}")
+        else:
+            logger.debug(f"⚠️ Perfume {perfume_id} not found")
+        return perfume
+    except Exception as e:
+        logger.error(f"❌ Failed to get perfume {perfume_id}: {e}")
+        raise
+
+
+def update_perfume(
+    db: Session,
+    perfume_id: UUID,
+    **updates
+) -> Optional[Perfume]:
+    """
+    Update perfume fields.
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+        **updates: Fields to update
+    
+    Returns:
+        Perfume: Updated perfume object if successful, None if not found
+    """
+    try:
+        perfume = db.query(Perfume).filter(Perfume.perfume_id == perfume_id).first()
+        if not perfume:
+            logger.warning(f"⚠️ Perfume {perfume_id} not found for update")
+            return None
+        
+        for key, value in updates.items():
+            if hasattr(perfume, key):
+                setattr(perfume, key, value)
+        
+        db.commit()
+        db.refresh(perfume)
+        logger.info(f"✅ Updated perfume {perfume_id}: {list(updates.keys())}")
+        return perfume
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update perfume {perfume_id}: {e}")
+        raise
+
+
+def delete_perfume(db: Session, perfume_id: UUID) -> bool:
+    """
+    Delete a perfume (only if it has no campaigns).
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+    
+    Returns:
+        bool: True if deleted, False if not found or has campaigns
+    """
+    try:
+        perfume = db.query(Perfume).filter(Perfume.perfume_id == perfume_id).first()
+        if not perfume:
+            logger.warning(f"⚠️ Perfume {perfume_id} not found")
+            return False
+        
+        # Check if perfume has campaigns
+        campaigns_count = db.query(Campaign).filter(Campaign.perfume_id == perfume_id).count()
+        if campaigns_count > 0:
+            logger.warning(f"⚠️ Cannot delete perfume {perfume_id}: has {campaigns_count} campaigns")
+            return False
+        
+        db.delete(perfume)
+        db.commit()
+        logger.info(f"✅ Deleted perfume {perfume_id}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to delete perfume {perfume_id}: {e}")
+        raise
+
+
+def get_perfume_campaigns_count(db: Session, perfume_id: UUID) -> int:
+    """
+    Get count of campaigns for a perfume.
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+    
+    Returns:
+        int: Number of campaigns
+    """
+    try:
+        count = db.query(Campaign).filter(Campaign.perfume_id == perfume_id).count()
+        return count
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaigns count for perfume {perfume_id}: {e}")
+        raise
+
+
+# ============================================================================
+# Campaign CRUD Operations (Phase 2 B2B SaaS)
+# ============================================================================
+
+def create_campaign(
+    db: Session,
+    perfume_id: UUID,
+    brand_id: UUID,
+    campaign_name: str,
+    creative_prompt: str,
+    selected_style: str,
+    target_duration: int,
+    num_variations: int = 1
+) -> Campaign:
+    """
+    Create a new campaign for a perfume.
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+        brand_id: Brand ID
+        campaign_name: Campaign name (unique within perfume)
+        creative_prompt: Creative prompt text
+        selected_style: Video style ('gold_luxe', 'dark_elegance', 'romantic_floral')
+        target_duration: Target duration in seconds (15-60)
+        num_variations: Number of variations (1-3)
+    
+    Returns:
+        Campaign: Created campaign object
+    """
+    try:
+        campaign = Campaign(
+            perfume_id=perfume_id,
+            brand_id=brand_id,
+            campaign_name=campaign_name,
+            creative_prompt=creative_prompt,
+            selected_style=selected_style,
+            target_duration=target_duration,
+            num_variations=num_variations,
+            status='pending',
+            progress=0,
+            cost=0,
+            campaign_json={}
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+        logger.info(f"✅ Created campaign {campaign.campaign_id} for perfume {perfume_id}")
+        return campaign
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create campaign: {e}")
+        raise
+
+
+def get_campaigns_by_perfume(
+    db: Session,
+    perfume_id: UUID,
+    page: int = 1,
+    limit: int = 20
+) -> Tuple[List[Campaign], int]:
+    """
+    Get campaigns for a perfume with pagination.
+    
+    Args:
+        db: Database session
+        perfume_id: Perfume ID
+        page: Page number (1-indexed)
+        limit: Items per page
+    
+    Returns:
+        Tuple of (list of campaigns, total count)
+    """
+    try:
+        offset = (page - 1) * limit
+        campaigns = db.query(Campaign)\
+            .filter(Campaign.perfume_id == perfume_id)\
+            .order_by(desc(Campaign.created_at))\
+            .offset(offset)\
+            .limit(limit)\
+            .all()
+        
+        total = db.query(Campaign).filter(Campaign.perfume_id == perfume_id).count()
+        
+        logger.debug(f"✅ Retrieved {len(campaigns)} campaigns for perfume {perfume_id} (page {page})")
+        return campaigns, total
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaigns for perfume {perfume_id}: {e}")
+        raise
+
+
+def get_campaigns_by_brand(
+    db: Session,
+    brand_id: UUID,
+    page: int = 1,
+    limit: int = 20
+) -> Tuple[List[Campaign], int]:
+    """
+    Get campaigns for a brand with pagination.
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+        page: Page number (1-indexed)
+        limit: Items per page
+    
+    Returns:
+        Tuple of (list of campaigns, total count)
+    """
+    try:
+        offset = (page - 1) * limit
+        campaigns = db.query(Campaign)\
+            .filter(Campaign.brand_id == brand_id)\
+            .order_by(desc(Campaign.created_at))\
+            .offset(offset)\
+            .limit(limit)\
+            .all()
+        
+        total = db.query(Campaign).filter(Campaign.brand_id == brand_id).count()
+        
+        logger.debug(f"✅ Retrieved {len(campaigns)} campaigns for brand {brand_id} (page {page})")
+        return campaigns, total
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaigns for brand {brand_id}: {e}")
+        raise
+
+
+def get_campaign_by_id(db: Session, campaign_id: UUID) -> Optional[Campaign]:
+    """
+    Get campaign by ID.
+    
+    Args:
+        db: Database session
+        campaign_id: Campaign ID
+    
+    Returns:
+        Campaign: Campaign object if found, None otherwise
+    """
+    try:
+        campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+        if campaign:
+            logger.debug(f"✅ Retrieved campaign {campaign_id}")
+        else:
+            logger.debug(f"⚠️ Campaign {campaign_id} not found")
+        return campaign
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaign {campaign_id}: {e}")
+        raise
+
+
+def update_campaign(
+    db: Session,
+    campaign_id: UUID,
+    **updates
+) -> Optional[Campaign]:
+    """
+    Update campaign fields.
+    
+    Args:
+        db: Database session
+        campaign_id: Campaign ID
+        **updates: Fields to update (status, progress, cost, campaign_json, etc.)
+    
+    Returns:
+        Campaign: Updated campaign object if successful, None if not found
+    """
+    try:
+        campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+        if not campaign:
+            logger.warning(f"⚠️ Campaign {campaign_id} not found for update")
+            return None
+        
+        for key, value in updates.items():
+            if hasattr(campaign, key):
+                setattr(campaign, key, value)
+                # Explicitly mark JSONB fields as modified so SQLAlchemy detects changes
+                if key == 'campaign_json':
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(campaign, 'campaign_json')
+        
+        db.commit()
+        db.refresh(campaign)
+        logger.info(f"✅ Updated campaign {campaign_id}: {list(updates.keys())}")
+        return campaign
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update campaign {campaign_id}: {e}")
+        raise
+
+
+def delete_campaign(db: Session, campaign_id: UUID) -> bool:
+    """
+    Delete a campaign (only if not processing).
+    
+    Args:
+        db: Database session
+        campaign_id: Campaign ID
+    
+    Returns:
+        bool: True if deleted, False if not found or processing
+    """
+    try:
+        campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+        if not campaign:
+            logger.warning(f"⚠️ Campaign {campaign_id} not found")
+            return False
+        
+        # Check if campaign is processing
+        if campaign.status == 'processing':
+            logger.warning(f"⚠️ Cannot delete campaign {campaign_id}: currently processing")
+            return False
+        
+        db.delete(campaign)
+        db.commit()
+        logger.info(f"✅ Deleted campaign {campaign_id}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to delete campaign {campaign_id}: {e}")
         raise
 
 

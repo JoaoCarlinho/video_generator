@@ -15,10 +15,11 @@ PERFUME-SPECIFIC FEATURES (Phase 8):
 - Grammar compliance checking
 - TikTok vertical optimization (9:16 hardcoded)
 
-LOCAL-FIRST ARCHITECTURE:
-- All intermediate files stored locally in /tmp/genads/{project_id}/
-- Final videos saved locally only (no S3 upload)
-- User can finalize project to mark as complete (videos stay local)
+S3-FIRST ARCHITECTURE (Phase 2):
+- Inputs (guidelines, logo, products) fetched from S3
+- Intermediate files uploaded to S3 draft folders
+- Final videos uploaded to S3 final folders
+- Frontend streams directly from S3 or via API proxy
 """
 
 import asyncio
@@ -33,10 +34,10 @@ from functools import wraps
 from app.database import connection as db_connection
 from app.database.connection import init_db
 from app.database.crud import (
-    get_project,
-    update_project_status,
-    update_project_output,
-    update_project_s3_paths,
+    get_campaign_by_id,
+    get_perfume_by_id,
+    get_brand_by_id,
+    update_campaign,
 )
 from app.models.schemas import AdProject, Scene, StyleSpec
 from app.services.scene_planner import ScenePlanner
@@ -46,11 +47,12 @@ from app.services.compositor import Compositor
 from app.services.text_overlay import TextOverlayRenderer
 from app.services.audio_engine import AudioEngine
 from app.services.renderer import Renderer
-from app.services.reference_image_extractor import ReferenceImageStyleExtractor
+# REMOVED: ReferenceImageStyleExtractor (feature removed in Phase 2 B2B SaaS)
 from app.utils.s3_utils import (
-    create_project_folder_structure,
-    delete_project_folder,
-    upload_to_project_folder,
+    get_campaign_s3_path,
+    upload_draft_video,
+    upload_final_video,
+    upload_draft_music,
 )
 from app.utils.local_storage import LocalStorageManager, format_storage_size
 
@@ -86,13 +88,13 @@ def timed_step(step_name: str):
 class GenerationPipeline:
     """Main pipeline orchestrator for video generation."""
 
-    def __init__(self, project_id: UUID):
-        """Initialize pipeline for a specific project.
+    def __init__(self, campaign_id: UUID):
+        """Initialize pipeline for a specific campaign.
         
         Args:
-            project_id: UUID of the project to generate
+            campaign_id: UUID of the campaign to generate
         """
-        self.project_id = project_id
+        self.campaign_id = campaign_id
         init_db()
         
         if db_connection.SessionLocal is None:
@@ -103,6 +105,37 @@ class GenerationPipeline:
         
         self.db = db_connection.SessionLocal()
         self.step_timings: Dict[str, float] = {}
+        
+        # Load campaign, perfume, and brand from database
+        self.campaign = get_campaign_by_id(self.db, campaign_id)
+        if not self.campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+        
+        logger.info(f"🔍 Loaded campaign {self.campaign.campaign_id}: perfume_id={self.campaign.perfume_id}, brand_id={self.campaign.brand_id}")
+        
+        self.perfume = get_perfume_by_id(self.db, self.campaign.perfume_id)
+        if not self.perfume:
+            raise ValueError(f"Perfume {self.campaign.perfume_id} not found")
+        
+        logger.info(f"🔍 Loaded perfume {self.perfume.perfume_id}: brand_id={self.perfume.brand_id}")
+        
+        # Verify perfume belongs to campaign's brand
+        if self.perfume.brand_id != self.campaign.brand_id:
+            logger.error(f"❌ CRITICAL: Perfume {self.perfume.perfume_id} brand_id {self.perfume.brand_id} doesn't match campaign brand_id {self.campaign.brand_id}")
+            raise ValueError(f"Perfume {self.perfume.perfume_id} does not belong to campaign's brand {self.campaign.brand_id}")
+        
+        self.brand = get_brand_by_id(self.db, self.campaign.brand_id)
+        if not self.brand:
+            raise ValueError(f"Brand {self.campaign.brand_id} not found")
+        
+        logger.info(f"🔍 Loaded brand {self.brand.brand_id}: user_id={self.brand.user_id}")
+        
+        # Verify brand matches perfume's brand
+        if self.brand.brand_id != self.perfume.brand_id:
+            logger.error(f"❌ CRITICAL: Brand {self.brand.brand_id} doesn't match perfume brand_id {self.perfume.brand_id}")
+            raise ValueError(f"Brand {self.brand.brand_id} does not match perfume's brand {self.perfume.brand_id}")
+        
+        logger.info(f"✅ Verified IDs: brand={self.brand.brand_id}, perfume={self.perfume.perfume_id}, campaign={self.campaign.campaign_id}")
 
     async def run(self) -> Dict[str, Any]:
         """Execute the full generation pipeline.
@@ -117,328 +150,147 @@ class GenerationPipeline:
         music_task = None
         
         try:
-            logger.info(f"Starting generation pipeline for project {self.project_id}")
+            logger.info(f"Starting generation pipeline for campaign {self.campaign_id}")
 
-            # Load project from database
-            project = get_project(self.db, self.project_id)
-            if not project:
-                raise ValueError(f"Project {self.project_id} not found")
+            # Campaign, perfume, and brand already loaded in __init__
+            campaign = self.campaign
+            perfume = self.perfume
+            brand = self.brand
 
-            # Initialize local storage
+            # Initialize local storage (using campaign_id)
             logger.info("Initializing local storage...")
             try:
-                local_paths = LocalStorageManager.initialize_project_storage(self.project_id)
+                local_paths = LocalStorageManager.initialize_project_storage(self.campaign_id)
                 self.local_paths = local_paths
-                storage_info = LocalStorageManager.get_project_storage_size(self.project_id)
+                storage_info = LocalStorageManager.get_project_storage_size(self.campaign_id)
                 logger.info(f"Local storage initialized: {self.local_paths}")
             except Exception as e:
                 logger.error(f"Failed to initialize local storage: {e}")
                 raise
 
-            # Initialize S3 project folder structure
-            logger.info("Initializing S3 project folder structure...")
-            try:
-                folders = await create_project_folder_structure(str(self.project_id))
-                update_project_s3_paths(
-                    self.db,
-                    self.project_id,
-                    folders["s3_folder"],
-                    folders["s3_url"]
-                )
-                logger.info(f"S3 folders initialized at {folders['s3_url']}")
-                self.s3_folders = folders
-            except Exception as e:
-                logger.error(f"Failed to initialize S3 folders: {e}")
-                self.s3_folders = None
-
-            # Parse AdProject JSON
-            # Ensure ad_project_json is a dict (handle JSONB/string cases)
-            project_json = project.ad_project_json
-            if isinstance(project_json, str):
+            # Parse Campaign JSON
+            # Ensure campaign_json is a dict (handle JSONB/string cases)
+            campaign_json = campaign.campaign_json
+            if isinstance(campaign_json, str):
                 import json
-                project_json = json.loads(project_json)
-            elif not isinstance(project_json, dict):
-                raise ValueError(f"Invalid ad_project_json type: {type(project_json)}")
+                campaign_json = json.loads(campaign_json)
+            elif not isinstance(campaign_json, dict):
+                raise ValueError(f"Invalid campaign_json type: {type(campaign_json)}")
             
             # Ensure video_metadata exists in the JSON
-            if 'video_metadata' not in project_json:
-                project_json['video_metadata'] = {}
+            if 'video_metadata' not in campaign_json:
+                campaign_json['video_metadata'] = {}
             
-            ad_project = AdProject(**project_json)
+            # Build AdProject from campaign data
+            ad_project = self._build_ad_project_from_campaign(campaign, perfume, brand, campaign_json)
+            
+            # STEP 0 REMOVED: Reference image extraction (feature removed in Phase 2 B2B SaaS)
 
-            # STEP 0: Extract Reference Image Style (Optional)
-            logger.info("Step 0: Checking for reference image...")
-            has_reference = False
-            if project.ad_project_json:
-                reference_local_path = project.ad_project_json.get("referenceImage", {}).get("localPath")
-                
-                if reference_local_path:
-                    import os
-                    if os.path.exists(reference_local_path):
-                        has_reference = True
-                        logger.info("Extracting visual style from reference image...")
-                        
-                        try:
-                            from openai import AsyncOpenAI
-                            from app.config import settings
-                            
-                            openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-                            extractor = ReferenceImageStyleExtractor(openai_client)
-                            
-                            brand_name = project.ad_project_json.get("brand", {}).get("name", "Brand") if isinstance(project.ad_project_json, dict) else "Brand"
-                            extracted_style = await extractor.extract_style(
-                                image_path=reference_local_path,
-                                brand_name=brand_name
-                            )
-                            
-                            project.ad_project_json["referenceImage"]["extractedStyle"] = extracted_style.to_dict()
-                            project.ad_project_json["referenceImage"]["extractedAt"] = datetime.now().isoformat()
-                            self.db.commit()
-                            
-                            # Reload project to get updated JSON
-                            project = get_project(self.db, self.project_id)
-                            project_json = project.ad_project_json
-                            if isinstance(project_json, str):
-                                import json
-                                project_json = json.loads(project_json)
-                            elif not isinstance(project_json, dict):
-                                raise ValueError(f"Invalid ad_project_json type: {type(project_json)}")
-                            
-                            if 'video_metadata' not in project_json:
-                                project_json['video_metadata'] = {}
-                            
-                            ad_project = AdProject(**project_json)
-                            
-                            os.unlink(reference_local_path)
-                            logger.info("Reference style extracted and temp file deleted")
-                            
-                        except Exception as e:
-                            logger.warning(f"Failed to extract reference style: {e}")
-                            has_reference = False
-                    else:
-                        logger.info(f"Reference image file not found: {reference_local_path}")
-                else:
-                    logger.info("No reference image provided")
-            else:
-                logger.info("No ad_project_json available")
-
-            # STEP 1: Extract Product (Optional)
+            # STEP 1: Extract Product from Perfume Images
             product_url = None
-            has_product = ad_project.product_asset is not None and (ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False)
+            has_product = perfume.front_image_url is not None
             
             if has_product:
-                logger.info("Step 1: Extracting product...")
-                product_url = await self._extract_product(project, ad_project)
+                logger.info("Step 1: Extracting product from perfume image...")
+                from app.config import settings
+                extractor = ProductExtractor(
+                    aws_access_key_id=settings.aws_access_key_id,
+                    aws_secret_access_key=settings.aws_secret_access_key,
+                    s3_bucket_name=settings.s3_bucket_name,
+                    aws_region=settings.aws_region,
+                )
+                product_url = await extractor.extract_perfume_for_campaign(campaign, perfume)
             else:
-                logger.info("Step 1: Skipping product extraction (no product image provided)")
+                logger.info("Step 1: Skipping product extraction (no perfume front image)")
 
             # STEP 2: Plan Scenes (with multi-variation support)
             planning_start = 15 if has_product else 10
-            num_variations = getattr(project, 'num_variations', 1) or 1
+            num_variations = campaign.num_variations or 1
             logger.info(f"Step 2: Planning scenes (variations: {num_variations})...")
             
             if num_variations > 1:
                 # Multi-variation flow: Generate N scene plan variations
                 logger.info(f"Generating {num_variations} scene plan variations...")
                 scene_variations = await self._plan_scenes_variations(
-                    project, ad_project, num_variations, progress_start=planning_start
+                    campaign, perfume, brand, ad_project, num_variations, progress_start=planning_start
                 )
                 # Use first variation's ad_project for metadata (all variations share same brand/product info)
-                updated_project = await self._plan_scenes(project, ad_project, progress_start=planning_start)
-                ad_project = AdProject(**updated_project.ad_project_json)
+                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
             else:
                 # Single variation flow (existing behavior)
-                updated_project = await self._plan_scenes(project, ad_project, progress_start=planning_start)
-                ad_project = AdProject(**updated_project.ad_project_json)
+                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, perfume, brand, ad_project, progress_start=planning_start)
                 scene_variations = [ad_project.scenes]
 
             # STEP 3-7: Process all variations IN PARALLEL
-            if num_variations > 1:
-                logger.info(f"Processing {num_variations} variations in parallel...")
-                variation_tasks = [
-                    self._process_variation(
-                        scenes=scenes,
-                        var_idx=var_idx,
-                        num_variations=num_variations,
-                        project=project,
-                        ad_project=ad_project,
-                        product_url=product_url,
-                        has_product=has_product,
-                        progress_start=planning_start + 5,
-                    )
-                    for var_idx, scenes in enumerate(scene_variations)
-                ]
-                final_videos = await asyncio.gather(*variation_tasks, return_exceptions=True)
-                
-                # Separate successful variations from errors
-                successful_videos = []
-                failed_variations = []
-                for var_idx, result in enumerate(final_videos):
-                    if isinstance(result, Exception):
-                        failed_variations.append((var_idx, result))
-                        logger.error(f"Variation {var_idx + 1} failed: {result}")
-                    else:
-                        successful_videos.append(result)
-                        logger.info(f"Variation {var_idx + 1} succeeded: {result}")
-                
-                # If all variations failed, raise error
-                if len(successful_videos) == 0:
-                    error_msg = f"All {num_variations} variation(s) failed: {failed_variations[0][1]}"
-                    logger.error(error_msg)
-                    raise RuntimeError(error_msg)
-                
-                # If some variations failed, log warning but continue with successful ones
-                if failed_variations:
-                    failed_indices = [idx + 1 for idx, _ in failed_variations]
-                    logger.warning(
-                        f"⚠️ {len(failed_variations)} variation(s) failed (indices: {failed_indices}), "
-                        f"but {len(successful_videos)} variation(s) succeeded. Continuing with successful variations."
-                    )
-                
-                # Store successful variations locally
-                actual_num_variations = len(successful_videos)
-                local_video_paths = self._save_variations_locally(successful_videos, actual_num_variations)
-                
-                # Update project with successful variation info
-                await self._update_project_variations(actual_num_variations, successful_videos)
-                
-                total_elapsed = time.time() - pipeline_start
-                logger.info(f"Pipeline complete in {total_elapsed:.1f}s ({actual_num_variations}/{num_variations} variations succeeded)")
-                
-                storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
-                logger.info(f"Total local storage: {format_storage_size(storage_size)}")
-                
-                # Build message indicating partial success if applicable
-                if failed_variations:
-                    message = f"{actual_num_variations} TikTok vertical video variations ready for preview ({len(failed_variations)} variation(s) failed due to API timeout)."
+            logger.info(f"Processing {num_variations} variations in parallel...")
+            variation_tasks = [
+                self._process_variation(
+                    scenes=scenes,
+                    var_idx=var_idx,
+                    num_variations=num_variations,
+                    campaign=campaign,
+                    perfume=perfume,
+                    brand=brand,
+                    ad_project=ad_project,
+                    product_url=product_url,
+                    has_product=has_product,
+                    progress_start=planning_start + 5,
+                )
+                for var_idx, scenes in enumerate(scene_variations)
+            ]
+            final_videos = await asyncio.gather(*variation_tasks, return_exceptions=True)
+            
+            # Separate successful variations from errors
+            successful_videos = []
+            failed_variations = []
+            for var_idx, result in enumerate(final_videos):
+                if isinstance(result, Exception):
+                    failed_variations.append((var_idx, result))
+                    logger.error(f"Variation {var_idx + 1} failed: {result}")
                 else:
-                    message = f"{actual_num_variations} TikTok vertical video variations ready for preview."
-                
-                return {
-                    "status": "COMPLETED",
-                    "project_id": str(self.project_id),
-                    "local_video_paths": local_video_paths,
-                    "num_variations": actual_num_variations,
-                    "requested_variations": num_variations,
-                    "failed_variations": len(failed_variations) if failed_variations else 0,
-                    "storage_size": storage_size,
-                    "storage_size_formatted": format_storage_size(storage_size),
-                    "message": message,
-                    "timing_seconds": total_elapsed,
-                    "step_timings": self.step_timings,
-                }
+                    successful_videos.append(result)
+                    logger.info(f"Variation {var_idx + 1} succeeded: {result}")
+            
+            # If all variations failed, raise error
+            if len(successful_videos) == 0:
+                error_msg = f"All {num_variations} variation(s) failed: {failed_variations[0][1]}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            # If some variations failed, log warning but continue with successful ones
+            if failed_variations:
+                failed_indices = [idx + 1 for idx, _ in failed_variations]
+                logger.warning(
+                    f"⚠️ {len(failed_variations)} variation(s) failed (indices: {failed_indices}), "
+                    f"but {len(successful_videos)} variation(s) succeeded. Continuing with successful variations."
+                )
+            
+            # Update campaign with successful variation info (S3 URLs)
+            actual_num_variations = len(successful_videos)
+            await self._update_campaign_variations(actual_num_variations, successful_videos)
+            
+            total_elapsed = time.time() - pipeline_start
+            logger.info(f"Pipeline complete in {total_elapsed:.1f}s ({actual_num_variations}/{num_variations} variations succeeded)")
+            
+            # Build message indicating partial success if applicable
+            if failed_variations:
+                message = f"{actual_num_variations} TikTok vertical video variations ready for preview ({len(failed_variations)} variation(s) failed due to API timeout)."
             else:
-                # Single variation flow (existing code)
-                # STEP 3A: Spawn Music Generation (parallel with video)
-                logger.info("Step 3A: Spawning background music generation...")
-                music_task = asyncio.create_task(
-                    self._generate_audio(project, ad_project, progress_start=30)
-                )
-
-                # STEP 3B: Generate Videos (parallel with music)
-                logger.info("Step 3B: Generating videos for all scenes...")
-                video_start = 25 if has_product else 20
-                replicate_videos = await self._generate_scene_videos(project, ad_project, progress_start=video_start)
-                
-                logger.info("Saving videos to local storage...")
-                scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id))
-                logger.info(f"Saved {len(scene_videos)} videos to local storage")
-
-                # STEP 4: Composite Product (Optional)
-                if product_url:
-                    logger.info("Step 4: Compositing product onto scenes...")
-                    composited_videos = await self._composite_products(
-                        scene_videos, product_url, ad_project, progress_start=40
-                    )
-                else:
-                    logger.info("Step 4: Skipping compositing (no product image)")
-                    composited_videos = scene_videos
-
-                # STEP 4B: Composite Logo (Optional)
-                logo_url = ad_project.brand.get('logo_url') if isinstance(ad_project.brand, dict) else None
-                if logo_url:
-                    logger.info("Step 4B: Compositing logo onto scenes...")
-                    logo_composited_videos = await self._composite_logos(
-                        composited_videos,
-                        logo_url,
-                        ad_project,
-                        progress_start=55 if product_url else 50
-                    )
-                else:
-                    logger.info("Step 4B: Skipping logo compositing (no logo provided)")
-                    logo_composited_videos = composited_videos
-
-                # STEP 5: Add Text Overlays
-                logger.info("Step 5: Rendering text overlays...")
-                overlay_start = 65 if (product_url or logo_url) else 50
-                text_rendered_videos = await self._add_text_overlays(
-                    logo_composited_videos, ad_project, progress_start=overlay_start
-                )
-
-                # STEP 6: Wait for Music Generation
-                logger.info("Step 6: Waiting for background music generation to complete...")
-                try:
-                    audio_url = await music_task
-                    logger.info(f"Background music generation complete: {audio_url}")
-                except asyncio.CancelledError:
-                    logger.error("Music generation was cancelled")
-                    raise
-                except Exception as e:
-                    logger.error(f"Music generation failed: {e}", exc_info=True)
-                    # Ensure task exception is retrieved to avoid "Task exception was never retrieved" warning
-                    if music_task.done() and music_task.exception():
-                        logger.debug(f"Task exception details: {music_task.exception()}")
-                    raise
-
-                # STEP 7: Render Final TikTok Vertical Video (9:16 only)
-                logger.info("Step 7: Rendering final TikTok vertical video (9:16)...")
-                render_start = 85 if has_product else 80
-                final_video_path = await self._render_final(
-                    text_rendered_videos, audio_url, ad_project, progress_start=render_start
-                )
-
-                total_elapsed = time.time() - pipeline_start
-                logger.info(f"Pipeline complete in {total_elapsed:.1f}s")
-                logger.info(f"Step timings: {self.step_timings}")
-
-                # ===== LOCAL-FIRST: Final video already saved locally by renderer =====
-                logger.info("Final TikTok vertical video already saved to local storage by renderer")
-                # Store as dict with single 9:16 entry for backward compatibility
-                local_video_paths = {"9:16": final_video_path}
-
-                # Calculate local storage size
-                storage_size = LocalStorageManager.get_project_storage_size(self.project_id)
-                logger.info(f"Total local storage: {format_storage_size(storage_size)}")
-
-                # Update project with local path
-                project.local_video_paths = local_video_paths  # Backward compat (deprecated)
-                project.local_video_path = final_video_path  # Phase 9: Single TikTok vertical video path
-                project.aspect_ratio = "9:16"  # Set default aspect ratio
-                project.status = 'COMPLETED'
-                self.db.commit()
-
-                logger.info(f"Project ready for preview. TikTok vertical video stored locally.")
-
-                # Update legacy output_videos field for backward compatibility
-                update_project_output(
-                    self.db,
-                    self.project_id,
-                    {},
-                    0.0,
-                    {},
-                )
-
-                return {
-                    "status": "COMPLETED",
-                    "project_id": str(self.project_id),
-                    "local_video_paths": local_video_paths,  # Backward compat (deprecated)
-                    "local_video_path": final_video_path,  # Phase 9: Single TikTok vertical video path
-                    "storage_size": storage_size,
-                    "storage_size_formatted": format_storage_size(storage_size),
-                    "message": "TikTok vertical video ready for preview. Video stored in local storage.",
-                    "timing_seconds": total_elapsed,
-                    "step_timings": self.step_timings,
-                }
+                message = f"{actual_num_variations} TikTok vertical video variations ready for preview."
+            
+            return {
+                "status": "COMPLETED",
+                "campaign_id": str(self.campaign_id),
+                "video_urls": successful_videos,  # S3 URLs
+                "num_variations": actual_num_variations,
+                "requested_variations": num_variations,
+                "failed_variations": len(failed_variations) if failed_variations else 0,
+                "message": message,
+                "timing_seconds": total_elapsed,
+                "step_timings": self.step_timings,
+            }
 
         except Exception as e:
             total_elapsed = time.time() - pipeline_start
@@ -466,103 +318,150 @@ class GenerationPipeline:
             # Cleanup partial files
             try:
                 logger.info("Attempting to cleanup partial files...")
-                LocalStorageManager.cleanup_project_storage(self.project_id)
+                LocalStorageManager.cleanup_project_storage(self.campaign_id)
                 logger.info("Cleanup completed")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup storage: {cleanup_error}")
 
-            # Mark project as failed
+            # Mark campaign as failed
             error_msg = str(e)[:500]
-            update_project_status(
+            update_campaign(
                 self.db,
-                self.project_id,
-                "FAILED",
+                self.campaign_id,
+                status="failed",
                 error_message=error_msg,
             )
 
             return {
                 "status": "FAILED",
-                "project_id": str(self.project_id),
+                "campaign_id": str(self.campaign_id),
                 "error": error_msg,
                 "timing_seconds": total_elapsed,
                 "step_timings": self.step_timings,
             }
 
-    @timed_step("Product Extraction")
-    async def _extract_product(
-        self, project: Any, ad_project: AdProject
-    ) -> str:
-        """Extract product from uploaded image using rembg."""
+    # REMOVED: _extract_perfume_product - now using ProductExtractor.extract_perfume_for_campaign directly
+
+    async def _upload_scene_videos_to_s3(
+        self, 
+        video_urls: List[str], 
+        variation_index: int
+    ) -> List[str]:
+        """
+        Download videos from Replicate/URL and upload to S3 as draft.
+        
+        Args:
+            video_urls: List of Replicate URLs or local paths
+            variation_index: Variation index (0, 1, 2)
+            
+        Returns:
+            List of S3 URLs for the uploaded videos
+        """
         try:
-            update_project_status(
-                self.db, self.project_id, "EXTRACTING_PRODUCT", progress=10
-            )
-
-            product_asset = ad_project.product_asset
-            if not product_asset or not (product_asset.get('original_url') if isinstance(product_asset, dict) else None):
-                raise ValueError("Product asset not found or missing original_url")
+            import aiohttp
+            import os
+            import tempfile
+            from pathlib import Path
             
-            product_image_url = product_asset.get('original_url') if isinstance(product_asset, dict) else None
+            s3_urls = []
             
+            # Create a temp session for downloads
             from app.config import settings
-            extractor = ProductExtractor(
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                s3_bucket_name=settings.s3_bucket_name,
-                aws_region=settings.aws_region,
-            )
+            from app.utils.s3_utils import parse_s3_url, get_s3_client
             
-            product_url = await extractor.extract_product(
-                image_url=product_image_url,
-                project_id=str(self.project_id),
-            )
-
-            logger.info(f"Product extracted: {product_url}")
-            return product_url
-
+            # Initialize S3 client for authenticated downloads
+            s3_client = get_s3_client()
+            
+            async with aiohttp.ClientSession() as session:
+                for i, url in enumerate(video_urls):
+                    # Check if it's already an S3 URL - if so, skip re-uploading
+                    is_s3_url = (
+                        url.startswith("https://") and 
+                        ("s3." in url or "s3.amazonaws.com" in url or settings.s3_bucket_name in url)
+                    )
+                    if is_s3_url:
+                        logger.info(f"Scene {i+1} video already in S3, skipping re-upload: {url[:80]}...")
+                        s3_urls.append(url)
+                        continue
+                    
+                    # Create temp file
+                    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                        temp_path = tmp.name
+                    
+                    try:
+                        # Download content using appropriate method
+                        if url.startswith("http"):
+                            # Check if it's an S3 URL that needs authentication
+                            if ".s3." in url or "s3.amazonaws.com" in url:
+                                # Use boto3 for authenticated S3 download
+                                try:
+                                    bucket_name, s3_key = parse_s3_url(url)
+                                    s3_client.download_file(bucket_name, s3_key, temp_path)
+                                    logger.info(f"✅ Downloaded from S3 using boto3: {s3_key}")
+                                except Exception as e:
+                                    logger.error(f"Failed to download from S3 with boto3: {e}")
+                                    raise ValueError(f"Failed to download video {i+1} from S3: {str(e)}")
+                            else:
+                                # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
+                                async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                                    if resp.status != 200:
+                                        raise ValueError(f"Failed to download video {i+1}: HTTP {resp.status}")
+                                    content = await resp.read()
+                                    with open(temp_path, "wb") as f:
+                                        f.write(content)
+                        else:
+                            # It's a local path
+                            import shutil
+                            shutil.copy2(url, temp_path)
+                            
+                        # Upload to S3
+                        result = await upload_draft_video(
+                            brand_id=str(self.brand.brand_id),
+                            perfume_id=str(self.perfume.perfume_id),
+                            campaign_id=str(self.campaign.campaign_id),
+                            variation_index=variation_index,
+                            scene_index=i+1,  # 1-based index
+                            file_path=temp_path
+                        )
+                        s3_urls.append(result["url"])
+                        
+                    finally:
+                        # Cleanup temp file
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+            
+            logger.info(f"Uploaded {len(s3_urls)} scenes to S3 for variation {variation_index}")
+            return s3_urls
+            
         except Exception as e:
-            logger.error(f"Product extraction failed: {e}")
+            logger.error(f"Failed to upload scenes to S3: {e}")
             raise
 
     @timed_step("Scene Planning")
-    async def _plan_scenes(self, project: Any, ad_project: AdProject, progress_start: int = 15) -> Any:
+    async def _plan_scenes(self, campaign: Any, perfume: Any, brand: Any, ad_project: AdProject, progress_start: int = 15) -> Dict[str, Any]:
         """Plan perfume scenes using LLM with shot grammar constraints."""
         try:
-            update_project_status(
-                self.db, self.project_id, "PLANNING", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Extract perfume-specific info (Phase 9)
-            # First check ad_project (from schema), then fallback to ad_project_json
-            perfume_name = getattr(ad_project, 'perfume_name', None) or None
-            if not perfume_name and project.ad_project_json and isinstance(project.ad_project_json, dict):
-                perfume_name = project.ad_project_json.get("perfume_name")
-            # Fallback to brand name if perfume_name not available
-            if not perfume_name:
-                perfume_name = ad_project.brand.get('name', 'Perfume') if isinstance(ad_project.brand, dict) else 'Perfume'
+            # Extract perfume-specific info from perfume table
+            perfume_name = perfume.perfume_name
             logger.info(f"Using perfume name: {perfume_name}")
             
-            # Brand colors from LLM or reference image if available
+            # Brand colors from brand guidelines (extracted from brand table)
             brand_colors = []
             
-            # Check if reference image style was extracted
-            extracted_style = None
-            if project.ad_project_json:
-                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
-                if extracted_style:
-                    brand_colors = extracted_style.get("colors", [])
-                    logger.info(f"Using colors from reference image: {brand_colors}")
-            
             # Check if product/logo are available
-            has_product = ad_project.product_asset is not None and ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False
-            has_logo = ad_project.brand.get('logo_url') is not None if isinstance(ad_project.brand, dict) else False
+            has_product = perfume.front_image_url is not None
+            has_logo = brand.brand_logo_url is not None
             
-            # Extract Brand Guidelines (Optional)
+            # Extract Brand Guidelines from brand table (required in B2B SaaS)
             extracted_guidelines = None
-            guidelines_url = ad_project.brand.get('guidelines_url') if isinstance(ad_project.brand, dict) else None
+            guidelines_url = brand.brand_guidelines_url
             if guidelines_url:
                 logger.info("Extracting brand guidelines from document...")
                 try:
@@ -607,20 +506,8 @@ class GenerationPipeline:
                 brand_colors = list(set(brand_colors))
                 logger.info(f"Merged brand colors from guidelines: {brand_colors}")
             
-            # Build creative prompt with reference style if available
-            creative_prompt = ad_project.creative_prompt
-            if extracted_style:
-                creative_prompt += f"""
-
-REFERENCE VISUAL STYLE (from uploaded mood board):
-- Colors: {', '.join(extracted_style.get('colors', []))}
-- Mood: {extracted_style.get('mood', 'professional')}
-- Lighting: {extracted_style.get('lighting', 'professional')}
-- Camera: {extracted_style.get('camera', 'professional')}
-- Atmosphere: {extracted_style.get('atmosphere', 'professional')}
-- Texture: {extracted_style.get('texture', 'professional')}
-
-Incorporate this visual style consistently throughout all scenes."""
+            # Build creative prompt (reference image removed in Phase 2 B2B SaaS)
+            creative_prompt = campaign.creative_prompt
             
             # Add brand guidelines context to creative prompt
             if extracted_guidelines:
@@ -638,20 +525,37 @@ BRAND GUIDELINES (extracted from guidelines document):
                 guideline_text += "\n\nEnsure all scenes follow these brand guidelines."
                 creative_prompt += guideline_text
             
+            # Convert brand guidelines dict to string format for scene planner
+            brand_guidelines_str = None
+            if extracted_guidelines:
+                import json
+                guidelines_dict = extracted_guidelines.to_dict()
+                # Format as readable string instead of raw JSON
+                guidelines_parts = []
+                if guidelines_dict.get('tone_of_voice'):
+                    guidelines_parts.append(f"Tone: {guidelines_dict['tone_of_voice']}")
+                if guidelines_dict.get('color_palette'):
+                    guidelines_parts.append(f"Colors: {', '.join(guidelines_dict['color_palette'])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('dos'):
+                    guidelines_parts.append(f"DO: {'; '.join(guidelines_dict['dos_and_donts']['dos'][:3])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('donts'):
+                    guidelines_parts.append(f"DON'T: {'; '.join(guidelines_dict['dos_and_donts']['donts'][:3])}")
+                brand_guidelines_str = " | ".join(guidelines_parts) if guidelines_parts else None
+            
             plan = await planner.plan_scenes(
                 creative_prompt=creative_prompt,
-                brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else '',
-                brand_description=ad_project.brand.get('description', '') if isinstance(ad_project.brand, dict) else '',
+                brand_name=brand.brand_name,
+                brand_description="",  # Not stored in brand table (extracted from guidelines)
                 brand_colors=brand_colors,
-                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
-                target_audience=ad_project.target_audience or "general consumers",
-                target_duration=ad_project.target_duration,
+                brand_guidelines=brand_guidelines_str,
+                target_audience="general consumers",  # Removed feature in Phase 2
+                target_duration=campaign.target_duration,
                 has_product=has_product,
                 has_logo=has_logo,
-                selected_style=project.selected_style,
-                extracted_style=extracted_style,
+                selected_style=campaign.selected_style,
+                extracted_style=None,  # Reference image removed in Phase 2
                 perfume_name=perfume_name,
-                perfume_gender=ad_project.perfume_gender if hasattr(ad_project, 'perfume_gender') else None,
+                perfume_gender=perfume.perfume_gender,
             )
 
             chosen_style = plan.get('chosenStyle')
@@ -741,17 +645,26 @@ BRAND GUIDELINES (extracted from guidelines document):
                 ad_project.video_metadata['derivedTone'] = plan['derivedTone']
                 logger.info(f"Stored derived tone in metadata: {plan['derivedTone']}")
             
-            # PHASE 8: Store perfume_name in ad_project_json for future use
-            if perfume_name:
-                project.ad_project_json['perfume_name'] = perfume_name
-                logger.info(f"Stored perfume_name in ad_project_json: {perfume_name}")
+            # Store results in campaign_json
+            campaign_json = campaign.campaign_json
+            if isinstance(campaign_json, str):
+                import json
+                campaign_json = json.loads(campaign_json)
+            
+            campaign_json['scenes'] = [scene.dict() if hasattr(scene, 'dict') else scene.model_dump() if hasattr(scene, 'model_dump') else scene for scene in ad_project.scenes]
+            campaign_json['style_spec'] = style_spec_dict
+            campaign_json['video_metadata'] = ad_project.video_metadata
+            campaign_json['perfume_name'] = perfume_name
 
             # Save back to database
-            project.ad_project_json = ad_project.dict()
-            self.db.commit()
+            update_campaign(
+                self.db,
+                self.campaign_id,
+                campaign_json=campaign_json
+            )
 
             logger.info(f"Planned {len(ad_project.scenes)} scenes with style spec")
-            return project
+            return campaign_json
 
         except Exception as e:
             logger.error(f"Scene planning failed: {e}")
@@ -759,29 +672,20 @@ BRAND GUIDELINES (extracted from guidelines document):
 
     @timed_step("Video Generation")
     async def _generate_scene_videos(
-        self, project: Any, ad_project: AdProject, progress_start: int = 25
+        self, campaign: Any, ad_project: AdProject, progress_start: int = 25
     ) -> List[str]:
         """Generate background videos for all scenes in parallel."""
         try:
-            update_project_status(
-                self.db, self.project_id, "GENERATING_SCENES", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
             generator = VideoGenerator(api_token=settings.replicate_api_token)
 
-            # Check if reference style was extracted
-            extracted_style = None
-            if project.ad_project_json:
-                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
-            
-            # Get the chosen style for all scenes
-            chosen_style = None
-            if project.ad_project_json and "video_metadata" in project.ad_project_json:
-                video_metadata = project.ad_project_json.get("video_metadata", {})
-                style_info = video_metadata.get("selectedStyle", {})
-                chosen_style = style_info.get("style")
-                logger.info(f"Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
+            # Get the chosen style for all scenes (from campaign)
+            chosen_style = campaign.selected_style
+            logger.info(f"Using chosen style for ALL scenes: {chosen_style}")
             
             # Generate TikTok vertical videos (9:16 hardcoded)
             logger.info("Generating TikTok vertical videos (9:16)")
@@ -798,7 +702,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         prompt=scene.background_prompt,
                         style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else (ad_project.style_spec if isinstance(ad_project.style_spec, dict) else {}),
                         duration=scene.duration,
-                        extracted_style=extracted_style,
+                        extracted_style=None,  # Reference image removed in Phase 2
                         style_override=scene.style or chosen_style,
                     )
                     tasks.append(task)
@@ -828,65 +732,8 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"Video generation failed: {e}")
             raise
 
-    async def _save_videos_locally(self, video_urls: List[str], project_id: str, variation_index: Optional[int] = None) -> List[str]:
-        """Download videos from Replicate and save to local storage in parallel."""
-        try:
-            import aiohttp
-            from app.utils.local_storage import LocalStorageManager
-            
-            async def download_and_save_video(session: aiohttp.ClientSession, index: int, url: str) -> str:
-                """Download a single video and save it to local storage."""
-                try:
-                    # Download from Replicate
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
-                        if resp.status == 200:
-                            video_data = await resp.read()
-                        else:
-                            logger.warning(f"Failed to download video {index}: HTTP {resp.status}")
-                            raise Exception(f"Failed to download video {index}: HTTP {resp.status}")
-                    
-                    # Save to local storage in drafts folder with variation index if provided
-                    if variation_index is not None:
-                        filename = f"scene_{variation_index}_{index:02d}.mp4"
-                    else:
-                        filename = f"scene_{index:02d}.mp4"
-                    
-                    local_path = LocalStorageManager.save_draft_file(
-                        UUID(project_id),
-                        filename,
-                        video_data
-                    )
-                    logger.debug(f"Saved scene {index} locally: {local_path}")
-                    return local_path
-                    
-                except Exception as e:
-                    logger.error(f"Failed to save video {index} locally: {e}")
-                    raise
-            
-            # Download all videos in parallel using a single session
-            async with aiohttp.ClientSession() as session:
-                tasks = [
-                    download_and_save_video(session, i, url)
-                    for i, url in enumerate(video_urls)
-                ]
-                local_paths = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Check for errors with scene context
-            for i, result in enumerate(local_paths):
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"Failed to download/save video {i}:\n"
-                        f"   URL: {video_urls[i][:100]}...\n"
-                        f"   Error: {result}"
-                    )
-                    raise RuntimeError(f"Video {i} download/save failed: {result}")
-            
-            logger.info(f"Downloaded and saved {len(local_paths)} videos in parallel")
-            return local_paths
-            
-        except Exception as e:
-            logger.error(f"Error saving videos locally: {e}")
-            raise
+    # Removed _save_videos_locally since we now upload directly to S3
+    # Removed _save_variations_locally since we store S3 URLs directly
 
     @timed_step("Product Compositing")
     async def _composite_products(
@@ -899,8 +746,8 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> List[str]:
         """Composite product onto each scene video using scene-specific positioning."""
         try:
-            update_project_status(
-                self.db, self.project_id, "COMPOSITING", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
@@ -930,7 +777,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                     composited_url = await compositor.composite_product(
                         background_video_url=video_url,
                         product_image_url=product_url,
-                        project_id=str(self.project_id),
+                        project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
                         position=position,
                         scale=scale,  # None = use role-based scaling
                         opacity=opacity,
@@ -943,8 +790,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                     composited.append(video_url)
                     logger.debug(f"Skipping scene {i} (use_product=False)")
                 progress = progress_start + (i / len(ad_project.scenes)) * 15
-                update_project_status(
-                    self.db, self.project_id, "COMPOSITING", progress=int(progress)
+                update_campaign(
+                    self.db, self.campaign_id, status="processing", progress=int(progress)
                 )
 
             product_scenes_count = sum(1 for s in ad_project.scenes if s.use_product)
@@ -969,8 +816,8 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> List[str]:
         """Composite logo onto scenes that have use_logo=True."""
         try:
-            update_project_status(
-                self.db, self.project_id, "COMPOSITING_LOGO", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
             
             from app.config import settings
@@ -994,7 +841,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                     logo_url_result = await compositor.composite_logo(
                         video_url=video_url,
                         logo_image_url=logo_url,
-                        project_id=str(self.project_id),
+                        project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
                         position=position,
                         scale=scale,
                         opacity=opacity,
@@ -1007,8 +854,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                     logger.debug(f"Skipping logo for scene {i} (use_logo=False)")
                 
                 progress = progress_start + (i / len(ad_project.scenes)) * 10
-                update_project_status(
-                    self.db, self.project_id, "COMPOSITING_LOGO", progress=int(progress)
+                update_campaign(
+                    self.db, self.campaign_id, status="processing", progress=int(progress)
                 )
             
             logo_scenes_count = sum(1 for s in ad_project.scenes if s.use_logo)
@@ -1028,8 +875,8 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> List[str]:
         """Render text overlays on videos with luxury perfume typography constraints."""
         try:
-            update_project_status(
-                self.db, self.project_id, "ADDING_OVERLAYS", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
@@ -1079,7 +926,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         position=overlay.position or "bottom",
                         duration=overlay.duration or min(scene.duration, 4.0),  # Max 4s per grammar
                         start_time=0.0,  # Start at beginning of scene
-                        project_id=str(self.project_id),
+                        project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
                         scene_index=i,
                         variation_index=variation_index,  # Pass variation index
                     )
@@ -1088,8 +935,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                     overlaid_url = video_url
                 overlaid.append(overlaid_url)
                 progress = progress_start + (i / len(ad_project.scenes)) * 10
-                update_project_status(
-                    self.db, self.project_id, "ADDING_OVERLAYS", progress=int(progress)
+                update_campaign(
+                    self.db, self.campaign_id, status="processing", progress=int(progress)
                 )
 
             logger.info(f"Added {text_overlay_count} luxury text overlays to videos")
@@ -1143,11 +990,11 @@ BRAND GUIDELINES (extracted from guidelines document):
             return 'tagline'  # Default to tagline
 
     @timed_step("Audio Generation")
-    async def _generate_audio(self, project: Any, ad_project: AdProject, progress_start: int = 75) -> str:
+    async def _generate_audio(self, campaign: Any, perfume: Any, ad_project: AdProject, progress_start: int = 75) -> str:
         """Generate luxury perfume background music using MusicGen."""
         try:
-            update_project_status(
-                self.db, self.project_id, "GENERATING_AUDIO", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
@@ -1159,18 +1006,17 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # Infer perfume gender from selected style or default to unisex
-            gender = self._infer_perfume_gender(ad_project)
-            logger.info(f"Using perfume gender: {gender} (inferred from style/context)")
+            # Use perfume gender directly from perfume table
+            logger.info(f"Using perfume gender: {perfume.perfume_gender}")
             
             # Calculate total duration from scenes
-            total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else ad_project.target_duration
+            total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else campaign.target_duration
             
             # Use new perfume-specific audio generation method
             audio_url = await audio_engine.generate_perfume_background_music(
                 duration=total_duration,
-                project_id=str(self.project_id),
-                gender=gender,
+                project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
+                gender=perfume.perfume_gender,  # Use perfume gender directly
             )
 
             logger.info(f"Generated perfume audio: {audio_url}")
@@ -1180,49 +1026,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"Audio generation failed: {e}")
             raise
 
-    def _infer_perfume_gender(self, ad_project: AdProject) -> str:
-        """Infer perfume gender from selected style or context.
-        
-        Returns:
-            'masculine', 'feminine', or 'unisex'
-        """
-        from app.services.style_manager import StyleManager
-        
-        # Phase 9: Check if perfume_gender is already set in ad_project
-        if ad_project.perfume_gender:
-            valid_genders = ['masculine', 'feminine', 'unisex']
-            if ad_project.perfume_gender in valid_genders:
-                return ad_project.perfume_gender
-        
-        # Check if style is selected
-        if ad_project.selectedStyle:
-            style_id = None
-            if isinstance(ad_project.selectedStyle, dict):
-                style_id = ad_project.selectedStyle.get('id') or ad_project.selectedStyle.get('style')
-            elif isinstance(ad_project.selectedStyle, str):
-                style_id = ad_project.selectedStyle
-            
-            if style_id:
-                style_config = StyleManager.get_style_config(style_id)
-                if style_config:
-                    best_for = style_config.get('best_for', [])
-                    # Check best_for descriptions for gender hints
-                    best_for_str = ' '.join(best_for).lower()
-                    if 'masculine' in best_for_str:
-                        return 'masculine'
-                    elif 'feminine' in best_for_str:
-                        return 'feminine'
-        
-        # Check creative prompt for gender hints
-        if ad_project.creative_prompt:
-            prompt_lower = ad_project.creative_prompt.lower()
-            if any(word in prompt_lower for word in ['masculine', 'men', 'male', 'gentleman', 'man']):
-                return 'masculine'
-            elif any(word in prompt_lower for word in ['feminine', 'women', 'female', 'lady', 'woman']):
-                return 'feminine'
-        
-        # Default to unisex
-        return 'unisex'
+    # REMOVED: _infer_perfume_gender - perfume gender now comes directly from perfume table
 
     def _normalize_scene_durations(
         self,
@@ -1311,8 +1115,8 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> str:
         """Render final TikTok vertical video (9:16 only)."""
         try:
-            update_project_status(
-                self.db, self.project_id, "RENDERING", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
 
             from app.config import settings
@@ -1327,12 +1131,12 @@ BRAND GUIDELINES (extracted from guidelines document):
             final_video_path = await renderer.render_final_video(
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
-                project_id=str(self.project_id),
+                project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
                 variation_index=variation_index,
             )
 
-            update_project_status(
-                self.db, self.project_id, "RENDERING", progress=100
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=100
             )
 
             logger.info(f"✅ Rendered final TikTok vertical video: {final_video_path}")
@@ -1425,7 +1229,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             response.raise_for_status()
             
             local_path = LocalStorageManager.save_final_video(
-                self.project_id,
+                self.campaign_id,
                 "9:16",  # Hardcoded TikTok vertical
                 None
             )
@@ -1446,7 +1250,9 @@ BRAND GUIDELINES (extracted from guidelines document):
 
     async def _plan_scenes_variations(
         self,
-        project: Any,
+        campaign: Any,
+        perfume: Any,
+        brand: Any,
         ad_project: AdProject,
         num_variations: int,
         progress_start: int = 15,
@@ -1455,7 +1261,9 @@ BRAND GUIDELINES (extracted from guidelines document):
         Generate N variations of scene plans with different visual approaches.
         
         Args:
-            project: Project database object
+            campaign: Campaign database object
+            perfume: Perfume database object
+            brand: Brand database object
             ad_project: AdProject schema object
             num_variations: Number of variations to generate (1-3)
             progress_start: Progress percentage start
@@ -1464,37 +1272,26 @@ BRAND GUIDELINES (extracted from guidelines document):
             List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
         """
         try:
-            update_project_status(
-                self.db, self.project_id, "PLANNING_VARIATIONS", progress=progress_start
+            update_campaign(
+                self.db, self.campaign_id, status="processing", progress=progress_start
             )
             
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
-            # Extract perfume-specific info
-            perfume_name = getattr(ad_project, 'perfume_name', None) or None
-            if not perfume_name and project.ad_project_json and isinstance(project.ad_project_json, dict):
-                perfume_name = project.ad_project_json.get("perfume_name")
-            if not perfume_name:
-                perfume_name = ad_project.brand.get('name', 'Perfume') if isinstance(ad_project.brand, dict) else 'Perfume'
+            # Extract perfume-specific info from perfume table
+            perfume_name = perfume.perfume_name
             
-            # Check if reference style was extracted
-            extracted_style = None
-            if project.ad_project_json:
-                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
-            
-            # Brand colors
+            # Brand colors from brand guidelines (extracted from brand table)
             brand_colors = []
-            if extracted_style:
-                brand_colors = extracted_style.get("colors", [])
             
             # Check if product/logo are available
-            has_product = ad_project.product_asset is not None and ad_project.product_asset.get('original_url') if isinstance(ad_project.product_asset, dict) else False
-            has_logo = ad_project.brand.get('logo_url') is not None if isinstance(ad_project.brand, dict) else False
+            has_product = perfume.front_image_url is not None
+            has_logo = brand.brand_logo_url is not None
             
-            # Extract brand guidelines
+            # Extract brand guidelines from brand table
             extracted_guidelines = None
-            guidelines_url = ad_project.brand.get('guidelines_url') if isinstance(ad_project.brand, dict) else None
+            guidelines_url = brand.brand_guidelines_url
             if guidelines_url:
                 try:
                     from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
@@ -1522,27 +1319,42 @@ BRAND GUIDELINES (extracted from guidelines document):
                 brand_colors.extend(extracted_guidelines.color_palette)
                 brand_colors = list(set(brand_colors))
             
-            # Build creative prompt
-            creative_prompt = ad_project.creative_prompt
-            if extracted_style:
-                creative_prompt += f"\n\nREFERENCE VISUAL STYLE: {extracted_style.get('mood', 'professional')}"
+            # Build creative prompt (reference image removed in Phase 2)
+            creative_prompt = campaign.creative_prompt
+            
+            # Convert brand guidelines dict to string format for scene planner
+            brand_guidelines_str = None
+            if extracted_guidelines:
+                import json
+                guidelines_dict = extracted_guidelines.to_dict()
+                # Format as readable string instead of raw JSON
+                guidelines_parts = []
+                if guidelines_dict.get('tone_of_voice'):
+                    guidelines_parts.append(f"Tone: {guidelines_dict['tone_of_voice']}")
+                if guidelines_dict.get('color_palette'):
+                    guidelines_parts.append(f"Colors: {', '.join(guidelines_dict['color_palette'])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('dos'):
+                    guidelines_parts.append(f"DO: {'; '.join(guidelines_dict['dos_and_donts']['dos'][:3])}")
+                if guidelines_dict.get('dos_and_donts', {}).get('donts'):
+                    guidelines_parts.append(f"DON'T: {'; '.join(guidelines_dict['dos_and_donts']['donts'][:3])}")
+                brand_guidelines_str = " | ".join(guidelines_parts) if guidelines_parts else None
             
             # Generate scene variations
             scene_variations = await planner._generate_scene_variations(
                 num_variations=num_variations,
                 creative_prompt=creative_prompt,
-                brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else '',
-                brand_description=ad_project.brand.get('description', '') if isinstance(ad_project.brand, dict) else '',
+                brand_name=brand.brand_name,
+                brand_description="",  # Not stored in brand table
                 brand_colors=brand_colors,
-                brand_guidelines=extracted_guidelines.to_dict() if extracted_guidelines else None,
-                target_audience=ad_project.target_audience or "general consumers",
-                target_duration=ad_project.target_duration,
+                brand_guidelines=brand_guidelines_str,
+                target_audience="general consumers",  # Removed feature
+                target_duration=campaign.target_duration,
                 has_product=has_product,
                 has_logo=has_logo,
-                selected_style=project.selected_style,
-                extracted_style=extracted_style,
+                selected_style=campaign.selected_style,
+                extracted_style=None,  # Reference image removed
                 perfume_name=perfume_name,
-                perfume_gender=ad_project.perfume_gender if hasattr(ad_project, 'perfume_gender') else None,
+                perfume_gender=perfume.perfume_gender,
             )
             
             logger.info(f"Generated {len(scene_variations)} scene plan variations")
@@ -1557,7 +1369,9 @@ BRAND GUIDELINES (extracted from guidelines document):
         scenes: List[Any],
         var_idx: int,
         num_variations: int,
-        project: Any,
+        campaign: Any,
+        perfume: Any,
+        brand: Any,
         ad_project: AdProject,
         product_url: Optional[str],
         has_product: bool,
@@ -1577,7 +1391,9 @@ BRAND GUIDELINES (extracted from guidelines document):
             scenes: List of scene dictionaries for this variation
             var_idx: Variation index (0-based)
             num_variations: Total number of variations
-            project: Project database object
+            campaign: Campaign database object
+            perfume: Perfume database object
+            brand: Brand database object
             ad_project: AdProject schema object
             product_url: Product image URL (if available)
             has_product: Whether product is available
@@ -1592,40 +1408,84 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Convert scene dictionaries to AdProjectScene objects
             from app.models.schemas import Overlay, Scene as AdProjectScene, AdProject
             
-            # Get chosen style from project
-            chosen_style = project.selected_style or "cinematic"
+            # Get chosen style from campaign
+            chosen_style = campaign.selected_style or "gold_luxe"
             
             # Convert scenes to AdProjectScene format
+            # Handle both dictionaries and Scene objects
             ad_project_scenes = []
-            for i, scene_dict in enumerate(scenes):
-                ad_project_scenes.append(
-                    AdProjectScene(
-                        id=str(scene_dict.get('scene_id', i)),
-                        role=scene_dict.get('role', 'showcase'),
-                        duration=scene_dict.get('duration', 5),
-                        description=scene_dict.get('background_prompt', ''),
-                        background_prompt=scene_dict.get('background_prompt', ''),
-                        background_type=scene_dict.get('background_type', 'cinematic'),
-                        style=scene_dict.get('style', chosen_style),
-                        use_product=scene_dict.get('use_product', False),
-                        product_usage=scene_dict.get('product_usage', 'static_insert'),
-                        product_position=scene_dict.get('product_position', 'center'),
-                        product_scale=scene_dict.get('product_scale'),
-                        product_opacity=scene_dict.get('product_opacity', 1.0),
-                        use_logo=scene_dict.get('use_logo', False),
-                        logo_position=scene_dict.get('logo_position', 'top_right'),
-                        logo_scale=scene_dict.get('logo_scale', 0.1),
-                        logo_opacity=scene_dict.get('logo_opacity', 0.9),
-                        camera_movement=scene_dict.get('camera_movement', 'static'),
-                        transition_to_next=scene_dict.get('transition_to_next', 'cut'),
-                        overlay=Overlay(
-                            text=scene_dict.get('overlay', {}).get('text', ''),
-                            position=scene_dict.get('overlay', {}).get('position', 'bottom'),
-                            duration=scene_dict.get('overlay', {}).get('duration', 3.0),
-                            font_size=scene_dict.get('overlay', {}).get('font_size', 48),
-                            color=scene_dict.get('overlay', {}).get('color', '#FFFFFF'),
-                            animation=scene_dict.get('overlay', {}).get('animation', 'fade_in'),
-                        ) if scene_dict.get('overlay') else None,
+            for i, scene_item in enumerate(scenes):
+                # Check if scene_item is already a Scene object or a dictionary
+                if isinstance(scene_item, AdProjectScene):
+                    # Already a Scene object, use it directly
+                    ad_project_scenes.append(scene_item)
+                elif isinstance(scene_item, dict):
+                    # Dictionary, convert to Scene object
+                    scene_dict = scene_item
+                    overlay_dict = scene_dict.get('overlay')
+                    ad_project_scenes.append(
+                        AdProjectScene(
+                            id=str(scene_dict.get('scene_id', scene_dict.get('id', i))),
+                            role=scene_dict.get('role', 'showcase'),
+                            duration=scene_dict.get('duration', 5),
+                            description=scene_dict.get('background_prompt', scene_dict.get('description', '')),
+                            background_prompt=scene_dict.get('background_prompt', ''),
+                            background_type=scene_dict.get('background_type', 'cinematic'),
+                            style=scene_dict.get('style', chosen_style),
+                            use_product=scene_dict.get('use_product', False),
+                            product_usage=scene_dict.get('product_usage', 'static_insert'),
+                            product_position=scene_dict.get('product_position', 'center'),
+                            product_scale=scene_dict.get('product_scale'),
+                            product_opacity=scene_dict.get('product_opacity', 1.0),
+                            use_logo=scene_dict.get('use_logo', False),
+                            logo_position=scene_dict.get('logo_position', 'top_right'),
+                            logo_scale=scene_dict.get('logo_scale', 0.1),
+                            logo_opacity=scene_dict.get('logo_opacity', 0.9),
+                            camera_movement=scene_dict.get('camera_movement', 'static'),
+                            transition_to_next=scene_dict.get('transition_to_next', 'cut'),
+                            overlay=Overlay(
+                                text=overlay_dict.get('text', '') if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'text', ''),
+                                position=overlay_dict.get('position', 'bottom') if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'position', 'bottom'),
+                                duration=overlay_dict.get('duration', 3.0) if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'duration', 3.0),
+                                font_size=overlay_dict.get('font_size', 48) if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'font_size', 48),
+                                color=overlay_dict.get('color', '#FFFFFF') if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'color', '#FFFFFF'),
+                                animation=overlay_dict.get('animation', 'fade_in') if isinstance(overlay_dict, dict) else getattr(overlay_dict, 'animation', 'fade_in'),
+                            ) if overlay_dict else None,
+                        )
+                    )
+                else:
+                    # Unknown type, try to convert using getattr
+                    logger.warning(f"Unknown scene type: {type(scene_item)}, attempting attribute access")
+                    ad_project_scenes.append(
+                        AdProjectScene(
+                            id=str(getattr(scene_item, 'scene_id', getattr(scene_item, 'id', i))),
+                            role=getattr(scene_item, 'role', 'showcase'),
+                            duration=getattr(scene_item, 'duration', 5),
+                            description=getattr(scene_item, 'background_prompt', getattr(scene_item, 'description', '')),
+                            background_prompt=getattr(scene_item, 'background_prompt', ''),
+                            background_type=getattr(scene_item, 'background_type', 'cinematic'),
+                            style=getattr(scene_item, 'style', chosen_style),
+                            use_product=getattr(scene_item, 'use_product', False),
+                            product_usage=getattr(scene_item, 'product_usage', 'static_insert'),
+                            product_position=getattr(scene_item, 'product_position', 'center'),
+                            product_scale=getattr(scene_item, 'product_scale', None),
+                            product_opacity=getattr(scene_item, 'product_opacity', 1.0),
+                            use_logo=getattr(scene_item, 'use_logo', False),
+                            logo_position=getattr(scene_item, 'logo_position', 'top_right'),
+                            logo_scale=getattr(scene_item, 'logo_scale', 0.1),
+                            logo_opacity=getattr(scene_item, 'logo_opacity', 0.9),
+                            camera_movement=getattr(scene_item, 'camera_movement', 'static'),
+                            transition_to_next=getattr(scene_item, 'transition_to_next', 'cut'),
+                            overlay=(
+                                Overlay(
+                                    text=getattr(overlay_obj, 'text', ''),
+                                    position=getattr(overlay_obj, 'position', 'bottom'),
+                                    duration=getattr(overlay_obj, 'duration', 3.0),
+                                    font_size=getattr(overlay_obj, 'font_size', 48),
+                                    color=getattr(overlay_obj, 'color', '#FFFFFF'),
+                                    animation=getattr(overlay_obj, 'animation', 'fade_in'),
+                                ) if (overlay_obj := getattr(scene_item, 'overlay', None)) else None
+                            )
                     )
                 )
             
@@ -1644,107 +1504,226 @@ BRAND GUIDELINES (extracted from guidelines document):
             # STEP 1: Generate Videos
             video_start = progress_start + (var_idx * 5)
             replicate_videos = await self._generate_scene_videos(
-                project, variation_ad_project, progress_start=video_start
+                campaign, variation_ad_project, progress_start=video_start
             )
             
-            # Save videos locally with variation index
-            scene_videos = await self._save_videos_locally(replicate_videos, str(self.project_id), variation_index=var_idx)
+            # Upload scene videos to S3 (Draft)
+            scene_videos = await self._upload_scene_videos_to_s3(replicate_videos, variation_index=var_idx)
             
             # STEP 2: Composite Product (if available)
             if product_url:
-                composited_videos = await self._composite_products(
+                composited_paths = await self._composite_products(
                     scene_videos, product_url, variation_ad_project, progress_start=video_start + 10, variation_index=var_idx
                 )
-            else:
-                composited_videos = scene_videos
+                # Upload composited videos to S3 and update paths
+                scene_videos = await self._upload_scene_videos_to_s3(composited_paths, variation_index=var_idx)
             
             # STEP 3: Composite Logo (if available)
             logo_url = variation_ad_project.brand.get('logo_url') if isinstance(variation_ad_project.brand, dict) else None
             if logo_url:
-                logo_composited_videos = await self._composite_logos(
-                    composited_videos,
+                logo_paths = await self._composite_logos(
+                    scene_videos,
                     logo_url,
                     variation_ad_project,
                     progress_start=video_start + 15,
                     variation_index=var_idx
                 )
-            else:
-                logo_composited_videos = composited_videos
+                # Upload logo composited videos to S3
+                scene_videos = await self._upload_scene_videos_to_s3(logo_paths, variation_index=var_idx)
             
             # STEP 4: Add Text Overlays
-            text_rendered_videos = await self._add_text_overlays(
-                logo_composited_videos, variation_ad_project, progress_start=video_start + 20, variation_index=var_idx
+            text_paths = await self._add_text_overlays(
+                scene_videos, variation_ad_project, progress_start=video_start + 20, variation_index=var_idx
             )
+            # Upload text overlay videos to S3
+            scene_videos = await self._upload_scene_videos_to_s3(text_paths, variation_index=var_idx)
             
             # STEP 5: Generate Audio (shared across variations, but we need it per variation)
-            audio_url = await self._generate_audio(project, variation_ad_project, progress_start=video_start + 25)
+            # Audio engine saves locally, returns local path
+            audio_local_path = await self._generate_audio(campaign, perfume, variation_ad_project, progress_start=video_start + 25)
+            
+            # Upload audio to S3 (Draft)
+            audio_url_result = await upload_draft_music(
+                brand_id=str(self.brand.brand_id),
+                perfume_id=str(self.perfume.perfume_id),
+                campaign_id=str(self.campaign.campaign_id),
+                variation_index=var_idx,
+                file_path=audio_local_path
+            )
+            audio_url = audio_url_result["url"]
             
             # STEP 6: Render Final Video
-            final_video_path = await self._render_final(
-                text_rendered_videos, audio_url, variation_ad_project, progress_start=video_start + 30, variation_index=var_idx
+            final_local_path = await self._render_final(
+                scene_videos, audio_url, variation_ad_project, progress_start=video_start + 30, variation_index=var_idx
             )
             
-            logger.info(f"Variation {var_idx + 1} complete: {final_video_path}")
-            return final_video_path
+            # Upload final video to S3 (Final)
+            final_result = await upload_final_video(
+                brand_id=str(self.brand.brand_id),
+                perfume_id=str(self.perfume.perfume_id),
+                campaign_id=str(self.campaign.campaign_id),
+                variation_index=var_idx,
+                file_path=final_local_path
+            )
+            final_video_url = final_result["url"]
+            
+            logger.info(f"Variation {var_idx + 1} complete: {final_video_url}")
+            return final_video_url
             
         except Exception as e:
             logger.error(f"Failed to process variation {var_idx + 1}: {e}")
             raise
 
-    def _save_variations_locally(self, final_videos: List[str], num_variations: int) -> Dict[str, Any]:
+
+    def _build_ad_project_from_campaign(
+        self,
+        campaign: Any,
+        perfume: Any,
+        brand: Any,
+        campaign_json: Dict[str, Any]
+    ) -> AdProject:
         """
-        Save all variation videos locally and return paths structure.
+        Build AdProject schema from campaign, perfume, and brand data.
         
         Args:
-            final_videos: List of final video paths (one per variation)
-            num_variations: Number of variations
+            campaign: Campaign database object
+            perfume: Perfume database object
+            brand: Brand database object
+            campaign_json: Campaign JSON data
             
         Returns:
-            Dictionary with video paths structure:
-            - If num_variations == 1: {"9:16": "path/to/video.mp4"}
-            - If num_variations > 1: {"9:16": ["path/to/v1.mp4", "path/to/v2.mp4", ...]}
+            AdProject: Built AdProject schema object
         """
-        if num_variations == 1:
-            return {"9:16": final_videos[0] if final_videos else ""}
-        else:
-            return {"9:16": final_videos}
+        # Build brand dict from brand table
+        brand_dict = {
+            "name": brand.brand_name,
+            "logo_url": brand.brand_logo_url,
+            "guidelines_url": brand.brand_guidelines_url,
+            "description": ""  # Not stored in brand table (extracted from guidelines)
+        }
+        
+        # Build product asset from perfume images (use front image as primary)
+        product_asset = {
+            "original_url": perfume.front_image_url,
+            "extracted_url": None,  # Will be set after extraction
+            "angles": {
+                "front": perfume.front_image_url,
+                "back": perfume.back_image_url,
+                "top": perfume.top_image_url,
+                "left": perfume.left_image_url,
+                "right": perfume.right_image_url,
+            }
+        }
+        
+        # Build AdProject from campaign data
+        # Note: style_spec will be populated during scene planning, but we need to provide defaults here
+        # to satisfy AdProject validation. These defaults will be replaced during planning.
+        default_style_spec = campaign_json.get("style_spec", {})
+        if not default_style_spec or not isinstance(default_style_spec, dict):
+            # Provide minimal defaults - these will be replaced during scene planning
+            default_style_spec = {
+                "lighting_direction": "",
+                "camera_style": "",
+                "texture_materials": "",
+                "mood_atmosphere": "",
+                "color_palette": [],
+                "grade_postprocessing": "",
+                "music_mood": "uplifting",
+            }
+        
+        ad_project_dict = {
+            "creative_prompt": campaign.creative_prompt,
+            "brand": brand_dict,
+            "target_audience": "general consumers",  # Not stored in campaign (removed feature)
+            "target_duration": campaign.target_duration,
+            "perfume_name": perfume.perfume_name,
+            "perfume_gender": perfume.perfume_gender,
+            "product_asset": product_asset,
+            "scenes": campaign_json.get("scenes", []),
+            "style_spec": default_style_spec,
+            "video_metadata": campaign_json.get("video_metadata", {}),
+            "selectedStyle": {
+                "id": campaign.selected_style,
+                "source": "user_selected"
+            }
+        }
+        
+        return AdProject(**ad_project_dict)
 
-    async def _update_project_variations(self, num_variations: int, final_videos: List[str]) -> None:
+    async def _update_campaign_variations(self, num_variations: int, final_videos: List[str]) -> None:
         """
-        Update project database with variation information.
+        Update campaign database with variation information.
         
         Args:
             num_variations: Number of variations generated
-            final_videos: List of final video paths
+            final_videos: List of final video S3 URLs
         """
         try:
-            project = get_project(self.db, self.project_id)
-            if not project:
-                raise ValueError(f"Project {self.project_id} not found")
+            campaign = get_campaign_by_id(self.db, self.campaign_id)
+            if not campaign:
+                raise ValueError(f"Campaign {self.campaign_id} not found")
             
-            # Update local_video_paths
-            local_video_paths = self._save_variations_locally(final_videos, num_variations)
-            project.local_video_paths = local_video_paths
+            # Update campaign_json
+            campaign_json = campaign.campaign_json
+            if isinstance(campaign_json, str):
+                import json
+                campaign_json = json.loads(campaign_json)
+            elif campaign_json is None:
+                campaign_json = {}
+            elif not isinstance(campaign_json, dict):
+                logger.warning(f"⚠️ campaign_json is not a dict, got {type(campaign_json)}, initializing as empty dict")
+                campaign_json = {}
             
-            # Set first video as local_video_path for backward compatibility
-            if num_variations == 1:
-                project.local_video_path = final_videos[0] if final_videos else None
-            else:
-                project.local_video_path = final_videos[0] if final_videos else None
+            logger.info(f"🔍 Current campaign_json before update: {campaign_json}")
+            logger.info(f"🔍 Final videos to store: {final_videos}")
             
-            project.aspect_ratio = "9:16"
-            project.status = 'COMPLETED'
-            project.selected_variation_index = None  # User hasn't selected yet
+            # Store S3 URLs in variationPaths with correct structure for API
+            # Format: {"variation_0": {"aspectExports": {"9:16": "url"}}, ...}
+            variation_paths = {}
+            for i, url in enumerate(final_videos):
+                variation_paths[f"variation_{i}"] = {
+                    "aspectExports": {
+                        "9:16": url  # Only 9:16 supported for now
+                    }
+                }
             
-            self.db.commit()
-            logger.info(f"Updated project with {num_variations} variations")
+            campaign_json["variationPaths"] = variation_paths
+            
+            logger.info(f"🔍 Updated campaign_json with variationPaths: {campaign_json}")
+            
+            # Clean up legacy local path fields to ensure S3 usage
+            if "local_video_paths" in campaign_json:
+                del campaign_json["local_video_paths"]
+            if "local_video_path" in campaign_json:
+                del campaign_json["local_video_path"]
+            
+            update_campaign(
+                self.db,
+                self.campaign_id,
+                status="completed",
+                progress=100,
+                campaign_json=campaign_json,
+                selected_variation_index=None  # User hasn't selected yet
+            )
+            
+            # Verify the update was successful
+            updated_campaign = get_campaign_by_id(self.db, self.campaign_id)
+            if updated_campaign:
+                verify_json = updated_campaign.campaign_json
+                if isinstance(verify_json, str):
+                    import json
+                    verify_json = json.loads(verify_json)
+                logger.info(f"✅ Verified campaign_json after update: {verify_json}")
+                logger.info(f"✅ variationPaths keys: {list(verify_json.get('variationPaths', {}).keys())}")
+            
+            logger.info(f"Updated campaign with {num_variations} variations (S3 URLs)")
             
         except Exception as e:
-            logger.error(f"Failed to update project variations: {e}")
+            logger.error(f"Failed to update campaign variations: {e}")
             raise
 
 
-def generate_video(project_id: str) -> Dict[str, Any]:
+def generate_video(campaign_id: str) -> Dict[str, Any]:
     """
     RQ job function for video generation.
     
@@ -1752,7 +1731,7 @@ def generate_video(project_id: str) -> Dict[str, Any]:
     Runs in a forked child process on macOS.
     
     Args:
-        project_id: String UUID of project to generate
+        campaign_id: String UUID of campaign to generate
         
     Returns:
         Dict with generation results
@@ -1767,9 +1746,9 @@ def generate_video(project_id: str) -> Dict[str, Any]:
         from app.database.connection import init_db
         init_db()
         
-        logger.info(f"Starting generation pipeline for project {project_id}")
-        project_uuid = UUID(project_id)
-        pipeline = GenerationPipeline(project_uuid)
+        logger.info(f"Starting generation pipeline for campaign {campaign_id}")
+        campaign_uuid = UUID(campaign_id)
+        pipeline = GenerationPipeline(campaign_uuid)
         
         # Handle event loop properly for RQ
         try:
@@ -1784,13 +1763,13 @@ def generate_video(project_id: str) -> Dict[str, Any]:
         result = loop.run_until_complete(pipeline.run())
         return result
     except KeyboardInterrupt:
-        logger.warning(f"Generation interrupted for project {project_id}")
+        logger.warning(f"Generation interrupted for campaign {campaign_id}")
         raise
     except Exception as e:
-        logger.error(f"RQ job failed for project {project_id}: {e}", exc_info=True)
+        logger.error(f"RQ job failed for campaign {campaign_id}: {e}", exc_info=True)
         return {
             "status": "FAILED",
-            "project_id": project_id,
+            "campaign_id": campaign_id,
             "error": str(e),
         }
 

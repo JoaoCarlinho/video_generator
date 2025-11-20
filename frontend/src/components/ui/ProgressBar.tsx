@@ -2,7 +2,7 @@ import React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../utils/cn'
 
-const progressVariants = cva('w-full rounded-full overflow-hidden bg-slate-700', {
+const progressVariants = cva('w-full rounded-full overflow-hidden bg-charcoal-800/80', {
   variants: {
     size: {
       sm: 'h-1',
@@ -18,11 +18,11 @@ const progressVariants = cva('w-full rounded-full overflow-hidden bg-slate-700',
 const progressBarVariants = cva('h-full rounded-full transition-all duration-300', {
   variants: {
     variant: {
-      default: 'bg-indigo-600',
+      default: 'bg-gold',
       success: 'bg-emerald-500',
       warning: 'bg-amber-500',
       danger: 'bg-red-500',
-      gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600',
+      gradient: 'bg-gradient-to-r from-gold to-gold-dark',
     },
     animated: {
       true: 'animate-pulse-subtle',
@@ -122,7 +122,7 @@ const CircularProgress = React.forwardRef<HTMLDivElement, CircularProgressProps>
     const offset = circumference - (percentage / 100) * circumference
 
     const colorMap = {
-      default: '#4f46e5',
+      default: '#F3D9A4',
       success: '#10b981',
       warning: '#f59e0b',
       danger: '#ef4444',
@@ -134,8 +134,8 @@ const CircularProgress = React.forwardRef<HTMLDivElement, CircularProgressProps>
         <svg width={size} height={size} className="transform -rotate-90">
           <defs>
             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#4f46e5" />
-              <stop offset="100%" stopColor="#9333ea" />
+              <stop offset="0%" stopColor="#F3D9A4" />
+              <stop offset="100%" stopColor="#D4B676" />
             </linearGradient>
           </defs>
           {/* Background circle */}

@@ -8,7 +8,6 @@ This module contains all backend services for video generation:
 5. TextOverlayRenderer - Add text overlays to videos
 6. AudioEngine - Background music generation
 7. Renderer - Final video rendering and multi-aspect export
-8. ReferenceImageStyleExtractor - Extract visual style from reference images
 """
 
 from app.services.scene_planner import ScenePlanner, AdProjectPlan, Scene, StyleSpec, TextOverlay
@@ -18,7 +17,7 @@ from app.services.compositor import Compositor
 from app.services.text_overlay import TextOverlayRenderer
 from app.services.audio_engine import AudioEngine
 from app.services.renderer import Renderer
-from app.services.reference_image_extractor import ReferenceImageStyleExtractor, ExtractedStyle
+# REMOVED: ReferenceImageStyleExtractor (feature removed in Phase 2 B2B SaaS)
 
 __all__ = [
     # Scene Planning
@@ -31,9 +30,6 @@ __all__ = [
     "ProductExtractor",
     "VideoGenerator",
     "AudioEngine",
-    # Reference Image Processing
-    "ReferenceImageStyleExtractor",
-    "ExtractedStyle",
     # Video Processing
     "Compositor",
     "TextOverlayRenderer",

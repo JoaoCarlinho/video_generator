@@ -21,7 +21,7 @@ export const useGeneration = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Trigger generation
+  // Trigger generation for project (legacy)
   const generateVideo = useCallback(async (projectId: string) => {
     setLoading(true)
     setError(null)
@@ -46,11 +46,56 @@ export const useGeneration = () => {
     }
   }, [])
 
-  // Get generation progress
+  // Trigger generation for campaign
+  const generateCampaign = useCallback(async (campaignId: string) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await apiClient.post(
+        `/api/generation/campaigns/${campaignId}/generate`
+      )
+      return response.data
+    } catch (err: any) {
+      // 409 Conflict means generation already started - treat as success
+      if (err?.response?.status === 409) {
+        console.log('✅ Generation already in progress (409)')
+        return { message: 'Generation already in progress' }
+      }
+      
+      const message = err instanceof Error ? err.message : 'Failed to generate video'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Get generation progress for project (legacy)
   const getProgress = useCallback(async (projectId: string, signal?: AbortSignal) => {
     try {
       const response = await apiClient.get(
         `/api/generation/projects/${projectId}/progress`, // Removed trailing slash to prevent redirect loop
+        { signal, timeout: 10000 } // 10 second timeout
+      )
+      return response.data as GenerationProgress
+    } catch (err: any) {
+      // Don't throw error if request was aborted (normal cleanup behavior)
+      if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || err?.message === 'canceled') {
+        // Silent abort - this is normal when component unmounts or re-renders
+        throw { silent: true, message: 'canceled' }
+      }
+      const message = err instanceof Error ? err.message : 'Failed to fetch progress'
+      setError(message)
+      throw err
+    }
+  }, [])
+
+  // Get generation progress for campaign
+  const getCampaignProgress = useCallback(async (campaignId: string, signal?: AbortSignal) => {
+    try {
+      const response = await apiClient.get(
+        `/api/generation/campaigns/${campaignId}/progress`,
         { signal, timeout: 10000 } // 10 second timeout
       )
       return response.data as GenerationProgress
@@ -134,7 +179,9 @@ export const useGeneration = () => {
     loading,
     error,
     generateVideo,
+    generateCampaign,
     getProgress,
+    getCampaignProgress,
     getJobStatus,
     cancelGeneration,
     resetProject,

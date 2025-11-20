@@ -57,7 +57,7 @@ export const Footer = () => {
                     key={social.label}
                     href={social.href}
                     aria-label={social.label}
-                    className="p-2 bg-slate-800/50 hover:bg-indigo-600/20 rounded-lg transition-colors text-slate-400 hover:text-indigo-400"
+                    className="p-2 bg-charcoal-900/60 hover:bg-gold/15 rounded-lg transition-colors text-muted-gray hover:text-gold"
                   >
                     <Icon className="w-5 h-5" />
                   </a>
@@ -74,7 +74,7 @@ export const Footer = () => {
                 <li key={link}>
                   <a
                     href="#"
-                    className="text-slate-400 hover:text-indigo-400 transition-colors text-sm"
+                    className="text-muted-gray hover:text-gold transition-colors text-sm"
                   >
                     {link}
                   </a>
@@ -91,7 +91,7 @@ export const Footer = () => {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-slate-400 hover:text-indigo-400 transition-colors text-sm"
+                    className="text-muted-gray hover:text-gold transition-colors text-sm"
                   >
                     {link.label}
                   </a>

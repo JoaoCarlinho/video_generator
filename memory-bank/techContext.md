@@ -146,7 +146,7 @@ OPENAI_API_KEY=sk-xxx
 # Storage (AWS S3)
 AWS_ACCESS_KEY_ID=AKIAxxx
 AWS_SECRET_ACCESS_KEY=xxx
-S3_BUCKET_NAME=adgen-videos-xxx
+S3_BUCKET_NAME=genads-gauntlet  # Phase 2 bucket
 AWS_REGION=us-east-1
 
 # Supabase
@@ -169,7 +169,24 @@ VITE_API_URL=http://localhost:8000
 
 ## Database Schema
 
-### Supabase Table: `projects`
+### Phase 2 B2B Schema (Current)
+
+**Tables:** `brands`, `perfumes`, `campaigns`
+
+See `systemPatterns.md` for complete schema details.
+
+**Migration:** `008_create_b2b_schema.py` (applied Nov 18, 2025)
+
+**Key Changes:**
+- Dropped `projects` table
+- Created 3-tier hierarchy: brands → perfumes → campaigns
+- 1:1 User-Brand relationship
+- Cascade delete enforced
+- CHECK constraints for validation
+
+### Legacy Schema (Temporary - DEPRECATED)
+
+### Supabase Table: `projects` (DEPRECATED - will be removed in Phase 3-4)
 ```sql
 CREATE TABLE projects (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -227,36 +244,79 @@ CREATE INDEX idx_projects_selected_variation ON projects(selected_variation_inde
 
 ---
 
-## Storage Structure (S3)
+## Storage Structure (S3) - Phase 2 B2B Hierarchy
 
+### Current Structure (Phase 2)
 ```
-s3://adgen-videos-xxx/
-├── projects/{project_id}/
-│   ├── product/
-│   │   ├── original.jpg          # User upload (perfume bottle)
-│   │   ├── masked.png             # Background removed
-│   │   └── mask.png               # Alpha mask
-│   ├── scenes/
-│   │   ├── scene_1_bg.mp4         # Generated background (9:16 TikTok vertical)
-│   │   ├── scene_1_comp.mp4       # With product composited
-│   │   ├── scene_1_overlay.mp4    # With text overlay
-│   │   └── ...
-│   ├── audio/
-│   │   └── background_music.mp3   # Luxury ambient cinematic
-│   └── outputs/
-│       └── final_9x16.mp4         # Final TikTok vertical (1080x1920) - ONLY format
+s3://genads-gauntlet/
+├── brands/{brand_id}/
+│   ├── brand_logo.png              # Permanent (no lifecycle)
+│   ├── brand_guidelines.pdf        # Permanent (no lifecycle)
+│   └── perfumes/{perfume_id}/
+│       ├── front.png               # Permanent (required)
+│       ├── back.png                # Permanent (optional)
+│       ├── top.png                 # Permanent (optional)
+│       ├── left.png                # Permanent (optional)
+│       ├── right.png               # Permanent (optional)
+│       └── campaigns/{campaign_id}/
+│           └── variations/variation_{0|1|2}/
+│               ├── draft/          # Delete after 30 days
+│               │   ├── scene_1_bg.mp4
+│               │   ├── scene_2_bg.mp4
+│               │   ├── scene_3_bg.mp4
+│               │   ├── scene_4_bg.mp4
+│               │   └── music.mp3
+│               └── final_video.mp4  # Delete after 90 days
 ```
 
-**Lifecycle Policy:**
+**S3 Bucket:** `genads-gauntlet`  
+**Region:** `us-east-1`  
+**ACL:** Disabled (modern bucket, no ACL support)
+
+**Lifecycle Policy (Applied):**
 ```json
 {
-  "Rules": [{
-    "Id": "DeleteAfter7Days",
-    "Prefix": "projects/",
-    "Status": "Enabled",
-    "Expiration": { "Days": 7 }
-  }]
+  "Rules": [
+    {
+      "ID": "DeleteDraftVideosAfter30Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {"Key": "type", "Value": "campaign_video"},
+            {"Key": "subtype", "Value": "draft"}
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {"Days": 30}
+    },
+    {
+      "ID": "DeleteFinalVideosAfter90Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {"Key": "type", "Value": "campaign_video"},
+            {"Key": "subtype", "Value": "final"}
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {"Days": 90}
+    }
+  ]
 }
+```
+
+**S3 Tagging Format:**
+- Tags formatted as URL-encoded string: `key1=value1&key2=value2`
+- Applied via `Tagging` parameter in `put_object()` calls
+- Tags used for lifecycle policy filtering
+
+**Legacy Structure (DEPRECATED):**
+```
+s3://adgen-videos-xxx/projects/{project_id}/...
 ```
 
 ---
@@ -493,5 +553,5 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete + Preview Endpoint Fix)
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
 

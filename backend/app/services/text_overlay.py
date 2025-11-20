@@ -305,21 +305,19 @@ class TextOverlayRenderer:
                 return
             
             # Check if it's an S3 URL
-            if f"s3.{self.aws_region}.amazonaws.com" in url or f"s3.amazonaws.com/{self.s3_bucket_name}" in url:
-                # Extract S3 key from URL
-                # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
-                if f"s3.{self.aws_region}.amazonaws.com" in url:
-                    s3_key = url.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
-                else:
-                    s3_key = url.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+            if '.s3.' in url or 's3.amazonaws.com' in url:
+                from app.utils.s3_utils import parse_s3_url
+                
+                # Parse S3 URL to get bucket and key
+                bucket_name, s3_key = parse_s3_url(url)
                 
                 # Download using boto3
                 self.s3_client.download_file(
-                    self.s3_bucket_name,
+                    bucket_name,
                     s3_key,
                     str(output_path)
                 )
-                logger.debug(f"Downloaded from S3: {output_path.name}")
+                logger.info(f"✅ Downloaded from S3: {s3_key} → {output_path.name}")
             else:
                 # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
                 async with aiohttp.ClientSession() as session:

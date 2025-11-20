@@ -90,7 +90,7 @@ export const ProgressTracker = ({
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-slate-400">Overall Progress</span>
-            <span className="text-indigo-400 font-medium">{Math.round(progress)}%</span>
+            <span className="text-gold font-medium">{Math.round(progress)}%</span>
           </div>
           <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
             <motion.div
@@ -99,7 +99,7 @@ export const ProgressTracker = ({
                   ? 'bg-gradient-to-r from-red-500 to-red-600'
                   : isComplete
                     ? 'bg-gradient-to-r from-emerald-500 to-emerald-600'
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                    : 'bg-gradient-to-r from-gold to-gold-dark'
               }`}
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
@@ -150,7 +150,7 @@ export const ProgressTracker = ({
                     </motion.div>
                   ) : stepStatus === 'current' ? (
                     <motion.div
-                      className="w-8 h-8 bg-indigo-500 border border-indigo-600 rounded-full flex items-center justify-center"
+                      className="w-8 h-8 bg-gold border border-gold/60 rounded-full flex items-center justify-center"
                       animate={{ scale: [1, 1.1, 1] }}
                       transition={{ duration: 1, repeat: Infinity }}
                     >
@@ -178,12 +178,12 @@ export const ProgressTracker = ({
 
                   {stepStatus === 'current' && (
                     <motion.div
-                      className="mt-2 h-1 bg-slate-800 rounded-full overflow-hidden"
+                      className="mt-2 h-1 bg-charcoal-800 rounded-full overflow-hidden"
                       initial={{ width: 0 }}
                       animate={{ width: '100%' }}
                     >
                       <motion.div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                        className="h-full bg-gradient-to-r from-gold to-gold-dark"
                         initial={{ x: '-100%' }}
                         animate={{ x: '100%' }}
                         transition={{ duration: 1, repeat: Infinity }}

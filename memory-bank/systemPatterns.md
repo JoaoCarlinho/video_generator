@@ -4,6 +4,65 @@
 
 ---
 
+## Database Schema (Phase 2 B2B Transformation)
+
+### New B2B Schema (Phase 2)
+
+**3-Tier Hierarchy:**
+```
+auth.users (Supabase Auth)
+  └── brands (1:1 relationship - one user = one brand)
+       ├── perfumes (1:many - many perfumes per brand)
+       │    └── campaigns (1:many - many campaigns per perfume)
+       └── campaigns (1:many - campaigns also reference brand_id)
+```
+
+**Tables:**
+
+**brands:**
+- `brand_id` (UUID, PK)
+- `user_id` (UUID, FK → auth.users, UNIQUE, CASCADE DELETE)
+- `brand_name` (VARCHAR(100), UNIQUE)
+- `brand_logo_url` (VARCHAR(500))
+- `brand_guidelines_url` (VARCHAR(500))
+- `onboarding_completed` (BOOLEAN, default false)
+- Indexes: user_id, onboarding_completed, brand_name (unique)
+
+**perfumes:**
+- `perfume_id` (UUID, PK)
+- `brand_id` (UUID, FK → brands, CASCADE DELETE)
+- `perfume_name` (VARCHAR(200))
+- `perfume_gender` (VARCHAR(20), CHECK: masculine/feminine/unisex)
+- `front_image_url` (VARCHAR(500), REQUIRED)
+- `back_image_url`, `top_image_url`, `left_image_url`, `right_image_url` (optional)
+- Unique constraint: (brand_id, perfume_name)
+- Indexes: brand_id, perfume_gender
+
+**campaigns:**
+- `campaign_id` (UUID, PK)
+- `perfume_id` (UUID, FK → perfumes, CASCADE DELETE)
+- `brand_id` (UUID, FK → brands, CASCADE DELETE)
+- `campaign_name` (VARCHAR(200))
+- `creative_prompt` (TEXT)
+- `selected_style` (VARCHAR(50), CHECK: gold_luxe/dark_elegance/romantic_floral)
+- `target_duration` (INTEGER, CHECK: 15-60)
+- `num_variations` (INTEGER, CHECK: 1-3, default 1)
+- `status` (VARCHAR(50))
+- `campaign_json` (JSONB) - All generation data
+- Indexes: perfume_id, brand_id, status, created_at
+
+**Key Constraints:**
+- 1:1 User-Brand relationship (enforced by UNIQUE on user_id)
+- Cascade delete: Brand → Perfumes → Campaigns
+- CHECK constraints: gender, style, duration, variations
+- UNIQUE constraints: brand_name, (brand_id, perfume_name)
+
+**Migration:** `008_create_b2b_schema.py` (applied Nov 18, 2025)
+
+**Legacy:** `projects` table kept temporarily (DEPRECATED) for backward compatibility. Will be removed in Phase 3-4.
+
+---
+
 ## High-Level Architecture
 
 ```
@@ -635,5 +694,120 @@ else:
 
 ---
 
-**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete + Preview Endpoint Fix)
+## S3 Storage Patterns (Phase 2)
+
+### Hierarchical Path Generation
+
+**Pattern:** Path functions build hierarchical S3 structure
+```python
+# Brand level
+brand_path = get_brand_s3_path(brand_id)  
+# → "brands/{brand_id}/"
+
+# Perfume level
+perfume_path = get_perfume_s3_path(brand_id, perfume_id)
+# → "brands/{brand_id}/perfumes/{perfume_id}/"
+
+# Campaign level
+campaign_path = get_campaign_s3_path(brand_id, perfume_id, campaign_id)
+# → "brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+```
+
+**Benefits:**
+- Clear hierarchy matches database structure
+- Easy to navigate in S3 console
+- Supports lifecycle policies via prefix filtering
+- Enables brand-level operations (delete all brand data)
+
+### S3 Tagging Pattern
+
+**Pattern:** All uploads apply tags for lifecycle management
+```python
+# Brand assets (permanent)
+tags = {
+    "type": "brand_asset",
+    "brand_id": brand_id,
+    "lifecycle": "permanent"
+}
+
+# Draft videos (30-day lifecycle)
+tags = {
+    "type": "campaign_video",
+    "subtype": "draft",
+    "brand_id": brand_id,
+    "perfume_id": perfume_id,
+    "campaign_id": campaign_id,
+    "variation_index": str(variation_index),
+    "lifecycle": "30days"
+}
+
+# Final videos (90-day lifecycle)
+tags = {
+    "type": "campaign_video",
+    "subtype": "final",
+    "brand_id": brand_id,
+    "perfume_id": perfume_id,
+    "campaign_id": campaign_id,
+    "variation_index": str(variation_index),
+    "lifecycle": "90days"
+}
+```
+
+**Tag Format:**
+- URL-encoded string: `key1=value1&key2=value2`
+- Applied via `Tagging` parameter in `put_object()`
+- Used by lifecycle policy for automatic deletion
+
+**Lifecycle Rules:**
+- Draft videos: Delete after 30 days (tagged `subtype=draft`)
+- Final videos: Delete after 90 days (tagged `subtype=final`)
+- Brand assets: No lifecycle (permanent)
+- Perfume images: No lifecycle (permanent)
+
+### Upload Function Pattern
+
+**Pattern:** Consistent function signatures across all upload types
+```python
+# Brand assets (file_content: bytes)
+async def upload_brand_logo(brand_id, file_content, filename) -> dict
+
+# Perfume images (file_content: bytes)
+async def upload_perfume_image(brand_id, perfume_id, angle, file_content, filename) -> dict
+
+# Campaign videos (file_path: str - local file)
+async def upload_draft_video(brand_id, perfume_id, campaign_id, variation_index, scene_index, file_path) -> dict
+async def upload_final_video(brand_id, perfume_id, campaign_id, variation_index, file_path) -> dict
+```
+
+**Return Format:**
+```python
+{
+    "url": "https://bucket.s3.region.amazonaws.com/path",
+    "s3_key": "brands/.../path",
+    "size_bytes": 12345,
+    "filename": "file.ext"
+}
+```
+
+**Error Handling:**
+- All functions raise `RuntimeError` on failure
+- Comprehensive logging at each step
+- Validation before upload (file types, sizes, indexes)
+
+### Modern S3 Bucket Pattern
+
+**Pattern:** No ACL support (modern buckets)
+- Removed `ACL="public-read"` from all `put_object()` calls
+- Bucket uses bucket policies for access control
+- Files accessible via presigned URLs if needed
+
+**Bucket Configuration:**
+- **Name:** `genads-gauntlet`
+- **Region:** `us-east-1`
+- **ACL:** Disabled (modern bucket)
+- **Lifecycle:** Applied via JSON policy file
+
+---
+
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
 
