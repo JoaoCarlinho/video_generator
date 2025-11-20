@@ -30,8 +30,8 @@ const Header = React.forwardRef<HTMLElement, HeaderProps>(
           'border-b transition-all duration-200',
           sticky && 'sticky top-0 z-40',
           transparent
-            ? 'border-slate-700/20 bg-slate-900/50 backdrop-blur'
-            : 'border-slate-700 bg-slate-900',
+            ? 'border-charcoal-700/40 bg-charcoal-900/40 backdrop-blur'
+            : 'border-charcoal-700 bg-charcoal-900/90',
           className
         )}
         {...props}
@@ -43,7 +43,7 @@ const Header = React.forwardRef<HTMLElement, HeaderProps>(
               {logo && (
                 <div className="flex-shrink-0">
                   {typeof logo === 'string' ? (
-                    <Link to="/" className="text-xl font-bold text-indigo-600">
+                    <Link to="/" className="text-xl font-bold text-gold">
                       {logo}
                     </Link>
                   ) : (

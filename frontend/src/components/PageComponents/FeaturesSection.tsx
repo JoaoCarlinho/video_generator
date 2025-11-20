@@ -109,13 +109,13 @@ export const FeaturesSection = ({
             <motion.div key={index} variants={itemVariants}>
               <Card
                 variant="glass"
-                className="h-full hover:border-indigo-500/50 transition-all hover:shadow-lg hover:shadow-indigo-500/20"
+                className="h-full hover:border-gold/50 transition-all hover:shadow-gold"
               >
                 <CardContent className="pt-8">
                   <div className="space-y-4">
                     {/* Icon */}
-                    <div className="inline-flex p-3 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-lg">
-                      <Icon className="w-6 h-6 text-indigo-400" />
+                    <div className="inline-flex p-3 bg-gradient-to-br from-gold/15 to-gold-dark/20 rounded-lg">
+                      <Icon className="w-6 h-6 text-gold" />
                     </div>
 
                     {/* Title & Highlight */}
@@ -124,7 +124,7 @@ export const FeaturesSection = ({
                         {feature.title}
                       </h3>
                       {feature.highlight && (
-                        <p className="text-xs font-medium text-indigo-400 mt-1">
+                        <p className="text-xs font-medium text-gold mt-1">
                           {feature.highlight}
                         </p>
                       )}

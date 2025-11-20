@@ -14,9 +14,9 @@ export interface PerfumeCardProps {
 }
 
 const genderColors = {
-  masculine: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  feminine: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  unisex: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  masculine: 'bg-charcoal-900/60 text-emerald-300 border border-emerald-500/40',
+  feminine: 'bg-charcoal-900/60 text-red-300 border border-red-500/40',
+  unisex: 'bg-charcoal-900/60 text-gold border border-gold/40',
 }
 
 const genderLabels = {
@@ -34,7 +34,7 @@ export const PerfumeCard = ({ perfume, onClick }: PerfumeCardProps) => {
       transition={{ duration: 0.2 }}
     >
       {/* Image */}
-      <div className="relative w-full h-3/4 bg-slate-800 overflow-hidden">
+      <div className="relative w-full h-3/4 bg-charcoal-900 overflow-hidden">
         {perfume.front_image_url ? (
           <img
             src={perfume.front_image_url}
@@ -51,7 +51,7 @@ export const PerfumeCard = ({ perfume, onClick }: PerfumeCardProps) => {
       </div>
 
       {/* Info Section */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-olive-950 via-olive-900 to-transparent p-4">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-charcoal-950 via-charcoal-900 to-transparent p-4">
         <h3 className="text-lg font-bold text-off-white mb-2 truncate">
           {perfume.perfume_name}
         </h3>

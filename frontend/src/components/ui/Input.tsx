@@ -28,10 +28,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <input
             type={type}
             className={cn(
-              'w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 transition-all duration-200',
-              'focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent',
+              'w-full px-4 py-3 bg-charcoal-900/70 border border-charcoal-700/70 rounded-xl text-off-white placeholder-muted-gray transition-all duration-200',
+              'focus:outline-none focus:ring-2 focus:ring-gold focus:border-gold/40 focus:bg-charcoal-900/90',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              'hover:border-slate-600',
+              'hover:border-gold/30',
               error && 'border-red-500 focus:ring-red-600',
               icon && iconPosition === 'left' && 'pl-10',
               icon && iconPosition === 'right' && 'pr-10',

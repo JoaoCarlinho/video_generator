@@ -12,24 +12,24 @@
 
 @layer base {
   :root {
-    --background: 42 51 40; /* olive-950 - lighter, more visible */
+    --background: 18 26 46; /* midnight-950 */
     --foreground: 229 231 235; /* off-white */
-    --card: 63 74 61; /* olive-800 */
+    --card: 17 20 27; /* slate-800 */
     --card-foreground: 229 231 235;
-    --popover: 63 74 61;
+    --popover: 21 31 52; /* midnight-900 */
     --popover-foreground: 229 231 235;
     --primary: 243 217 164; /* gold */
-    --primary-foreground: 26 26 26; /* gold-foreground */
+    --primary-foreground: 24 20 16; /* gold text */
     --secondary: 126 138 154; /* neutral */
-    --secondary-foreground: 229 231 235;
-    --muted: 93 107 90; /* olive-600 */
+    --secondary-foreground: 5 6 8;
+    --muted: 21 25 36; /* slate-700 */
     --muted-foreground: 156 163 175; /* muted-gray */
     --accent: 212 182 118; /* gold-dark */
-    --accent-foreground: 26 26 26;
+    --accent-foreground: 24 20 16;
     --destructive: 239 68 68; /* red-500 */
     --destructive-foreground: 255 255 255;
-    --border: 93 107 90; /* olive-600 */
-    --input: 93 107 90;
+    --border: 32 43 64; /* midnight border */
+    --input: 32 43 64;
     --ring: 243 217 164; /* gold */
     --radius: 0.5rem;
     color-scheme: dark;
@@ -38,7 +38,7 @@
 
 @layer base {
   * {
-    border-color: rgb(93 107 90); /* olive-600 */
+    border-color: rgb(32 43 64); /* midnight border */
   }
   
   html {
@@ -46,7 +46,7 @@
   }
 
   body {
-    background-color: rgb(42 51 40); /* olive-950 - lighter, more visible */
+    background-color: rgb(18 26 46); /* midnight-950 */
     color: rgb(229 231 235); /* off-white */
     font-feature-settings: "rlig" 1, "calt" 1;
   }
@@ -58,7 +58,7 @@
   }
   
   .bg-gradient-hero {
-    background: linear-gradient(135deg, #2a3328 0%, #354033 50%, #3f4a3d 100%);
+    background: linear-gradient(135deg, #111a2e 0%, #18233d 50%, #1f2d4a 100%);
   }
   
   .bg-gradient-primary {
