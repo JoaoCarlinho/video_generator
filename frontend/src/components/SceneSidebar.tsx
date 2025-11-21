@@ -93,7 +93,7 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
   
   return (
     <>
-      <div className={`scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 flex flex-col shadow-gold-lg max-h-[calc(100vh-120px)] ${className}`}>
+      <div className={`scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 flex flex-col shadow-gold-lg h-full ${className}`}>
         {/* Header */}
         <div className="flex justify-between items-center pb-4 border-b border-charcoal-800/70 mb-4 flex-shrink-0">
           <h3 className="text-lg font-semibold text-white">
@@ -101,8 +101,8 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
           </h3>
         </div>
         
-        {/* Scene List */}
-        <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
+        {/* Scene List - Scrollable */}
+        <div className="space-y-4 overflow-y-auto overflow-x-hidden pr-2 flex-1 min-h-0">
           {scenes.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <p>No scenes available</p>
