@@ -6,7 +6,7 @@ import { Input } from '@/components/ui'
 import { useCampaigns, type VideoStyle } from '@/hooks/useCampaigns'
 import { usePerfumes } from '@/hooks/usePerfumes'
 import { useAuth } from '@/hooks/useAuth'
-import { ArrowLeft, Sparkles, LogOut, CheckCircle, Clock, Sparkles as SparklesIcon } from 'lucide-react'
+import { ArrowLeft, Sparkles, LogOut, CheckCircle, Clock, Sparkles as SparklesIcon, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Slider } from '@/components/ui/slider'
 
@@ -175,11 +175,6 @@ export const CreateCampaign = () => {
               <h1 className="text-3xl sm:text-4xl font-bold text-off-white mb-3">
                 Create New <span className="text-gradient-gold">Campaign</span>
               </h1>
-              {perfume && (
-                <p className="text-lg text-muted-gray">
-                  For <span className="text-gold font-semibold">{perfume.perfume_name}</span>
-                </p>
-              )}
             </div>
 
             {/* Create Campaign Form */}
@@ -199,7 +194,6 @@ export const CreateCampaign = () => {
                   onChange={(e) => setCampaignName(e.target.value)}
                   placeholder="e.g., Summer Collection 2024, Holiday Launch"
                   required
-                  helpText="Give your campaign a memorable name"
                   className="bg-slate-800 border-slate-700 text-off-white"
                 />
               </div>
@@ -228,21 +222,29 @@ export const CreateCampaign = () => {
                   Video Style <span className="text-red-500">*</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {styleOptions.map((style) => (
-                    <button
-                      key={style.value}
-                      type="button"
-                      onClick={() => setSelectedStyle(style.value)}
-                      className={`p-4 rounded-lg border-2 transition-all text-left ${
-                        selectedStyle === style.value
-                          ? 'border-gold bg-gold/10 text-gold'
-                          : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white'
-                      }`}
-                    >
-                      <h3 className="font-semibold mb-1 capitalize">{style.label}</h3>
-                      <p className="text-xs opacity-80">{style.description}</p>
-                    </button>
-                  ))}
+                  {styleOptions.map((style) => {
+                    const isSelected = selectedStyle === style.value
+                    return (
+                      <button
+                        key={style.value}
+                        type="button"
+                        onClick={() => setSelectedStyle(style.value)}
+                        className={`p-4 rounded-lg border-2 transition-all duration-200 text-left ${
+                          isSelected
+                            ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
+                            : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {isSelected && <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                          <div className="flex-1">
+                            <h3 className="font-semibold mb-1 capitalize">{style.label}</h3>
+                            <p className="text-xs opacity-80">{style.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -267,40 +269,40 @@ export const CreateCampaign = () => {
                   <span>45s</span>
                   <span>60s</span>
                 </div>
-                <p className="text-xs text-muted-gray mt-2">
-                  TikTok videos work best between 15-60 seconds
-                </p>
               </div>
 
               {/* Number of Variations */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-3">
-                  Number of Variations <span className="text-xs text-muted-gray">(Optional)</span>
+                  Number of Variations
                 </label>
                 <div className="flex gap-3">
-                  {([1, 2, 3] as const).map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setNumVariations(num)}
-                      className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                        numVariations === num
-                          ? 'border-gold bg-gold/10 text-gold'
-                          : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <SparklesIcon className="w-4 h-4" />
-                        <span className="font-medium">{num}</span>
-                      </div>
-                      <p className="text-xs mt-1 opacity-80">
-                        {num === 1 ? 'Single video' : `${num} variations`}
-                      </p>
-                    </button>
-                  ))}
+                  {([1, 2, 3] as const).map((num) => {
+                    const isSelected = numVariations === num
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setNumVariations(num)}
+                        className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all duration-200 ${
+                          isSelected
+                            ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
+                            : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          {isSelected ? <Check className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
+                          <span className="font-medium">{num}</span>
+                        </div>
+                        <p className="text-xs mt-1 opacity-80">
+                          {num === 1 ? 'Single video' : `${num} variations`}
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className="text-xs text-muted-gray mt-2">
-                  Generate multiple variations to choose your favorite (all variations process in parallel)
+                  Generate multiple variations to choose your favorite.
                 </p>
               </div>
 
