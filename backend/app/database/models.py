@@ -250,6 +250,7 @@ class Campaign(Base):
     cost = Column(Numeric(10, 2), default=0, nullable=False)
     error_message = Column(Text, nullable=True)
     campaign_json = Column(JSONB, nullable=False)
+    edit_history = Column(JSONB, nullable=True)  # Phase 3: Edit history tracking
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
     

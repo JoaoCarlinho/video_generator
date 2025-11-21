@@ -654,6 +654,7 @@ async def stream_video(
             raise HTTPException(status_code=500, detail="Failed to stream video from S3")
         
         # Stream the video file to client with CORS headers
+        # Use no-cache headers to prevent browser caching after edits
         return StreamingResponse(
             iter([video_stream]),
             media_type=content_type,
@@ -662,7 +663,9 @@ async def stream_video(
                 "Content-Type": content_type,
                 "Accept-Ranges": "bytes",
                 "ETag": f'"{etag}"',
-                "Cache-Control": "public, max-age=3600",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
                 "Access-Control-Allow-Headers": "Range, Content-Range, Content-Type",

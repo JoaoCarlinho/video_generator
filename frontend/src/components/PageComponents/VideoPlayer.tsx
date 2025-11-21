@@ -197,6 +197,7 @@ export const VideoPlayer = ({
             <video
               ref={videoRef}
               src={videoUrl}
+              key={videoUrl} // Force reload when URL changes
               className={`${isFullscreen ? 'w-full h-full object-contain' : 'w-full h-full'}`}
               preload="metadata"
               playsInline

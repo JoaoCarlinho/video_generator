@@ -76,7 +76,7 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
       transition={{ duration: 0.2 }}
     >
       {/* Video Thumbnail */}
-      <div className="relative w-full h-48 bg-slate-900 overflow-hidden">
+      <div className="relative w-full h-40 bg-slate-900 overflow-hidden">
         {thumbnailUrl ? (
           <video
             src={thumbnailUrl}
@@ -95,9 +95,9 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-            <div className="flex flex-col items-center gap-3">
-              <Video className="w-12 h-12 text-muted-gray" />
-              <span className="text-sm text-muted-gray">No preview</span>
+            <div className="flex flex-col items-center gap-2">
+              <Video className="w-10 h-10 text-muted-gray" />
+              <span className="text-xs text-muted-gray">No preview</span>
             </div>
           </div>
         )}
@@ -106,9 +106,9 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
       </div>
 
       {/* Content Section */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2">
         {/* Campaign Name */}
-        <h3 className="text-lg font-bold text-off-white truncate group-hover:text-gold transition-colors">
+        <h3 className="text-base font-bold text-off-white truncate group-hover:text-gold transition-colors">
           {campaign.campaign_name}
         </h3>
 
@@ -132,30 +132,24 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
         </div>
 
         {/* Metadata Grid */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           {/* Duration */}
-          <div className="flex items-center gap-2 text-muted-gray">
-            <Clock className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 text-muted-gray">
+            <Clock className="w-3.5 h-3.5" />
             <span>{campaign.target_duration}s</span>
           </div>
 
           {/* Variations */}
-          <div className="flex items-center gap-2 text-muted-gray">
-            <Sparkles className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 text-muted-gray">
+            <Sparkles className="w-3.5 h-3.5" />
             <span>
               {campaign.num_variations} variation{campaign.num_variations !== 1 ? 's' : ''}
             </span>
           </div>
 
-          {/* Cost */}
-          <div className="flex items-center gap-2 text-muted-gray">
-            <DollarSign className="w-4 h-4" />
-            <span>{formatCost(campaign.cost)}</span>
-          </div>
-
           {/* Created Date */}
-          <div className="flex items-center gap-2 text-muted-gray">
-            <Calendar className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 text-muted-gray">
+            <Calendar className="w-3.5 h-3.5" />
             <span>{formatDate(campaign.created_at)}</span>
           </div>
         </div>

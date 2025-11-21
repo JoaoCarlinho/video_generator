@@ -3,6 +3,9 @@
 This service orchestrates video generation through pluggable provider backends
 (Replicate API, ECS-hosted Wan2.5, etc.) with automatic failover support.
 
+CURRENT: ByteDance SeedAnce-1-Pro (text-to-video)
+FUTURE: Google Veo S3 (image-to-video with product/text integration)
+
 Provider Architecture:
 - BaseVideoProvider interface for consistent provider API
 - ReplicateVideoProvider for Replicate's hosted inference
@@ -11,6 +14,12 @@ Provider Architecture:
 
 Model: bytedance/seedance-1-pro-fast (fast, high-quality production model)
 Optimized for: Professional ad video generation with excellent quality/speed balance
+
+VEO S3 READINESS:
+- Enhanced prompts from ScenePlanner (user-first + cinematography)
+- Support for style overrides
+- Prepared for image reference inputs (product/logo)
+- Text integration instructions ready
 """
 
 import logging
@@ -109,9 +118,14 @@ class VideoGenerator:
 
         This method delegates to the configured provider instance, enabling
         transparent backend switching without changing calling code.
+        
+        This method receives enhanced prompts from ScenePlanner with:
+        - User-first creative concepts
+        - Advanced cinematography vocabulary
+        - Perfume visual language applied to user's vision
 
         Args:
-            prompt: Scene description prompt
+            prompt: Enhanced scene description prompt (from ScenePlanner with Veo S3 optimizations)
             style_spec_dict: Style specification dict with visual guidelines
             duration: Video duration in seconds (typical: 2-5 seconds)
             aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
@@ -121,7 +135,8 @@ class VideoGenerator:
 
         Returns:
             URL of generated video from the selected provider
-
+        logger.info(f"Generating TikTok vertical background video: {prompt[:60]}...")
+s
         Raises:
             Exception: Provider-specific exceptions for generation failures
         """

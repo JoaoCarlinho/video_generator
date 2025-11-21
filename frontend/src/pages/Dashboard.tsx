@@ -57,13 +57,6 @@ export const Dashboard = () => {
       gradient: 'from-gold-silky/20 to-gold/10',
       iconBg: 'bg-gold-silky/20',
     },
-    {
-      label: 'Total Spent',
-      value: `$${(stats?.total_cost || 0).toFixed(2)}`,
-      icon: TrendingUp,
-      gradient: 'from-gold/20 to-gold-silky/20',
-      iconBg: 'bg-gold/20',
-    },
   ]
 
   const containerVariants = {
@@ -106,7 +99,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+      <nav className="relative z-50 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/30 sticky top-0">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -116,9 +109,6 @@ export const Dashboard = () => {
                 </div>
                 <span className="text-xl font-bold text-gradient-gold">GenAds</span>
               </Link>
-              <div className="hidden md:block ml-6 pl-6 border-l border-olive-600/50">
-                <h1 className="text-sm font-semibold text-off-white">Dashboard</h1>
-              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-2 text-sm text-muted-gray">
@@ -163,7 +153,7 @@ export const Dashboard = () => {
             {/* Stats Grid */}
             <motion.div
               variants={itemVariants}
-              className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6"
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6"
             >
               {dashboardStats.map((stat, index) => {
                 const Icon = stat.icon

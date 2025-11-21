@@ -5,7 +5,7 @@ import { Button } from '@/components/ui'
 import { Input } from '@/components/ui'
 import { usePerfumes, type PerfumeGender } from '@/hooks/usePerfumes'
 import { useAuth } from '@/hooks/useAuth'
-import { Image as ImageIcon, X, CheckCircle, Sparkles, LogOut, ArrowLeft } from 'lucide-react'
+import { Image as ImageIcon, X, CheckCircle, Sparkles, LogOut, ArrowLeft, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const AddPerfume = () => {
@@ -137,7 +137,7 @@ export const AddPerfume = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+      <nav className="relative z-50 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/30 sticky top-0">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link to="/dashboard" className="flex items-center gap-2">
@@ -212,20 +212,24 @@ export const AddPerfume = () => {
                   Perfume Gender <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-3">
-                  {(['masculine', 'feminine', 'unisex'] as PerfumeGender[]).map((gender) => (
+                  {(['masculine', 'feminine', 'unisex'] as PerfumeGender[]).map((gender) => {
+                    const isSelected = perfumeGender === gender
+                    return (
                     <button
                       key={gender}
                       type="button"
                       onClick={() => setPerfumeGender(gender)}
-                      className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                        perfumeGender === gender
-                          ? 'border-gold bg-gold/10 text-gold'
-                          : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white'
+                        className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                          isSelected
+                            ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
+                            : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
                       }`}
                     >
-                      <span className="capitalize font-medium">{gender}</span>
+                        {isSelected && <Check className="w-4 h-4" />}
+                        <span className="capitalize">{gender}</span>
                     </button>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
 
@@ -271,13 +275,13 @@ export const AddPerfume = () => {
                 )}
               </div>
 
-              {/* Optional Images */}
+              {/* Optional Images 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-3">
                   Additional Images <span className="text-xs text-muted-gray">(Optional)</span>
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {/* Back Image */}
+                  {/* Back Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Back</label>
                     {backPreview ? (
@@ -310,7 +314,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Top Image */}
+                  {/* Top Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Top</label>
                     {topPreview ? (
@@ -343,7 +347,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Left Image */}
+                  {/* Left Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Left</label>
                     {leftPreview ? (
@@ -376,7 +380,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Right Image */}
+                  {/* Right Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Right</label>
                     {rightPreview ? (
@@ -412,7 +416,7 @@ export const AddPerfume = () => {
                 <p className="text-xs text-muted-gray mt-2">
                   Upload additional angles to improve video generation quality (optional)
                 </p>
-              </div>
+              </div>*/}
 
               {/* Error Message */}
               {(error || submitError) && (

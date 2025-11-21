@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Button } from '@/components/ui'
 import { VideoPlayer } from '@/components/PageComponents'
+import { SceneSidebar } from '@/components/SceneSidebar'
+import { ToastContainer } from '@/components/ui/Toast'
+import type { ToastProps } from '@/components/ui/Toast'
 import { useProjects } from '@/hooks/useProjects'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { api } from '@/services/api'
@@ -130,13 +133,13 @@ function FailoverNotificationBanner({ metadata, projectId }: FailoverNotificatio
     </motion.div>
   )
 }
-import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play } from 'lucide-react'
+
+import { Download, Sparkles, CheckCircle2, Play, Loader2, Shuffle } from 'lucide-react'
 import {
   getVideoURL,
   getVideo,
   deleteProjectVideos,
   getStorageUsage,
-  formatBytes,
   markAsFinalized,
 } from '@/services/videoStorage'
 
@@ -170,8 +173,93 @@ export const VideoResults = () => {
   const [isFinalized, setIsFinalized] = useState(false)
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
+  const [isEditingScene, setIsEditingScene] = useState(false)
+  const [videoKey, setVideoKey] = useState(0) // Force video reload
+  const [toasts, setToasts] = useState<ToastProps[]>([])
 
   const handleBackToDashboard = () => navigate('/dashboard', { replace: true })
+
+  const addToast = (toast: Omit<ToastProps, 'id'>) => {
+    const id = Math.random().toString(36).substring(7)
+    setToasts((prev) => [...prev, { ...toast, id }])
+  }
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  const handleVideoUpdate = async () => {
+    // Called after successful edit
+    setIsEditingScene(false)
+    
+    // Small delay to ensure database update is committed
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Reload campaign/project data
+    try {
+      let data: any
+      if (isCampaign) {
+        // Force reload by adding cache-busting parameter
+        data = await getCampaign(id)
+        // Reload again to ensure we get fresh data
+        await new Promise(resolve => setTimeout(resolve, 300))
+        data = await getCampaign(id)
+      } else {
+        data = await getProject(id)
+      }
+      setProject(data)
+      
+      // Clear old video URL first
+      if (campaignBlobUrl) {
+        URL.revokeObjectURL(campaignBlobUrl)
+        setCampaignBlobUrl('')
+      }
+      setVideoUrl('')
+      
+      // Reload video
+      const aspectRatio = isCampaign ? '9:16' : (data.aspect_ratio || '9:16')
+      const { url: displayVideoPath, selectedIndex } = getDisplayVideo(
+        data,
+        aspectRatio as '9:16' | '1:1' | '16:9'
+      )
+      setSelectedVariationIndex(selectedIndex)
+      
+      if (isCampaign && displayVideoPath) {
+        // Force reload with cache-busting after edit
+        await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex, true)
+        // Force video player reload by updating key AFTER blob is loaded
+        setVideoKey(prev => prev + 1)
+      } else {
+        // For non-campaigns, just update the key
+        setVideoKey(prev => prev + 1)
+      }
+      
+      // Show success toast
+      addToast({
+        type: 'success',
+        title: 'Scene edited successfully!',
+        message: 'The video has been updated with your changes.',
+        duration: 5000
+      })
+    } catch (err) {
+      console.error('Failed to reload video after edit:', err)
+      addToast({
+        type: 'error',
+        title: 'Failed to reload video',
+        message: 'Please refresh the page to see your changes.',
+        duration: 5000
+      })
+    }
+  }
+
+  const handleEditStart = () => {
+    setIsEditingScene(true)
+  }
+
+  const handleEditError = () => {
+    // Clear loading state on error
+    setIsEditingScene(false)
+  }
 
   /**
    * Helper function to extract the display video path from project/campaign data.
@@ -300,7 +388,8 @@ export const VideoResults = () => {
   const fetchCampaignVideoBlob = async (
     campaignData: any,
     aspectRatio: '9:16' | '1:1' | '16:9',
-    variationIndex: number
+    variationIndex: number,
+    forceReload: boolean = false
   ) => {
     if (!campaignData?.campaign_id) {
       setError('Invalid campaign data')
@@ -308,16 +397,25 @@ export const VideoResults = () => {
     }
     try {
       setIsVideoFetching(true)
+      
+      // Add cache-busting parameter if forcing reload
+      const params: any = { variation_index: variationIndex }
+      if (forceReload) {
+        params._t = Date.now() // Cache-busting timestamp
+      }
+      
       const response = await api.get(
         `/api/generation/campaigns/${campaignData.campaign_id}/stream/${aspectRatio}`,
         {
           responseType: 'blob',
-          params: { variation_index: variationIndex },
+          params,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         }
       )
-      if (campaignBlobUrl) {
-        URL.revokeObjectURL(campaignBlobUrl)
-      }
+      
       const blobUrl = URL.createObjectURL(response.data)
       setCampaignBlobUrl(blobUrl)
       setVideoUrl(blobUrl)
@@ -532,36 +630,63 @@ export const VideoResults = () => {
     try {
       setDownloadingAspect(aspectRatio)
       
-      let videoUrlToDownload: string
+      let videoBlob: Blob | null = null
+      let blobUrl: string | null = null
       
       if (isCampaign) {
-        // Campaigns: videos are stored in S3 - use direct URL for download
-        const { url: displayVideoPath } = getDisplayVideo(project, aspectRatio)
-        videoUrlToDownload = displayVideoPath || ''
-        
-        if (!videoUrlToDownload) {
-          setError('Video URL not available')
+        // Campaigns: Fetch video as blob through backend to force download
+        const { selectedIndex } = getDisplayVideo(project, aspectRatio)
+        try {
+          const response = await api.get(
+            `/api/generation/campaigns/${id}/stream/${aspectRatio}`,
+            {
+              responseType: 'blob',
+              params: { variation_index: selectedIndex }
+            }
+          )
+          videoBlob = response.data
+          blobUrl = URL.createObjectURL(videoBlob)
+        } catch (err) {
+          console.error('Failed to fetch video for download:', err)
+          setError('Failed to download video')
           setDownloadingAspect(null)
           return
         }
       } else {
-        // Projects: Try local storage first, then S3
-        const videoBlob = await getVideo(id, aspectRatio)
-      
-      if (videoBlob) {
-        videoUrlToDownload = URL.createObjectURL(videoBlob)
-      } else {
-        videoUrlToDownload = project.output_videos?.[aspectRatio] || ''
-        if (!videoUrlToDownload) {
-          setError('Video URL not available')
-          setDownloadingAspect(null)
-          return
+        // Projects: Try local storage first, then fetch from API
+        videoBlob = await getVideo(id, aspectRatio)
+        
+        if (videoBlob) {
+          blobUrl = URL.createObjectURL(videoBlob)
+        } else {
+          // Fetch from API endpoint
+          try {
+            const response = await api.get(
+              `/api/local-generation/projects/${id}/preview`,
+              {
+                responseType: 'blob',
+                params: { variation: project.selected_variation_index ?? 0 }
+              }
+            )
+            videoBlob = response.data
+            blobUrl = URL.createObjectURL(videoBlob)
+          } catch (err) {
+            console.error('Failed to fetch video for download:', err)
+            setError('Failed to download video')
+            setDownloadingAspect(null)
+            return
           }
         }
       }
       
+      if (!blobUrl || !videoBlob) {
+        setError('Video not available for download')
+        setDownloadingAspect(null)
+        return
+      }
+      
       const link = document.createElement('a')
-      link.href = videoUrlToDownload
+      link.href = blobUrl
       
       const aspectNames: Record<string, string> = {
         '16:9': 'horizontal',
@@ -587,11 +712,13 @@ export const VideoResults = () => {
       link.click()
       document.body.removeChild(link)
       
-      if (videoUrlToDownload.startsWith('blob:')) {
-        URL.revokeObjectURL(videoUrlToDownload)
-      }
-      
-      setTimeout(() => setDownloadingAspect(null), 1000)
+      // Cleanup blob URL after a short delay
+      setTimeout(() => {
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl)
+        }
+        setDownloadingAspect(null)
+      }, 1000)
     } catch (err) {
       console.error('Download failed:', err)
       setError('Failed to download video')
@@ -736,18 +863,22 @@ export const VideoResults = () => {
   if (error || !project) {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
-        <nav className="border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+        <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
           <div className="max-w-5xl mx-auto w-full px-4 py-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBackToDashboard}
-                className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-muted-gray" />
-              </button>
+              {project?.perfume_id && (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />
+                    <span className="text-muted-gray group-hover:text-gold transition-colors duration-200">Back to Campaign</span>
+                  </button>
+                </div>
+              )}
               <span className="text-xl font-bold text-gradient-gold">GenAds</span>
             </div>
-          </div>
         </nav>
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
@@ -771,181 +902,227 @@ export const VideoResults = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
-        <div className="max-w-5xl mx-auto w-full px-4 py-4">
+      <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
+        <div className="max-w-7xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
-            <button
-              onClick={handleBackToDashboard}
-              className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-muted-gray" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-gold rounded-lg shadow-gold">
-                <Sparkles className="h-5 w-5 text-gold-foreground" />
-              </div>
-              <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+            {/* Left: Back Button */}
+            {project?.perfume_id && (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />
+                    <span className="text-muted-gray group-hover:text-gold transition-colors duration-200">Back to Campaign</span>
+                  </button>
+                </div>
+              )}
+
+            {/* Right: Logo and Actions */}
+            <div className="flex items-center gap-4">
+              <Link to="/" className="flex items-center gap-2">
+                <div className="p-2 bg-gold rounded-lg shadow-gold">
+                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                </div>
+                <span className="text-xl font-bold text-gradient-gold hidden sm:inline">GenAds</span>
+              </Link>
+              {!isCampaign && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/create')}
+                  className="hidden sm:flex gap-2 border-olive-600 text-muted-gray hover:text-gold hover:border-gold"
+                >
+                  <Play className="w-3 h-3" />
+                  Create New
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 w-full max-w-5xl mx-auto px-4 py-6">
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] gap-6">
-          {/* Main Video Card */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
-          >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gold/10 rounded-lg border border-gold/20">
-                    <CheckCircle2 className="w-5 h-5 text-gold" />
+      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-8">
+        <div className={`grid grid-cols-1 ${isCampaign ? 'lg:grid-cols-12' : 'max-w-4xl mx-auto'} gap-8 items-stretch`}>
+          
+          {/* LEFT COLUMN: Video Player & Details */}
+          <div className={`${isCampaign ? 'lg:col-span-8' : 'w-full'} flex`}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl overflow-hidden shadow-gold-lg flex flex-col h-full"
+            >
+              {/* Card Header */}
+              <div className="p-6 border-b border-charcoal-800/70 bg-charcoal-950/30">
+                <div className="flex items-center justify-between">
+                  {/* Left: Title */}
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-gold/10 rounded-xl border border-gold/20">
+                      <CheckCircle2 className="w-6 h-6 text-gold" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-off-white tracking-tight">
+                        {isCampaign ? project.campaign_name : project.title}
+                      </h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        {isFinalized && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Finalized
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-bold text-off-white">
-                      {isCampaign ? project.campaign_name : project.title}
-                    </h2>
+                  
+                  {/* Center: Select Different Variation Button - Only show for campaigns with multiple variations */}
+                  <div className="flex-1 flex justify-center">
+                    {isCampaign && project?.num_variations && project.num_variations > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/campaigns/${id}/select`)}
+                        className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold gap-2"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                        <span className="hidden sm:inline">Switch Variation</span>
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Right: Primary Actions */}
+                  <div className="flex items-center gap-3">
+                    {!isCampaign && storageUsage > 0 && !isFinalized && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFinalizeVideo}
+                        disabled={isFinalizing}
+                        className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold"
+                      >
+                        {isFinalizing ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <Cloud className="w-3 h-3 mr-2" />
+                            Finalize
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    <Button
+                      variant="hero"
+                      onClick={() => handleDownload(aspect)}
+                      disabled={!!downloadingAspect}
+                      className="gap-2 min-w-[120px] transition-all duration-200 hover:scale-105 hover:shadow-gold-lg"
+                    >
+                      {downloadingAspect === aspect ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Download
+                        </>
+                      )}
+                    </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteProject}
+                      disabled={deleting}
+                      className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      {deleting ? (
+                        <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              {/* Video Player */}
-              <div className="mb-4">
-                {videoUrl ? 
-                  <VideoPlayer
-                    videoUrl={videoUrl}
-                    title={isCampaign ? project.campaign_name : project.title}
-                    aspect={aspect}
-                    onDownload={() => handleDownload(aspect)}
-                    isLoading={isVideoFetching}
-                    size="standard"
-                  />
-                 : (
-                  <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
-                    <p className="text-muted-gray">No video available</p>
+              {/* Video Player Container */}
+              <div className="p-8 bg-black/20 min-h-[400px] flex-1 flex items-center justify-center relative">
+                {videoUrl ? (
+                  <>
+                    <div className="w-full max-w-3xl mx-auto shadow-2xl rounded-xl overflow-hidden border border-charcoal-800">
+                      <VideoPlayer
+                        key={videoKey}
+                        videoUrl={videoUrl}
+                        title={isCampaign ? project.campaign_name : project.title}
+                        aspect={aspect}
+                        onDownload={() => handleDownload(aspect)}
+                        isLoading={isVideoFetching}
+                        size="standard"
+                      />
+                    </div>
+                    
+                    {/* Loading Overlay During Edit */}
+                    {isEditingScene && (
+                      <div className="absolute inset-0 bg-charcoal-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                        <div className="bg-charcoal-900 border border-gold/30 p-8 rounded-2xl shadow-2xl text-center max-w-md mx-4">
+                          <Loader2 className="w-12 h-12 text-gold animate-spin mb-4 mx-auto" />
+                          <h3 className="text-xl font-semibold text-white mb-2">
+                            Refining Scene...
+                          </h3>
+                          <p className="text-gray-400 mb-4">
+                            AI is regenerating this scene with your new instructions.
+                          </p>
+                          <div className="w-full bg-charcoal-800 rounded-full h-1.5 mb-2 overflow-hidden">
+                            <div className="h-full bg-gold animate-pulse w-2/3 rounded-full"></div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Estimated time: ~2-3 minutes
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-charcoal-700 rounded-xl w-full max-w-lg">
+                    <div className="p-4 bg-charcoal-800 rounded-full mb-4">
+                      <Play className="w-8 h-8 text-muted-gray" />
+                    </div>
+                    <p className="text-off-white font-medium text-lg mb-1">No video available</p>
+                    <p className="text-muted-gray text-sm mb-4">The video could not be loaded.</p>
                     {error && (
-                      <p className="text-red-400 mt-2 text-sm">{error}</p>
+                      <p className="text-red-400 text-sm bg-red-500/10 px-3 py-1 rounded-lg border border-red-500/20">{error}</p>
                     )}
                   </div>
                 )}
               </div>
-
-              {/* Action Buttons Row */}
-              <div className="flex items-center gap-3 pt-4 border-t border-charcoal-800/70">
-                <Button
-                  variant="hero"
-                  onClick={() => handleDownload(aspect)}
-                  disabled={!!downloadingAspect}
-                  className="gap-2 transition-transform duration-200 hover:scale-105"
-                >
-                  {downloadingAspect === aspect ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-gold-foreground/30 border-t-gold-foreground rounded-full animate-spin" />
-                      Downloading...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      Download
-                    </>
-                  )}
-                </Button>
-                
-                {!isCampaign && storageUsage > 0 && !isFinalized && (
-                  <Button
-                    variant="outline"
-                    onClick={handleFinalizeVideo}
-                    disabled={isFinalizing}
-                    className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold transition-transform duration-200 hover:scale-105"
-                  >
-                    {isFinalizing ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full animate-spin mr-2" />
-                        Finalizing...
-                      </>
-                    ) : (
-                      <>
-                        <Cloud className="w-4 h-4 mr-2" />
-                        Finalize
-                      </>
-                    )}
-                  </Button>
-                )}
-                {isCampaign && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 rounded text-xs text-emerald-400 border border-emerald-500/30">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Finalized
-                  </div>
-                )}
-              </div>
-
-              {isFinalized && (
-                <div className="pt-4 border-t border-charcoal-800/70">
-                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                    <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Video finalized and uploaded to S3
-                    </p>
-                  </div>
-                </div>
-              )}
-          </motion.div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3 flex-wrap justify-center">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/dashboard')}
-              className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
-            >
-              Back to {isCampaign ? 'Dashboard' : 'Projects'}
-            </Button>
-            {isCampaign && project?.perfume_id && (
-              <Button
-                variant="hero"
-                onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
-                className="gap-2 transition-transform duration-200 hover:scale-105"
-              >
-                <Play className="w-4 h-4" />
-                Back to Perfume
-              </Button>
-            )}
-            {!isCampaign && (
-              <Button
-                variant="hero"
-                onClick={() => navigate('/create')}
-                className="gap-2 transition-transform duration-200 hover:scale-105"
-              >
-                <Play className="w-4 h-4" />
-                Create Another
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleDeleteProject}
-              disabled={deleting}
-              className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 transition-transform duration-200 hover:scale-105"
-            >
-              {deleting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </>
-              )}
-            </Button>
+            </motion.div>
           </div>
+
+          {/* RIGHT COLUMN: Scene Sidebar */}
+          {isCampaign && (
+            <div className="lg:col-span-4 flex flex-col h-full">
+              <SceneSidebar
+                campaignId={id}
+                variationIndex={selectedVariationIndex}
+                onVideoUpdate={handleVideoUpdate}
+                onEditStart={handleEditStart}
+                onEditError={handleEditError}
+                className="h-full"
+              />
+            </div>
+          )}
         </div>
       </main>
+
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
 }

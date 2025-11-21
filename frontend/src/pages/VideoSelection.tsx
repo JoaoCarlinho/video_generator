@@ -317,7 +317,7 @@ export function VideoSelection() {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+      <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
         <div className="max-w-6xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <button
@@ -355,7 +355,13 @@ export function VideoSelection() {
         </motion.div>
 
         {/* Video Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8 auto-rows-fr">
+        <div
+          className={`grid gap-5 mb-8 auto-rows-fr ${
+            videoUrls.length === 2
+              ? 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'
+              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+          }`}
+        >
           {videoUrls.map((videoUrl, index) => (
             <motion.div
               key={index}

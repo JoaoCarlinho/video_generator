@@ -28,15 +28,18 @@
 - **Async:** asyncio + aiohttp
 
 ### AI Services
-- **Video Generation:** Replicate API (Wān model: `minimax/video-01`)
+- **Video Generation:** 
+  - Current: ByteDance SeedAnce-1-Pro via Replicate API
+  - Future: Google Veo S3 (image-to-video with product/text integration)
 - **Music Generation:** Replicate API (MusicGen)
-- **Scene Planning:** OpenAI GPT-4o-mini
-- **Product Extraction:** rembg (local processing)
+- **Scene Planning:** OpenAI GPT-4o-mini (enhanced with Veo S3 prompts)
+- **Product Extraction:** rembg (local processing, may be simplified for Veo)
 
 ### Processing Libraries
-- **Compositing:** OpenCV + PIL (Pillow)
-- **Rendering:** FFmpeg (subprocess)
+- **Compositing:** OpenCV + PIL (DEPRECATED - being removed for Veo S3)
+- **Rendering:** FFmpeg (subprocess) - for final video concatenation only
 - **Audio:** pydub
+- **Text Overlay:** FFmpeg drawtext (DEPRECATED - being removed, Veo handles text)
 
 ### Infrastructure
 - **Frontend Hosting:** Vercel
@@ -553,5 +556,34 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
+## Phase 3: Editing Feature (January 20, 2025)
+
+### Editing Service
+- **EditService** (`app/services/edit_service.py`)
+  - LLM-based prompt modification
+  - Model: GPT-4o-mini
+  - Cost: ~$0.01 per edit
+  - Maintains scene structure and brand consistency
+
+### Editing Pipeline
+- **SceneEditPipeline** (`app/jobs/edit_pipeline.py`)
+  - 8-step edit pipeline
+  - Regenerates single scene
+  - Re-renders final video
+  - Updates edit history
+  - Cost: ~$0.21 per edit
+
+### Editing API Endpoints
+- `GET /api/campaigns/{id}/scenes` - Get all scenes
+- `POST /api/campaigns/{id}/scenes/{idx}/edit` - Edit a scene
+- `GET /api/campaigns/{id}/edit-history` - Get edit history
+
+### Database Schema
+- `campaigns.edit_history` (JSONB) - Edit history tracking
+- GIN index for efficient JSONB queries
+- Migration: `009_add_edit_history.py`
+
+---
+
+**Last Updated:** January 20, 2025 (Phase 3 Editing Feature - Backend Complete)
 

@@ -7,7 +7,7 @@ FROM public.ecr.aws/lambda/python:3.11
 # wget, tar, xz for downloading FFmpeg
 # gcc-c++, cmake for building Python packages with C++ extensions (like soxr)
 # Development tools for building audio libraries
-# mesa-libGL, mesa-libGLU for OpenCV/video processing graphics libraries
+# mesa-libGL, mesa-libGLU for OpenCV/video processings graphics libraries
 # libXext, libXrender, libSM, libICE for X11 graphics support
 # fontconfig, freetype, fribidi for text rendering support
 RUN yum update -y && \
@@ -82,3 +82,46 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 LABEL maintainer="AI Ad Video Generator"
 LABEL description="AWS Lambda worker for video generation via SQS"
 LABEL version="1.0.0"
+# Dockerfile for FastAPI Backend
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Set Python environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    build-essential \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the API server
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+

@@ -4,20 +4,75 @@ Handles perfume CRUD operations.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
 from typing import Optional, List
+import boto3
+from urllib.parse import urlparse
+import io
+from PIL import Image
 
 from app.database.connection import get_db
 from app.database import crud
 from app.api.auth import get_current_brand_id, get_current_user_id, verify_perfume_ownership
 from app.models.schemas import PerfumeDetail, PerfumeCreate, PaginatedPerfumes, PerfumeGender
-from app.utils.s3_utils import upload_perfume_image
+from app.utils.s3_utils import upload_perfume_image, get_s3_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Import rembg for background removal
+try:
+    from rembg import remove as rembg_remove
+    REMBG_AVAILABLE = True
+except ImportError:
+    logger.warning("rembg not available - background removal will be skipped")
+    REMBG_AVAILABLE = False
+    rembg_remove = None
+
 router = APIRouter()
+
+
+async def remove_background_from_image(image_bytes: bytes) -> bytes:
+    """
+    Remove background from image bytes using rembg.
+    
+    Args:
+        image_bytes: Original image bytes
+        
+    Returns:
+        Image bytes with background removed (PNG format with transparency)
+    """
+    if not REMBG_AVAILABLE or rembg_remove is None:
+        logger.warning("rembg not available - returning original image")
+        return image_bytes
+    
+    try:
+        # Open image from bytes
+        input_image = Image.open(io.BytesIO(image_bytes))
+        
+        # Ensure RGB mode for rembg
+        if input_image.mode != "RGB" and input_image.mode != "RGBA":
+            input_image = input_image.convert("RGB")
+        
+        # Remove background
+        output_image = rembg_remove(input_image)
+        
+        # Convert to bytes (PNG format to preserve transparency)
+        output_buffer = io.BytesIO()
+        output_image.save(output_buffer, format="PNG")
+        output_bytes = output_buffer.getvalue()
+        
+        logger.info(f"✅ Background removed: {len(image_bytes)} bytes → {len(output_bytes)} bytes")
+        return output_bytes
+        
+    except Exception as e:
+        logger.error(f"Error removing background: {e}")
+        # Fallback to original image if background removal fails
+        logger.warning("Falling back to original image")
+        return image_bytes
 
 
 @router.post(
@@ -133,20 +188,33 @@ async def create_perfume(
         front_content = await front_image.read()
         front_image.file.seek(0)
         
-        # Upload front image (required)
-        logger.info(f"📤 Uploading front image for perfume {perfume_id} to brand {brand_id}")
-        front_result = await upload_perfume_image(str(brand_id), str(perfume_id), "front", front_content, front_image.filename)
+        # Remove background from front image before uploading
+        logger.info(f"🎨 Removing background from front image for perfume {perfume_id}")
+        front_content_processed = await remove_background_from_image(front_content)
+        
+        # Upload front image (required) - use .png extension since we're saving as PNG with transparency
+        front_filename = front_image.filename or "front.png"
+        if not front_filename.lower().endswith('.png'):
+            front_filename = front_filename.rsplit('.', 1)[0] + '.png'
+        
+        logger.info(f"📤 Uploading front image (background removed) for perfume {perfume_id} to brand {brand_id}")
+        front_result = await upload_perfume_image(str(brand_id), str(perfume_id), "front", front_content_processed, front_filename)
         front_url = front_result["url"]
         logger.info(f"✅ Front image uploaded: {front_url}")
         
-        # Upload optional images
+        # Upload optional images (also remove backgrounds)
         back_url = None
         if back_image:
             back_image.file.seek(0)
             back_content = await back_image.read()
             back_image.file.seek(0)
-            logger.info(f"📤 Uploading back image for perfume {perfume_id}")
-            back_result = await upload_perfume_image(str(brand_id), str(perfume_id), "back", back_content, back_image.filename)
+            logger.info(f"🎨 Removing background from back image for perfume {perfume_id}")
+            back_content_processed = await remove_background_from_image(back_content)
+            back_filename = back_image.filename or "back.png"
+            if not back_filename.lower().endswith('.png'):
+                back_filename = back_filename.rsplit('.', 1)[0] + '.png'
+            logger.info(f"📤 Uploading back image (background removed) for perfume {perfume_id}")
+            back_result = await upload_perfume_image(str(brand_id), str(perfume_id), "back", back_content_processed, back_filename)
             back_url = back_result["url"]
             logger.info(f"✅ Back image uploaded: {back_url}")
         
@@ -155,8 +223,13 @@ async def create_perfume(
             top_image.file.seek(0)
             top_content = await top_image.read()
             top_image.file.seek(0)
-            logger.info(f"📤 Uploading top image for perfume {perfume_id}")
-            top_result = await upload_perfume_image(str(brand_id), str(perfume_id), "top", top_content, top_image.filename)
+            logger.info(f"🎨 Removing background from top image for perfume {perfume_id}")
+            top_content_processed = await remove_background_from_image(top_content)
+            top_filename = top_image.filename or "top.png"
+            if not top_filename.lower().endswith('.png'):
+                top_filename = top_filename.rsplit('.', 1)[0] + '.png'
+            logger.info(f"📤 Uploading top image (background removed) for perfume {perfume_id}")
+            top_result = await upload_perfume_image(str(brand_id), str(perfume_id), "top", top_content_processed, top_filename)
             top_url = top_result["url"]
             logger.info(f"✅ Top image uploaded: {top_url}")
         
@@ -165,8 +238,13 @@ async def create_perfume(
             left_image.file.seek(0)
             left_content = await left_image.read()
             left_image.file.seek(0)
-            logger.info(f"📤 Uploading left image for perfume {perfume_id}")
-            left_result = await upload_perfume_image(str(brand_id), str(perfume_id), "left", left_content, left_image.filename)
+            logger.info(f"🎨 Removing background from left image for perfume {perfume_id}")
+            left_content_processed = await remove_background_from_image(left_content)
+            left_filename = left_image.filename or "left.png"
+            if not left_filename.lower().endswith('.png'):
+                left_filename = left_filename.rsplit('.', 1)[0] + '.png'
+            logger.info(f"📤 Uploading left image (background removed) for perfume {perfume_id}")
+            left_result = await upload_perfume_image(str(brand_id), str(perfume_id), "left", left_content_processed, left_filename)
             left_url = left_result["url"]
             logger.info(f"✅ Left image uploaded: {left_url}")
         
@@ -175,8 +253,13 @@ async def create_perfume(
             right_image.file.seek(0)
             right_content = await right_image.read()
             right_image.file.seek(0)
-            logger.info(f"📤 Uploading right image for perfume {perfume_id}")
-            right_result = await upload_perfume_image(str(brand_id), str(perfume_id), "right", right_content, right_image.filename)
+            logger.info(f"🎨 Removing background from right image for perfume {perfume_id}")
+            right_content_processed = await remove_background_from_image(right_content)
+            right_filename = right_image.filename or "right.png"
+            if not right_filename.lower().endswith('.png'):
+                right_filename = right_filename.rsplit('.', 1)[0] + '.png'
+            logger.info(f"📤 Uploading right image (background removed) for perfume {perfume_id}")
+            right_result = await upload_perfume_image(str(brand_id), str(perfume_id), "right", right_content_processed, right_filename)
             right_url = right_result["url"]
             logger.info(f"✅ Right image uploaded: {right_url}")
         
@@ -326,6 +409,133 @@ async def get_perfume(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve perfume"
+        )
+
+
+@router.get(
+    "/{perfume_id}/image/{angle}",
+    summary="Stream perfume image",
+    description="Stream a perfume image from S3 through the backend (with CORS support)."
+)
+async def stream_perfume_image(
+    perfume_id: UUID,
+    angle: str,
+    _: bool = Depends(verify_perfume_ownership),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream a perfume image file for display in the browser (with CORS support).
+    
+    This endpoint streams the image file from S3 through the backend,
+    adding proper CORS headers to allow frontend to access it.
+    
+    **Path Parameters:**
+    - perfume_id: UUID of the perfume
+    - angle: Image angle ('front', 'back', 'top', 'left', 'right')
+    
+    **Response:** 
+    - Content-Type: image/png, image/jpeg, or image/webp
+    - Image file as binary stream with CORS headers
+    
+    **Errors:**
+    - 404: Perfume not found or image not available
+    - 403: Not authorized
+    - 400: Invalid angle
+    """
+    try:
+        # Validate angle
+        valid_angles = ['front', 'back', 'top', 'left', 'right']
+        if angle not in valid_angles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid angle: {angle}. Must be one of: {', '.join(valid_angles)}"
+            )
+        
+        # Get perfume and verify ownership (done via dependency)
+        perfume = crud.get_perfume_by_id(db, perfume_id)
+        if not perfume:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfume not found"
+            )
+        
+        # Get image URL based on angle
+        image_url = None
+        if angle == 'front':
+            image_url = perfume.front_image_url
+        elif angle == 'back':
+            image_url = perfume.back_image_url
+        elif angle == 'top':
+            image_url = perfume.top_image_url
+        elif angle == 'left':
+            image_url = perfume.left_image_url
+        elif angle == 'right':
+            image_url = perfume.right_image_url
+        
+        if not image_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Image not available for angle: {angle}"
+            )
+        
+        # Extract S3 key from URL
+        # URL format: https://bucket.s3.region.amazonaws.com/key
+        parsed_url = urlparse(image_url)
+        s3_key = parsed_url.path.lstrip('/')
+        
+        # Remove bucket name from key if present
+        if s3_key.startswith(settings.s3_bucket_name + '/'):
+            s3_key = s3_key[len(settings.s3_bucket_name) + 1:]
+        
+        logger.info(f"🖼️ Streaming perfume image from S3: {s3_key}")
+        
+        # Get S3 client
+        s3_client = get_s3_client()
+        
+        try:
+            # Download from S3
+            response = s3_client.get_object(
+                Bucket=settings.s3_bucket_name,
+                Key=s3_key
+            )
+            
+            image_data = response['Body'].read()
+            content_type = response.get('ContentType', 'image/png')
+            
+            logger.info(f"✅ Streamed image from S3: {s3_key} ({len(image_data)} bytes)")
+            
+            # Stream the image file to client with CORS headers
+            return StreamingResponse(
+                iter([image_data]),
+                media_type=content_type,
+                headers={
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET',
+                    'Access-Control-Allow-Headers': '*',
+                    'Cache-Control': 'public, max-age=3600'
+                }
+            )
+            
+        except s3_client.exceptions.NoSuchKey:
+            logger.error(f"❌ Image not found in S3: {s3_key}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found in storage"
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to stream image from S3: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to stream image from S3"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to stream image: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to stream image: {str(e)}"
         )
 
 

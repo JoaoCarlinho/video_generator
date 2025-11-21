@@ -6,7 +6,7 @@ import { CampaignCard } from '@/components/CampaignCard'
 import { useAuth } from '@/hooks/useAuth'
 import { usePerfumes } from '@/hooks/usePerfumes'
 import { useCampaigns } from '@/hooks/useCampaigns'
-import { Plus, ArrowLeft, Sparkles, LogOut, Package, ImageIcon, X } from 'lucide-react'
+import { Plus, ArrowLeft, Sparkles, LogOut, Package, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const CampaignDashboard = () => {
@@ -16,7 +16,6 @@ export const CampaignDashboard = () => {
   const { getPerfume } = usePerfumes()
   const { campaigns, loading, error, fetchCampaigns, deleteCampaign } = useCampaigns()
   const [perfume, setPerfume] = useState<any>(null)
-  const [perfumeLoading, setPerfumeLoading] = useState(true)
 
   useEffect(() => {
     if (perfumeId) {
@@ -26,7 +25,6 @@ export const CampaignDashboard = () => {
         .catch((err) => {
           console.error('Error fetching perfume:', err)
         })
-        .finally(() => setPerfumeLoading(false))
 
       // Fetch campaigns for this perfume
       fetchCampaigns(perfumeId)
@@ -97,22 +95,27 @@ export const CampaignDashboard = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+      <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
         <div className="max-w-6xl mx-auto w-full px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between relative">
+            {/* Left: Back Button */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={handleBackToDashboard}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
               >
-                <ArrowLeft className="w-5 h-5 text-muted-gray" />
-                <span className="text-muted-gray">Back to Dashboard</span>
+                <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />
+                <span className="text-muted-gray group-hover:text-gold transition-colors duration-200">Back to Perfumes</span>
               </button>
-              <div className="hidden md:block ml-4 pl-4 border-l border-charcoal-800/60">
-                <h1 className="text-sm font-semibold text-off-white">Campaign Dashboard</h1>
-              </div>
             </div>
+            
+            {/* Center: Title */}
+            <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
+              <h1 className="text-sm font-semibold text-off-white">Campaign Dashboard</h1>
+            </div>
+            
+            {/* Right: Logo and Actions */}
             <div className="flex items-center gap-4">
               <Link to="/" className="flex items-center gap-2">
                 <div className="p-2 bg-gold rounded-lg shadow-gold">
@@ -140,64 +143,15 @@ export const CampaignDashboard = () => {
           initial="hidden"
           animate="visible"
         >
-            {/* Perfume Header */}
-            {perfumeLoading ? (
-              <div className="h-40 bg-charcoal-900/60 rounded-xl border border-charcoal-800/70 animate-pulse" />
-            ) : perfume ? (
-              <motion.div
-                variants={itemVariants}
-                className="bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-xl p-6"
-              >
-                <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-                  {/* Perfume Image */}
-                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-lg border-2 border-gold overflow-hidden bg-charcoal-800 flex-shrink-0">
-                    {perfume.front_image_url ? (
-                      <img
-                        src={perfume.front_image_url}
-                        alt={perfume.perfume_name}
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-12 h-12 text-muted-gray" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Perfume Info */}
-                  <div className="flex-1">
-                    <h1 className="text-3xl sm:text-4xl font-bold text-off-white mb-2">
-                      {perfume.perfume_name}
-                    </h1>
-                    <div className="flex flex-wrap items-center gap-4 text-muted-gray">
-                      <span className="capitalize">{perfume.perfume_gender}</span>
-                      <span>•</span>
-                      <span>{campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div variants={itemVariants} className="text-center py-12">
-                <p className="text-red-400">Failed to load perfume details</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/dashboard')}
-                  className="mt-4"
-                >
-                  Back to Dashboard
-                </Button>
-              </motion.div>
-            )}
-
             {/* Campaigns Section */}
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-off-white mb-2">Campaigns</h2>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-off-white mb-2">
+                    {perfume ? perfume.perfume_name : 'Campaigns'}
+                  </h2>
                   <p className="text-muted-gray text-sm">
-                    {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} for this perfume
+                    {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
                   </p>
                 </div>
                 <Button

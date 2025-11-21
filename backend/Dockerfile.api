@@ -1,32 +1,40 @@
-# AWS Lambda Docker image for FastAPI backend API
-# Based on official AWS Lambda Python runtime
-FROM public.ecr.aws/lambda/python:3.11
+# FastAPI Backend API Server
+# Standard Python runtime for containerized deployment
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
 
 # Copy requirements file
-COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+COPY requirements.txt /app/
 
-# Install Python dependencies including mangum for Lambda integration
+# Install Python dependencies
 # Use --no-cache-dir to reduce image size
 # Upgrade pip first for better dependency resolution
 # Set CXX environment variable for soxr compilation
 # Note: soxr==0.3.7 is pinned in requirements.txt for nanobind compatibility
 ENV CXX=g++
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt && \
-    pip install --no-cache-dir mangum
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends g++ && \
+    pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/requirements.txt && \
+    pip install --no-cache-dir uvicorn[standard] && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy application code
-COPY app/ ${LAMBDA_TASK_ROOT}/app/
+COPY app/ /app/app/
 
-# Copy API Lambda handler
-COPY api_handler.py ${LAMBDA_TASK_ROOT}/
+# Expose API port
+EXPOSE 8000
 
-# Set Lambda handler
-# Format: filename.function_name
-CMD ["api_handler.handler"]
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
 
-# Environment variables will be set in Lambda function configuration
-# Required env vars:
+# Run FastAPI application with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Required environment variables (set via container runtime):
 # - DATABASE_URL
 # - SUPABASE_URL
 # - SUPABASE_SERVICE_ROLE_KEY
@@ -36,15 +44,11 @@ CMD ["api_handler.handler"]
 # - SQS_QUEUE_URL
 # - REPLICATE_API_TOKEN
 # - OPENAI_API_KEY
-
-# Lambda runtime will provide:
 # - AWS_ACCESS_KEY_ID
 # - AWS_SECRET_ACCESS_KEY
-# - AWS_SESSION_TOKEN
-# - AWS_REGION (also set by us for consistency)
 
 # Labels for documentation
 LABEL maintainer="AI Ad Video Generator"
-LABEL description="AWS Lambda API for FastAPI backend via Function URL"
+LABEL description="FastAPI Backend API Server"
 LABEL version="1.0.0"
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
@@ -10,8 +10,17 @@ import { Link } from 'react-router-dom'
 
 export const Onboarding = () => {
   const navigate = useNavigate()
-  const { onboardBrand, loading, error, brand } = useBrand()
+  const { onboardBrand, loading, error, brand, fetchBrand } = useBrand()
   const { logout } = useAuth()
+  const isNavigatingRef = useRef(false) // Prevent navigation loops
+
+  // State declarations
+  const [brandName, setBrandName] = useState('')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -22,20 +31,17 @@ export const Onboarding = () => {
     }
   }
 
-  // Check if user already has a brand and redirect
+  // Check if user already has a brand and redirect (only if not already navigating)
   useEffect(() => {
-    if (brand && brand.onboarding_completed) {
+    if (brand && brand.onboarding_completed && !isNavigatingRef.current && !isSubmitting) {
       // User already completed onboarding, redirect to dashboard
-      navigate('/dashboard', { replace: true })
+      isNavigatingRef.current = true
+      // Small delay to ensure state is fully propagated
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true })
+      }, 100)
     }
-  }, [brand, navigate])
-
-  const [brandName, setBrandName] = useState('')
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string>('')
-  const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  }, [brand, navigate, isSubmitting])
 
   // Handle logo upload
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,40 +130,61 @@ export const Onboarding = () => {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent any event bubbling that might cause issues
     setSubmitError(null)
 
     if (!validateForm()) {
-      return
+      return false
     }
 
     if (!logoFile || !guidelinesFile) {
       setSubmitError('Please upload both logo and guidelines')
-      return
+      return false
+    }
+
+    // Prevent multiple submissions
+    if (isNavigatingRef.current || isSubmitting) {
+      return false
     }
 
     setIsSubmitting(true)
+    isNavigatingRef.current = true // Set flag to prevent useEffect navigation
 
     try {
-      await onboardBrand(brandName, logoFile, guidelinesFile)
-      // Refresh brand data and redirect to dashboard on success
-      // Small delay to ensure brand data is synced
-      setTimeout(() => {
-      navigate('/dashboard')
-      }, 500)
+      // onboardBrand will update the brand state via setBrand(response.data)
+      const updatedBrand = await onboardBrand(brandName, logoFile, guidelinesFile)
+      
+      // Verify the brand was created successfully
+      if (!updatedBrand || !updatedBrand.onboarding_completed) {
+        throw new Error('Onboarding was not completed successfully')
+      }
+      
+      // Force a brand fetch to ensure state is synced
+      await fetchBrand()
+      
+      // Use window.location.href to force a full page reload
+      // This ensures all components (including ProtectedRoute) see the fresh brand state
+      // This prevents navigation loops caused by stale state
+      window.location.href = '/dashboard'
     } catch (err: any) {
+      // Reset navigation flag on error
+      isNavigatingRef.current = false
+      
       // Handle 409 Conflict - brand already exists
       if (err?.response?.status === 409) {
-        // Brand was already created, just redirect to dashboard
-        setSubmitError('Brand already exists. Redirecting to dashboard...')
-        setTimeout(() => {
-          navigate('/dashboard')
-        }, 1500)
+        // Brand was already created, fetchBrand will be called by onboardBrand
+        // Fetch brand again to ensure state is updated
+        await fetchBrand()
+        // Use window.location.href to force a full page reload
+        // This ensures all components see the fresh brand state
+        window.location.href = '/dashboard'
       } else {
-      setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
+        setSubmitError(err.message || 'Failed to complete onboarding. Please try again.')
+        setIsSubmitting(false)
       }
-    } finally {
-      setIsSubmitting(false)
     }
+    
+    return false // Prevent any default form submission
   }
 
   return (
@@ -170,7 +197,7 @@ export const Onboarding = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+      <nav className="relative z-50 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/30 sticky top-0">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
@@ -228,7 +255,6 @@ export const Onboarding = () => {
                   onChange={(e) => setBrandName(e.target.value)}
                   placeholder="e.g., Chanel, Dior, Tom Ford"
                   required
-                  helpText="This will be used across all your campaigns"
                   className="bg-slate-800 border-slate-700 text-off-white"
                 />
               </div>
@@ -299,13 +325,15 @@ export const Onboarding = () => {
                     </button>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold transition-colors bg-slate-800/50">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <UploadCloud className="w-8 h-8 mb-2 text-muted-gray group-hover:text-gold transition-colors" />
-                      <p className="mb-2 text-sm text-muted-gray">
-                        <span className="font-semibold">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-muted-gray">PDF or DOCX (MAX. 10MB)</p>
+                  <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold transition-colors bg-slate-800/50">
+                    <div className="flex items-center gap-3">
+                      <UploadCloud className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-muted-gray">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-muted-gray">PDF or DOCX (MAX. 10MB)</p>
+                      </div>
                     </div>
                     <input
                       type="file"

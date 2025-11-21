@@ -1,5 +1,6 @@
 """RQ Background job for end-to-end  product video generation pipeline.
 
+VEO S3 MIGRATION: Simplified 5-step pipeline (November 2025)
 This module contains the main generation pipeline that orchestrates all services:
 1. Product Extraction (remove background)
 2. Scene Planning (LLM-based with product shot grammar constraints)
@@ -9,13 +10,17 @@ This module contains the main generation pipeline that orchestrates all services
 6. Audio Generation (luxury ambient music)
 7. Final Rendering
 
-PERFUME-SPECIFIC FEATURES (Phase 8):
-- Perfume shot grammar validation
+REMOVED STEPS (Veo S3 handles natively):
+- ❌ Compositing (product overlay) - Veo integrates product naturally
+- ❌ Text Overlay Rendering - Veo embeds text in scene
+
+PERFUME-SPECIFIC FEATURES:
+- User-first creative approach (user vision = primary, grammar = secondary)
+- Perfume shot grammar as visual language library (not strict rules)
 - Perfume name extraction and storage
-- Grammar compliance checking
 - TikTok vertical optimization (9:16 hardcoded)
 
-S3-FIRST ARCHITECTURE (Phase 2):
+S3-FIRST ARCHITECTURE:
 - Inputs (guidelines, logo, products) fetched from S3
 - Intermediate files uploaded to S3 draft folders
 - Final videos uploaded to S3 final folders
@@ -43,8 +48,8 @@ from app.models.schemas import AdProject, Scene, StyleSpec
 from app.services.scene_planner import ScenePlanner
 from app.services.product_extractor import ProductExtractor
 from app.services.video_generator import VideoGenerator
-from app.services.compositor import Compositor
-from app.services.text_overlay import TextOverlayRenderer
+# REMOVED: Compositor - Veo S3 integrates product naturally
+# REMOVED: TextOverlayRenderer - Veo S3 generates text in scene
 from app.services.audio_engine import AudioEngine
 from app.services.renderer import Renderer
 from app.services.reference_image_extractor import ReferenceImageStyleExtractor
@@ -856,265 +861,10 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"Video generation failed: {e}")
             raise
 
-    # Removed _save_videos_locally since we now upload directly to S3
-    # Removed _save_variations_locally since we store S3 URLs directly
-
-    @timed_step("Product Compositing")
-    async def _composite_products(
-        self,
-        scene_videos: List[str],
-        product_url: str,
-        ad_project: AdProject,
-        progress_start: int = 40,
-        variation_index: Optional[int] = None,
-    ) -> List[str]:
-        """Composite product onto each scene video using scene-specific positioning."""
-        try:
-            update_campaign(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
-
-            from app.config import settings
-            compositor = Compositor(
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                s3_bucket_name=settings.s3_bucket_name,
-                aws_region=settings.aws_region,
-            )
-
-            # Composite products for each scene that has use_product=True
-            composited = []
-            for i, (video_url, scene) in enumerate(zip(scene_videos, ad_project.scenes)):
-                if scene.use_product:
-                    position = scene.product_position or "center"
-                    # Use explicit scale if set, otherwise let compositor use role-based scaling
-                    scale = scene.product_scale if scene.product_scale is not None else None
-                    opacity = scene.product_opacity or 1.0
-                    scene_role = scene.role  # Pass scene role for product-specific scaling
-                    
-                    logger.info(
-                        f"Compositing product bottle on scene {i}/{len(scene_videos)}: "
-                        f"role={scene_role}, position={position}, "
-                        f"scale={'auto' if scale is None else f'{scale:.2f}'}, opacity={opacity:.2f}"
-                    )
-                    
-                    composited_url = await compositor.composite_product(
-                        background_video_url=video_url,
-                        product_image_url=product_url,
-                        project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
-                        position=position,
-                        scale=scale,  # None = use role-based scaling
-                        opacity=opacity,
-                        scene_index=i,
-                        scene_role=scene_role,  # Pass role for product scaling
-                        variation_index=variation_index,  # Pass variation index
-                    )
-                    composited.append(composited_url)
-                else:
-                    composited.append(video_url)
-                    logger.debug(f"Skipping scene {i} (use_product=False)")
-                progress = progress_start + (i / len(ad_project.scenes)) * 15
-                update_campaign(
-                    self.db, self.campaign_id, status="processing", progress=int(progress)
-                )
-
-            product_scenes_count = sum(1 for s in ad_project.scenes if s.use_product)
-            logger.info(
-                f"Composited {len(composited)} videos "
-                f"({product_scenes_count} scenes with product, {len(composited) - product_scenes_count} skipped)"
-            )
-            return composited
-
-        except Exception as e:
-            logger.error(f"Compositing failed: {e}")
-            raise
-
-    @timed_step("Logo Compositing")
-    async def _composite_logos(
-        self,
-        scene_videos: List[str],
-        logo_url: str,
-        ad_project: AdProject,
-        progress_start: int = 50,
-        variation_index: Optional[int] = None,
-    ) -> List[str]:
-        """Composite logo onto scenes that have use_logo=True."""
-        try:
-            update_campaign(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
-            
-            from app.config import settings
-            compositor = Compositor(
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                s3_bucket_name=settings.s3_bucket_name,
-                aws_region=settings.aws_region,
-            )
-            
-            # Composite logo only for scenes with use_logo=True
-            result = []
-            for i, (video_url, scene) in enumerate(zip(scene_videos, ad_project.scenes)):
-                if scene.use_logo:
-                    position = scene.logo_position or "top_right"
-                    scale = scene.logo_scale or 0.1
-                    opacity = scene.logo_opacity or 0.9
-                    
-                    logger.info(f"Compositing logo on scene {i}: {position} at {scale*100:.0f}% scale")
-                    
-                    logo_url_result = await compositor.composite_logo(
-                        video_url=video_url,
-                        logo_image_url=logo_url,
-                        project_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
-                        position=position,
-                        scale=scale,
-                        opacity=opacity,
-                        scene_index=i,
-                        variation_index=variation_index,  # Pass variation index
-                    )
-                    result.append(logo_url_result)
-                else:
-                    result.append(video_url)
-                    logger.debug(f"Skipping logo for scene {i} (use_logo=False)")
-                
-                progress = progress_start + (i / len(ad_project.scenes)) * 10
-                update_campaign(
-                    self.db, self.campaign_id, status="processing", progress=int(progress)
-                )
-            
-            logo_scenes_count = sum(1 for s in ad_project.scenes if s.use_logo)
-            logger.info(
-                f"Logo composited on {logo_scenes_count} scenes, "
-                f"{len(result) - logo_scenes_count} scenes without logo"
-            )
-            return result
-            
-        except Exception as e:
-            logger.error(f"Logo compositing failed: {e}")
-            logger.warning("Continuing pipeline without logo compositing")
-            return scene_videos
-
-    async def _add_text_overlays(
-        self, video_urls: List[str], ad_project: AdProject, progress_start: int = 60, variation_index: Optional[int] = None
-    ) -> List[str]:
-        """Render text overlays on videos with luxury product typography constraints."""
-        try:
-            update_campaign(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
-
-            from app.config import settings
-            renderer = TextOverlayRenderer(
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                s3_bucket_name=settings.s3_bucket_name,
-                aws_region=settings.aws_region,
-            )
-            
-            # Add text overlays to TikTok vertical videos (9:16) with luxury typography
-            logger.info("Adding luxury product text overlays to TikTok vertical videos")
-
-            # Collect all text overlays for validation
-            text_overlays = []
-            for i, scene in enumerate(ad_project.scenes):
-                overlay = scene.overlay
-                if overlay and overlay.text:
-                    text_overlays.append(i)
-            
-            # Validate max text blocks (3-4 max for product ads)
-            max_text_blocks = 4
-            if len(text_overlays) > max_text_blocks:
-                logger.warning(
-                    f"Too many text overlays: {len(text_overlays)} (max {max_text_blocks}). "
-                    f"Only first {max_text_blocks} scenes will have text overlays."
-                )
-                # Track which scenes should have overlays
-                allowed_indices = set(text_overlays[:max_text_blocks])
-            else:
-                allowed_indices = set(text_overlays)
-
-            # Add overlays to each scene
-            overlaid = []
-            text_overlay_count = 0
-            for i, (video_url, scene) in enumerate(zip(video_urls, ad_project.scenes)):
-                overlay = scene.overlay
-                if overlay and overlay.text and i in allowed_indices:
-                    # Determine text type based on scene role and position
-                    text_type = self._infer_text_type(scene, overlay, i, len(ad_project.scenes))
-                    
-                    # Use product-specific luxury text overlay
-                    overlaid_url = await renderer.add_product_text_overlay(
-                        video_url=video_url,
-                        text=overlay.text,
-                        text_type=text_type,
-                        position=overlay.position or "bottom",
-                        duration=overlay.duration or min(scene.duration, 4.0),  # Max 4s per grammar
-                        start_time=0.0,  # Start at beginning of scene
-                        font_size=overlay.font_size or 48,
-                        color="#FFFFFF",  # Default white color (can be overridden by style_spec in future)
-                        animation="fade_in",  # Default animation
-                        campaign_id=str(self.campaign_id),  # LocalStorageManager uses project_id naming
-                        scene_index=i,
-                        variation_index=variation_index,  # Pass variation index
-                    )
-                    text_overlay_count += 1
-                else:
-                    overlaid_url = video_url
-                overlaid.append(overlaid_url)
-                progress = progress_start + (i / len(ad_project.scenes)) * 10
-                update_campaign(
-                    self.db, self.campaign_id, status="processing", progress=int(progress)
-                )
-
-            logger.info(f"Added {text_overlay_count} luxury text overlays to videos")
-            return overlaid
-
-        except Exception as e:
-            logger.error(f"Text overlay rendering failed: {e}")
-            raise
-
-    def _infer_text_type(self, scene: Any, overlay: Any, scene_index: int, total_scenes: int) -> str:
-        """Infer text type for product ad text overlay.
-        
-        Args:
-            scene: Scene object
-            overlay: Overlay object
-            scene_index: Current scene index (0-based)
-            total_scenes: Total number of scenes
-            
-        Returns:
-            Text type: 'product_name', 'brand_name', 'tagline', or 'cta'
-        """
-        # Last scene is typically brand moment with product/brand name
-        is_last_scene = scene_index == total_scenes - 1
-        
-        # Check scene role
-        scene_role = getattr(scene, 'role', '').lower()
-        
-        # Infer from text content (simple heuristics)
-        text_lower = overlay.text.lower()
-        
-        # Check if text contains brand indicators
-        if any(word in text_lower for word in ['discover', 'explore', 'experience', 'unveil']):
-            return 'tagline'
-        
-        # Check if text is short (likely product/brand name)
-        word_count = len(overlay.text.split())
-        if word_count <= 3 and is_last_scene:
-            # Could be product name or brand name - default to product_name
-            return 'product_name'
-        
-        # CTA scenes
-        if scene_role in ['cta', 'call_to_action'] or 'shop' in text_lower or 'buy' in text_lower:
-            return 'cta'
-        
-        # Default based on scene position
-        if is_last_scene:
-            return 'brand_name'  # Last scene typically shows brand
-        elif scene_index == 0:
-            return 'tagline'  # First scene might have tagline
-        else:
-            return 'tagline'  # Default to tagline
+    # REMOVED: _composite_products() - Veo S3 integrates product naturally (no manual overlay needed)
+    # REMOVED: _composite_logos() - Veo S3 integrates logo naturally (no manual overlay needed)
+    # REMOVED: _add_text_overlays() - Veo S3 generates text embedded in scene (not overlaid)
+    # REMOVED: _infer_text_type() - No longer needed without manual text rendering
 
     @timed_step("Audio Generation")
     async def _generate_audio(self, campaign: Any, product: Any, ad_project: AdProject, progress_start: int = 75) -> str:
@@ -1644,7 +1394,10 @@ BRAND GUIDELINES (extracted from guidelines document):
                 video_metadata=ad_project.video_metadata,
             )
             
-            # STEP 1: Generate Videos
+            # VEO S3 MIGRATION: Simplified 5-step pipeline (removed compositor + text overlay)
+            # Product and text now integrated by Veo S3 during video generation
+            
+            # STEP 1: Generate Videos (Veo S3 integrates product + text natively)
             video_start = progress_start + (var_idx * 5)
             replicate_videos = await self._generate_scene_videos(
                 campaign, variation_ad_project, progress_start=video_start
@@ -1653,37 +1406,13 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Upload scene videos to S3 (Draft)
             scene_videos = await self._upload_scene_videos_to_s3(replicate_videos, variation_index=var_idx)
             
-            # STEP 2: Composite Product (if available)
-            if product_url:
-                composited_paths = await self._composite_products(
-                    scene_videos, product_url, variation_ad_project, progress_start=video_start + 10, variation_index=var_idx
-                )
-                # Upload composited videos to S3 and update paths
-                scene_videos = await self._upload_scene_videos_to_s3(composited_paths, variation_index=var_idx)
+            # REMOVED STEP 2: Composite Product - Veo S3 integrates naturally
+            # REMOVED STEP 3: Composite Logo - Veo S3 integrates naturally
+            # REMOVED STEP 4: Add Text Overlays - Veo S3 embeds text in scene
             
-            # STEP 3: Composite Logo (if available)
-            logo_url = variation_ad_project.brand.get('logo_url') if isinstance(variation_ad_project.brand, dict) else None
-            if logo_url:
-                logo_paths = await self._composite_logos(
-                    scene_videos,
-                    logo_url,
-                    variation_ad_project,
-                    progress_start=video_start + 15,
-                    variation_index=var_idx
-                )
-                # Upload logo composited videos to S3
-                scene_videos = await self._upload_scene_videos_to_s3(logo_paths, variation_index=var_idx)
-            
-            # STEP 4: Add Text Overlays
-            text_paths = await self._add_text_overlays(
-                scene_videos, variation_ad_project, progress_start=video_start + 20, variation_index=var_idx
-            )
-            # Upload text overlay videos to S3
-            scene_videos = await self._upload_scene_videos_to_s3(text_paths, variation_index=var_idx)
-            
-            # STEP 5: Generate Audio (shared across variations, but we need it per variation)
+            # STEP 2: Generate Audio (formerly step 5)
             # Audio engine saves locally, returns local path
-            audio_local_path = await self._generate_audio(campaign, product, variation_ad_project, progress_start=video_start + 25)
+            audio_local_path = await self._generate_audio(campaign, perfume, variation_ad_project, progress_start=video_start + 45)
             
             # Upload audio to S3 (Draft)
             audio_url_result = await upload_draft_music(
@@ -1695,9 +1424,9 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             audio_url = audio_url_result["url"]
             
-            # STEP 6: Render Final Video
+            # STEP 3: Render Final Video (formerly step 6)
             final_local_path = await self._render_final(
-                scene_videos, audio_url, variation_ad_project, progress_start=video_start + 30, variation_index=var_idx
+                scene_videos, audio_url, variation_ad_project, progress_start=video_start + 60, variation_index=var_idx
             )
             
             # Upload final video to S3 (Final)
