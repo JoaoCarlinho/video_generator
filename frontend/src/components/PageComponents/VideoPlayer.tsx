@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Play, Pause, Volume2, VolumeX, Download } from 'lucide-react'
+import { Play, Pause, Volume2, VolumeX, Download, Maximize, Minimize } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
 import { useVideoElementManager } from '@/utils/videoElementHelpers'
@@ -11,6 +11,7 @@ interface VideoPlayerProps {
   aspect: AspectRatio
   onDownload?: () => void
   isLoading?: boolean
+  size?: 'compact' | 'standard' | 'wide'
 }
 
 export const VideoPlayer = ({
@@ -19,24 +20,34 @@ export const VideoPlayer = ({
   aspect,
   onDownload,
   isLoading = false,
+  size = 'standard',
 }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isVideoReady, setIsVideoReady] = useState(false)
 
   // Initialize defensive video element manager
   const videoManager = useVideoElementManager({ debug: false })
 
   const togglePlay = () => {
-    if (videoRef.current) {
+    if (videoRef.current && videoUrl && isVideoReady) {
       if (isPlaying) {
         videoRef.current.pause()
+        setIsPlaying(false)
       } else {
-        videoRef.current.play()
+        videoRef.current.play().catch((err) => {
+          console.error('Failed to play video:', err)
+          setIsPlaying(false)
+        })
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
+    } else if (!isVideoReady) {
+      console.warn('Video not ready yet, cannot play')
     }
   }
 
@@ -54,34 +65,68 @@ export const VideoPlayer = ({
     }
   }
 
-  const handleLoadedMetadata = (e?: Event) => {
-    const video = e ? (e.target as HTMLVideoElement) : videoRef.current
-    if (video) {
-      setDuration(video.duration)
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration)
+      setIsVideoReady(true)
+      console.log('Video metadata loaded, ready to play')
     }
   }
 
-  // Defensive listener attachment when video element is available
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+
+    if (!isFullscreen) {
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen()
+      } else if ((containerRef.current as any).webkitRequestFullscreen) {
+        (containerRef.current as any).webkitRequestFullscreen()
+      } else if ((containerRef.current as any).mozRequestFullScreen) {
+        (containerRef.current as any).mozRequestFullScreen()
+      } else if ((containerRef.current as any).msRequestFullscreen) {
+        (containerRef.current as any).msRequestFullscreen()
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen()
+      } else if ((document as any).mozCancelFullScreen) {
+        (document as any).mozCancelFullScreen()
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen()
+      }
+    }
+  }
+
   useEffect(() => {
-    if (!videoRef.current) return
-
-    // Attach listeners defensively to handle cases where the video element
-    // might not be immediately available (e.g., dynamic loading)
-    const setupListeners = async () => {
-      await videoManager.attachListeners(videoRef.current!, {
-        onTimeUpdate: handleTimeUpdate,
-        onLoadedMetadata: handleLoadedMetadata,
-        onEnded: () => setIsPlaying(false),
-      })
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      ))
     }
 
-    setupListeners()
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
 
-    // Cleanup on unmount
     return () => {
-      videoManager.cleanup()
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
     }
-  }, [videoUrl]) // Re-attach when video URL changes
+  }, [])
+
+  // Reset video ready state when videoUrl changes
+  useEffect(() => {
+    setIsVideoReady(false)
+    setIsPlaying(false)
+  }, [videoUrl])
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value)
@@ -101,21 +146,90 @@ export const VideoPlayer = ({
     '16:9': 'aspect-video',
   }
 
+  const aspectLabels = {
+    '9:16': 'Vertical',
+    '1:1': 'Square',
+    '16:9': 'Horizontal',
+  }
+
+  const maxWidthClasses: Record<'compact' | 'standard' | 'wide', Record<'9:16' | '1:1' | '16:9', string>> = {
+    compact: {
+      '9:16': 'max-w-[180px] sm:max-w-[210px]',
+      '1:1': 'max-w-[220px] sm:max-w-[260px]',
+      '16:9': 'max-w-md',
+    },
+    standard: {
+      '9:16': 'max-w-[240px] sm:max-w-[300px]',
+      '1:1': 'max-w-[320px] sm:max-w-[380px]',
+      '16:9': 'max-w-2xl',
+    },
+    wide: {
+      '9:16': 'max-w-sm sm:max-w-md',
+      '1:1': 'max-w-md sm:max-w-lg',
+      '16:9': 'max-w-3xl sm:max-w-4xl',
+    },
+  }
+
+  const heightLimitClasses: Record<'compact' | 'standard' | 'wide', string> = {
+    compact: 'max-h-[360px]',
+    standard: 'max-h-[520px]',
+    wide: 'max-h-[640px]',
+  }
+
   return (
     <motion.div
-      className="space-y-4"
+      className="space-y-3 w-full"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
       {/* Player Container */}
-      <div className={`bg-slate-900 rounded-lg overflow-hidden border border-slate-700/50 ${aspectRatios[aspect]}`}>
+      <div 
+        ref={containerRef}
+        className={`bg-charcoal-900 overflow-hidden border border-charcoal-700/70 shadow-gold-lg ${
+          isFullscreen 
+            ? 'fixed inset-0 z-50 rounded-none border-0 w-screen h-screen' 
+            : `rounded-xl ${aspectRatios[aspect]} w-full ${maxWidthClasses[size][aspect]} ${heightLimitClasses[size]} mx-auto`
+        }`}
+      >
         {videoUrl ? (
-          <div className="relative w-full h-full bg-black group">
+          <div className={`relative bg-black group ${isFullscreen ? 'w-full h-full' : 'w-full h-full'}`}>
             <video
               ref={videoRef}
               src={videoUrl}
-              className="w-full h-full"
+              className={`${isFullscreen ? 'w-full h-full object-contain' : 'w-full h-full'}`}
+              preload="metadata"
+              playsInline
+              crossOrigin="anonymous"
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={() => setIsPlaying(false)}
+              onError={(e) => {
+                console.error('❌ Video loading error:', e)
+                console.error('❌ Video URL:', videoUrl)
+                console.error('❌ Video URL type:', typeof videoUrl)
+                console.error('❌ Video URL length:', videoUrl?.length)
+                const video = e.currentTarget
+                console.error('❌ Video error code:', video.error?.code)
+                console.error('❌ Video error message:', video.error?.message)
+                console.error('❌ Video network state:', video.networkState)
+                console.error('❌ Video ready state:', video.readyState)
+                setIsVideoReady(false)
+              }}
+              onLoadStart={() => {
+                console.log('Video loading started:', videoUrl)
+                setIsVideoReady(false)
+              }}
+              onCanPlay={() => {
+                setIsVideoReady(true)
+                console.log('Video can play:', videoUrl)
+              }}
+              onLoadedData={() => {
+                console.log('Video data loaded:', videoUrl)
+              }}
+              onStalled={() => {
+                console.warn('Video stalled:', videoUrl)
+              }}
             />
 
             {/* Play Button Overlay */}
@@ -125,21 +239,37 @@ export const VideoPlayer = ({
                 className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm"
                 whileHover={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
               >
-                <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-700 transition-colors">
-                  <Play className="w-8 h-8 text-gray-50 fill-gray-50" />
-                </div>
+                <motion.div
+                  className="w-16 h-16 bg-gold rounded-full flex items-center justify-center shadow-gold-lg"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Play className="w-8 h-8 text-gold-foreground fill-gold-foreground" />
+                </motion.div>
               </motion.button>
             )}
 
             {/* Top Controls */}
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="px-3 py-1 bg-black/50 backdrop-blur rounded text-sm text-gray-50 font-medium">
-                Horizontal
+              <div className="px-3 py-1 bg-black/60 backdrop-blur rounded-lg text-sm text-gold font-semibold border border-gold/30">
+                {aspectLabels[aspect]}
               </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleFullscreen}
+                className="text-gold hover:bg-gold/10 p-1.5 rounded-lg bg-black/60 backdrop-blur border border-gold/30"
+              >
+                {isFullscreen ? (
+                  <Minimize className="w-4 h-4" />
+                ) : (
+                  <Maximize className="w-4 h-4" />
+                )}
+              </Button>
             </div>
 
             {/* Bottom Controls */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
               {/* Progress Bar */}
               <input
                 type="range"
@@ -147,7 +277,10 @@ export const VideoPlayer = ({
                 max={duration || 0}
                 value={currentTime}
                 onChange={handleProgressChange}
-                className="w-full h-1 bg-slate-700 rounded cursor-pointer accent-indigo-600 mb-4"
+                className="w-full h-1.5 bg-olive-700/50 rounded-full cursor-pointer accent-gold mb-4 appearance-none"
+                style={{
+                  background: `linear-gradient(to right, #F3D9A4 0%, #F3D9A4 ${(currentTime / (duration || 1)) * 100}%, rgba(93, 107, 90, 0.5) ${(currentTime / (duration || 1)) * 100}%, rgba(93, 107, 90, 0.5) 100%)`
+                }}
               />
 
               {/* Controls */}
@@ -157,7 +290,7 @@ export const VideoPlayer = ({
                     size="sm"
                     variant="ghost"
                     onClick={togglePlay}
-                    className="text-gray-50 hover:bg-white/10 p-1"
+                    className="text-gold hover:bg-gold/10 p-1.5 rounded-lg"
                   >
                     {isPlaying ? (
                       <Pause className="w-4 h-4" />
@@ -170,7 +303,7 @@ export const VideoPlayer = ({
                     size="sm"
                     variant="ghost"
                     onClick={toggleMute}
-                    className="text-gray-50 hover:bg-white/10 p-1"
+                    className="text-gold hover:bg-gold/10 p-1.5 rounded-lg"
                   >
                     {isMuted ? (
                       <VolumeX className="w-4 h-4" />
@@ -179,44 +312,51 @@ export const VideoPlayer = ({
                     )}
                   </Button>
 
-                  <span className="text-xs text-gray-50 font-medium">
+                  <span className="text-xs text-gold font-medium">
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
 
-                {onDownload && (
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={onDownload}
-                    className="text-gray-50 hover:bg-white/10 p-1"
+                    onClick={toggleFullscreen}
+                    className="text-gold hover:bg-gold/10 p-1.5 rounded-lg"
                   >
-                    <Download className="w-4 h-4" />
+                    {isFullscreen ? (
+                      <Minimize className="w-4 h-4" />
+                    ) : (
+                      <Maximize className="w-4 h-4" />
+                    )}
                   </Button>
-                )}
+                  {onDownload && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onDownload}
+                      className="text-gold hover:bg-gold/10 p-1.5 rounded-lg"
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         ) : isLoading ? (
-          <div className="w-full h-full flex items-center justify-center bg-slate-900">
+          <div className="w-full h-full flex items-center justify-center bg-olive-900">
             <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-3 border-slate-600 border-t-indigo-600 rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm">Loading video...</p>
+              <div className="w-12 h-12 border-3 border-olive-600 border-t-gold rounded-full animate-spin" />
+              <p className="text-muted-gray text-sm">Loading video...</p>
             </div>
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-slate-900">
-            <p className="text-slate-400">No video available</p>
+          <div className="w-full h-full flex items-center justify-center bg-olive-900">
+            <p className="text-muted-gray">No video available</p>
           </div>
         )}
-      </div>
-
-      {/* Info */}
-      <div className="flex items-center justify-between text-sm">
-        <h3 className="text-slate-100 font-medium">{title}</h3>
-        <p className="text-slate-500">{aspect}</p>
       </div>
     </motion.div>
   )
 }
-

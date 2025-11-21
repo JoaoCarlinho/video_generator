@@ -1,8 +1,14 @@
-# Active Context — AI Ad Video Generator
+# Active Context
 
-**Current work focus, recent changes, next steps, active decisions**
+## Current Focus
+Debugging and fixing the video streaming issue where the frontend receives a 404 error when trying to play the generated video.
 
----
+## Recent Changes
+- Modified `backend/app/api/generation.py`:
+  - Updated `stream_video` and `download_video` endpoints.
+  - Changed logic to construct S3 key directly from `brand_id`, `perfume_id`, `campaign_id`, and `variation_index`.
+  - Removed dependency on parsing the stored URL in `campaign_json`, which was causing issues due to recursive proxy URLs being stored/returned.
+  - Validated against `s3_client.head_object` before streaming.
 
 ## Current Phase
 
@@ -1357,3 +1363,6 @@ All major questions resolved during planning:
 **Last Updated:** November 14, 2025  
 **Next Update:** After Phase 0 complete
 
+## Next Steps
+- Verify that video playback works correctly in the frontend.
+- Ensure other aspect ratios (if added later) are handled correctly (currently only 9:16 is supported).

@@ -1,0 +1,360 @@
+{
+  "grammar_version": "1.0",
+  "target_platform": "tiktok_vertical",
+  "duration_range": [15, 60],
+  "scene_count_range": [3, 5],
+  "target_aspect_ratio": "9:16",
+  "target_resolution": "1080x1920",
+  "description": "Luxury perfume TikTok vertical video shot grammar. Constrains LLM to only generate perfume-specific scenes with consistent luxury aesthetic.",
+
+  "allowed_shot_types": {
+    "macro_bottle_shots": {
+      "id": "macro_bottle",
+      "display_name": "Macro Bottle Shot",
+      "description": "Extreme close-up of perfume bottle details showing craftsmanship and luxury",
+      "duration_range": [3, 8],
+      "priority": 1,
+      "variations": [
+        "extreme_closeup_cap",
+        "slow_pan_across_branding",
+        "spray_mist_macro",
+        "bottle_reflection",
+        "engraved_logo_detail",
+        "liquid_shimmer_inside",
+        "crystal_cut_detail",
+        "stopper_mechanism",
+        "perfume_drop_forming",
+        "label_engraving"
+      ],
+      "camera_movements": [
+        "slow_zoom_in",
+        "slow_pan_right",
+        "slow_pan_left",
+        "static",
+        "gentle_tilt"
+      ],
+      "lighting_keywords": [
+        "rim light",
+        "soft glow",
+        "golden hour",
+        "backlit spray",
+        "studio spotlight",
+        "directional light",
+        "edge lighting"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.6,
+      "use_product": true,
+      "llm_instruction": "Generate an extreme close-up of the perfume bottle showing intricate details like the cap, label, or spray mechanism. Use luxury lighting with rim light or backlit effects. Duration: 3-8 seconds."
+    },
+
+    "luxury_aesthetic_broll": {
+      "id": "aesthetic_broll",
+      "display_name": "Luxury Aesthetic B-roll",
+      "description": "Premium textures and materials that evoke luxury and elegance without product",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "silk_fabric_flowing",
+        "rose_petals_falling",
+        "smoke_mist_abstract",
+        "water_ripple_closeup",
+        "candle_flame_glow",
+        "jewelry_macro_reflection",
+        "gold_leaf_texture",
+        "marble_surface",
+        "crystal_refraction",
+        "velvet_fabric_texture",
+        "champagne_bubbles",
+        "perfume_bottle_shadow",
+        "luxury_container_detail",
+        "silk_ribbon",
+        "pearl_luster"
+      ],
+      "camera_movements": [
+        "slow_zoom_in",
+        "slow_zoom_out",
+        "static",
+        "gentle_pan"
+      ],
+      "lighting_keywords": [
+        "soft diffused",
+        "warm glow",
+        "dramatic shadow",
+        "elegant",
+        "golden light",
+        "high contrast",
+        "moody lighting"
+      ],
+      "recommended_position": null,
+      "recommended_scale": null,
+      "use_product": false,
+      "llm_instruction": "Generate a luxurious texture or material shot (silk, gold, roses, etc.) that evokes elegance and premium aesthetic. No product visible. Use soft, warm lighting. Duration: 3-6 seconds."
+    },
+
+    "atmospheric_scenes": {
+      "id": "atmospheric",
+      "display_name": "Atmospheric Scene",
+      "description": "Mood-setting environmental shots that establish luxury ambiance",
+      "duration_range": [3, 7],
+      "priority": 2,
+      "variations": [
+        "light_rays_through_window",
+        "golden_reflections",
+        "elegant_shadows",
+        "dust_motes_floating",
+        "droplets_on_glass",
+        "mirror_reflection",
+        "soft_bokeh_background",
+        "sunlight_diffusion",
+        "room_ambiance",
+        "luxurious_interior",
+        "negative_space_elegant",
+        "light_through_fabric"
+      ],
+      "camera_movements": [
+        "slow_pan_right",
+        "slow_zoom_in",
+        "static",
+        "gentle_tracking"
+      ],
+      "lighting_keywords": [
+        "natural light",
+        "golden hour",
+        "soft shadows",
+        "elegant",
+        "ambient",
+        "luminous",
+        "diffused glow"
+      ],
+      "recommended_position": null,
+      "recommended_scale": null,
+      "use_product": false,
+      "llm_instruction": "Generate an atmospheric environmental shot showing mood and ambiance for a luxury setting. Could be light rays, reflections, elegant shadows, or room ambiance. No product. Create elegant, sophisticated mood. Duration: 3-7 seconds."
+    },
+
+    "minimal_human_silhouettes": {
+      "id": "human_silhouette",
+      "display_name": "Minimal Human Element",
+      "description": "Subtle human interaction with product (AI decides if needed)",
+      "duration_range": [4, 8],
+      "priority": 3,
+      "optional": true,
+      "ai_decision_factors": [
+        "creative_prompt_mentions_human_interaction",
+        "brand_guidelines_allow_people",
+        "scene_narrative_benefits_from_human_touch"
+      ],
+      "variations": [
+        "hand_picking_bottle",
+        "neck_shoulder_spray",
+        "shadowed_figure_movement",
+        "silhouette_holding_bottle",
+        "fingers_touching_cap",
+        "wrist_spray_application",
+        "hand_reaching_for_bottle",
+        "elegant_hand_gesture",
+        "silhouette_profile"
+      ],
+      "camera_movements": [
+        "slow_zoom_in",
+        "static",
+        "slow_pan"
+      ],
+      "lighting_keywords": [
+        "silhouette",
+        "backlit",
+        "soft focus",
+        "elegant",
+        "rim_lit",
+        "dramatic"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.5,
+      "use_product": true,
+      "llm_instruction": "ONLY use this shot type if: (1) the creative brief mentions human interaction, OR (2) human touch would enhance emotional storytelling. Otherwise, stick to product-only luxury shots. If using: show elegant human silhouette interacting with or near perfume bottle. Silhouette style, backlit for elegance. Duration: 4-8 seconds."
+    },
+
+    "final_brand_moment": {
+      "id": "brand_moment",
+      "display_name": "Final Brand Moment",
+      "description": "Clean hero shot with product and branding text overlay",
+      "duration_range": [4, 7],
+      "priority": 1,
+      "variations": [
+        "product_centered_minimal",
+        "bottle_with_tagline",
+        "black_gold_theme",
+        "white_minimal_theme",
+        "logo_beside_product",
+        "product_hero_shot",
+        "premium_stilllife",
+        "studio_perfection"
+      ],
+      "camera_movements": [
+        "slow_zoom_out",
+        "static",
+        "gentle_push_in"
+      ],
+      "lighting_keywords": [
+        "studio lighting",
+        "clean",
+        "premium",
+        "centered",
+        "professional",
+        "focused"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.5,
+      "use_product": true,
+      "always_use_text_overlay": true,
+      "text_requirements": {
+        "perfume_name": "required",
+        "tagline": "optional",
+        "brand_name": "required",
+        "cta": "optional"
+      },
+      "llm_instruction": "Generate the final hero shot of the perfume bottle centered in frame on an elegant background. This is the conclusion of the video. ALWAYS include text overlay with perfume name, brand, and optional CTA. Clean, professional, premium studio lighting. Duration: 4-7 seconds."
+    }
+  },
+
+  "scene_flow_rules": {
+    "first_scene_must_be": ["macro_bottle", "atmospheric"],
+    "first_scene_explanation": "Grab attention immediately with either a close-up detail shot or atmospheric mood-setting",
+    "last_scene_must_be": ["brand_moment"],
+    "last_scene_explanation": "Always end with clean brand moment showing product and key text",
+    "max_consecutive_same_type": 2,
+    "max_consecutive_explanation": "Avoid using the same shot type more than twice in a row to maintain pacing",
+    "product_visibility_rules": {
+      "minimum_product_scenes": 2,
+      "maximum_product_scenes": 4,
+      "must_show_product_in": ["intro_or_second", "final"],
+      "explanation": "Product must be visible in at least 2 scenes (typically second or early) and always in final scene"
+    }
+  },
+
+  "text_overlay_rules": {
+    "max_text_blocks": 3,
+    "max_text_blocks_explanation": "Never more than 3 text elements to avoid clutter",
+    "allowed_positions": ["top", "center", "bottom"],
+    "font_style": ["serif_luxury", "sans_minimal"],
+    "serif_luxury_example": "Playfair Display - elegant, high-end",
+    "sans_minimal_example": "Montserrat - clean, modern luxury",
+    "max_words_per_block": 6,
+    "required_text_scenes": ["final_brand_moment"],
+    "text_animation": "fade_in_out",
+    "text_duration": [2, 4]
+  },
+
+  "transition_rules": {
+    "allowed_transitions": ["fade", "cut"],
+    "preferred_transition": "fade",
+    "final_scene_transition": "fade",
+    "transition_duration": [0.3, 0.5]
+  },
+
+  "pacing_guidelines": {
+    "15_30_seconds": {
+      "scene_count": 3,
+      "avg_scene_duration": [5, 10],
+      "breakdown": [
+        "Hook (3-5s)",
+        "Product or atmosphere (5-7s)",
+        "Final brand moment (4-5s)"
+      ]
+    },
+    "31_45_seconds": {
+      "scene_count": 4,
+      "avg_scene_duration": [7, 11],
+      "breakdown": [
+        "Hook (3-5s)",
+        "Luxury texture/atmosphere (5-7s)",
+        "Product detail (5-8s)",
+        "Final brand moment (5-7s)"
+      ]
+    },
+    "46_60_seconds": {
+      "scene_count": 5,
+      "avg_scene_duration": [9, 12],
+      "breakdown": [
+        "Hook atmosphere (3-5s)",
+        "Product macro shot (5-8s)",
+        "Luxury B-roll (5-7s)",
+        "Atmosphere or human (5-7s)",
+        "Final brand moment (5-7s)"
+      ]
+    }
+  },
+
+  "luxury_perfume_themes": {
+    "cinematic": {
+      "name": "Cinematic",
+      "description": "Professional cinematography with dramatic, storytelling-focused sequences",
+      "lighting_style": "Dramatic, high-contrast, cinematic",
+      "color_palette": "Warm golds, deep blacks, cool blues",
+      "mood": "Sophisticated, aspirational, premium"
+    },
+    "dark_elegance": {
+      "name": "Dark Elegance",
+      "description": "Luxury aesthetic with black backgrounds and rim lighting",
+      "lighting_style": "Rim light, backlit, high contrast",
+      "color_palette": "Black, gold accents, whites",
+      "mood": "Mysterious, exclusive, high-end"
+    },
+    "romantic_floral": {
+      "name": "Romantic Floral",
+      "description": "Soft, romantic aesthetic with florals and delicate details",
+      "lighting_style": "Soft, diffused, warm",
+      "color_palette": "Pastels, golds, warm neutrals",
+      "mood": "Delicate, romantic, elegant"
+    }
+  },
+
+  "validation_rules": {
+    "must_include": [
+      "At least one macro bottle shot (first 2 scenes preferred)",
+      "At least one final brand moment as last scene",
+      "All scenes 3-8 seconds (no shorter, no longer)",
+      "Total duration within 15-60 second range"
+    ],
+    "must_exclude": [
+      "Generic product shots (must be luxury perfume-specific)",
+      "Unrelated lifestyle content",
+      "Multiple product types",
+      "Non-luxury aesthetics"
+    ]
+  },
+
+  "example_scene_plan_15s": {
+    "title": "Example: 15-second luxury perfume TikTok",
+    "duration": 15,
+    "style": "dark_elegance",
+    "scenes": [
+      {
+        "index": 1,
+        "shot_type": "macro_bottle",
+        "duration": 5,
+        "prompt": "Extreme close-up of crystal-cut perfume bottle cap with rim lighting, slow pan revealing branding",
+        "use_product": true
+      },
+      {
+        "index": 2,
+        "shot_type": "luxury_aesthetic_broll",
+        "duration": 4,
+        "prompt": "Elegant gold leaf texture floating through light, soft warm glowing light",
+        "use_product": false
+      },
+      {
+        "index": 3,
+        "shot_type": "brand_moment",
+        "duration": 5,
+        "prompt": "Full perfume bottle centered on dark background, studio lighting, professional hero shot. Text overlay: fragrance name, brand name",
+        "use_product": true,
+        "text_overlay": ["Noir Luxe", "Chanel"]
+      }
+    ]
+  },
+
+  "llm_prompt_template": "You are a luxury perfume video director. Create a TikTok vertical video scene plan (9:16) constrained by perfume shot grammar.\n\nREQUIREMENTS:\n1. Use ONLY these shot types: macro_bottle, aesthetic_broll, atmospheric, human_silhouette (optional), brand_moment\n2. First scene MUST be: macro_bottle OR atmospheric\n3. Last scene MUST be: brand_moment\n4. Total scenes: {scene_count}\n5. Each scene: 3-8 seconds duration\n6. Product visible in 2-4 scenes total\n7. No generic content - ALWAYS luxury perfume-specific\n\nGenerate concise, vivid scene descriptions that follow this grammar. Output valid JSON."
+}
+

@@ -1,9 +1,10 @@
 """SQLAlchemy ORM models for the database."""
 
-from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, JSON, ARRAY, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, Boolean, ForeignKey, CheckConstraint, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, validates
+from sqlalchemy.sql import func
 from datetime import datetime
 import uuid
 
@@ -85,8 +86,36 @@ class Campaign(Base):
         return f"{self.name}-{self.seasonal_event}-{self.year}"
 
 
+# ============================================================================
+# Auth Users Model (for foreign key reference)
+# This is a minimal model to satisfy SQLAlchemy foreign key constraints
+# The actual auth.users table is managed by Supabase Auth
+# ============================================================================
+class AuthUser(Base):
+    """Minimal model for auth.users table (managed by Supabase).
+    
+    This model exists only to satisfy SQLAlchemy foreign key constraints.
+    We don't create/modify this table - it's managed by Supabase Auth.
+    """
+    __tablename__ = "users"
+    __table_args__ = {"schema": "auth"}
+    
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    
+    def __repr__(self):
+        return f"<AuthUser {self.id}>"
+
+
+# ============================================================================
+# DEPRECATED: Project model (will be removed in Phase 3-4)
+# Kept temporarily for backward compatibility with existing API endpoints
+# ============================================================================
 class Project(Base):
-    """Project model for storing ad generation projects."""
+    """DEPRECATED: Project model - replaced by Campaign in Phase 2.
+    
+    This model is kept temporarily for backward compatibility.
+    Will be removed when API endpoints are updated in Phase 3-4.
+    """
     
     __tablename__ = "projects"
     
@@ -137,7 +166,108 @@ class Project(Base):
                 f"Must be one of: {', '.join(valid_providers)}"
             )
         return value
-
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    
     def __repr__(self):
         return f"<Project {self.id} - {self.title} (provider: {self.video_provider})>"
+
+
+# ============================================================================
+# Phase 2 B2B SaaS Models
+# ============================================================================
+
+class Brand(Base):
+    """Brand model - one brand per user (B2B SaaS)."""
+    
+    __tablename__ = "brands"
+    
+    brand_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Foreign key to auth.users - AuthUser model defined above allows SQLAlchemy to resolve this
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    brand_name = Column(String(100), nullable=False, unique=True)
+    brand_logo_url = Column(String(500), nullable=False)
+    brand_guidelines_url = Column(String(500), nullable=False)
+    onboarding_completed = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    perfumes = relationship("Perfume", back_populates="brand", cascade="all, delete-orphan")
+    campaigns = relationship("Campaign", back_populates="brand", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Brand {self.brand_id} - {self.brand_name}>"
+
+
+class Perfume(Base):
+    """Perfume model - many perfumes per brand."""
+    
+    __tablename__ = "perfumes"
+    
+    perfume_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.brand_id", ondelete="CASCADE"), nullable=False)
+    perfume_name = Column(String(200), nullable=False)
+    perfume_gender = Column(String(20), nullable=False)  # 'masculine', 'feminine', 'unisex'
+    front_image_url = Column(String(500), nullable=False)
+    back_image_url = Column(String(500), nullable=True)
+    top_image_url = Column(String(500), nullable=True)
+    left_image_url = Column(String(500), nullable=True)
+    right_image_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    brand = relationship("Brand", back_populates="perfumes")
+    campaigns = relationship("Campaign", back_populates="perfume", cascade="all, delete-orphan")
+    
+    # Constraints
+    __table_args__ = (
+        CheckConstraint("perfume_gender IN ('masculine', 'feminine', 'unisex')", name='ck_perfumes_gender'),
+        UniqueConstraint('brand_id', 'perfume_name', name='uq_perfumes_brand_perfume'),
+    )
+    
+    def __repr__(self):
+        return f"<Perfume {self.perfume_id} - {self.perfume_name}>"
+
+
+class Campaign(Base):
+    """Campaign model - replaces Project, many campaigns per perfume."""
+    
+    __tablename__ = "campaigns"
+    
+    campaign_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    perfume_id = Column(UUID(as_uuid=True), ForeignKey("perfumes.perfume_id", ondelete="CASCADE"), nullable=False)
+    brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.brand_id", ondelete="CASCADE"), nullable=False)
+    campaign_name = Column(String(200), nullable=False)
+    creative_prompt = Column(Text, nullable=False)
+    selected_style = Column(String(50), nullable=False)  # 'gold_luxe', 'dark_elegance', 'romantic_floral'
+    target_duration = Column(Integer, nullable=False)  # 15-60 seconds
+    num_variations = Column(Integer, default=1, nullable=False)  # 1-3 variations
+    selected_variation_index = Column(Integer, nullable=True)  # 0-2, NULL if not selected
+    status = Column(String(50), default='pending', nullable=False)
+    progress = Column(Integer, default=0, nullable=False)  # 0-100
+    cost = Column(Numeric(10, 2), default=0, nullable=False)
+    error_message = Column(Text, nullable=True)
+    campaign_json = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    brand = relationship("Brand", back_populates="campaigns")
+    perfume = relationship("Perfume", back_populates="campaigns")
+    
+    # Constraints
+    __table_args__ = (
+        CheckConstraint("selected_style IN ('gold_luxe', 'dark_elegance', 'romantic_floral')", name='ck_campaigns_style'),
+        CheckConstraint('target_duration BETWEEN 15 AND 60', name='ck_campaigns_duration'),
+        CheckConstraint('num_variations BETWEEN 1 AND 3', name='ck_campaigns_variations'),
+        CheckConstraint('selected_variation_index IS NULL OR selected_variation_index BETWEEN 0 AND 2', name='ck_campaigns_selected_variation'),
+        CheckConstraint("status IN ('pending', 'processing', 'completed', 'failed')", name='ck_campaigns_status'),
+        CheckConstraint('progress BETWEEN 0 AND 100', name='ck_campaigns_progress'),
+        UniqueConstraint('perfume_id', 'campaign_name', name='uq_campaigns_perfume_campaign'),
+    )
+    
+    def __repr__(self):
+        return f"<Campaign {self.campaign_id} - {self.campaign_name}>"
 

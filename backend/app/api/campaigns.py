@@ -1,388 +1,290 @@
-"""API endpoints for campaign management."""
+"""
+Campaign API endpoints for B2B SaaS transformation.
+Handles campaign CRUD operations.
+"""
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
 import logging
+from typing import Optional
 
 from app.database.connection import get_db
-from app.database.crud import (
-    create_campaign,
-    get_product_campaigns,
-    get_campaign,
-    update_campaign,
-    delete_campaign
-)
-from app.models.schemas import (
-    CreateCampaignRequest,
-    UpdateCampaignRequest,
-    CampaignResponse
-)
-from app.api.auth import get_current_user_id
+from app.database import crud
+from app.api.auth import get_current_brand_id, verify_perfume_ownership, verify_campaign_ownership
+from app.models.schemas import CampaignDetail, CampaignCreate, PaginatedCampaigns, CampaignStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ============================================================================
-# Campaign Endpoints
-# ============================================================================
 
-@router.post("/products/{product_id}/campaigns", response_model=CampaignResponse, status_code=201)
-async def create_campaign_endpoint(
-    product_id: UUID,
-    request: CreateCampaignRequest,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
-):
+@router.post(
+    "",
+    response_model=CampaignDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create campaign",
+    description="Create a new campaign for a perfume. Verifies perfume ownership."
+)
+async def create_campaign(
+    data: CampaignCreate,
+    brand_id: UUID = Depends(get_current_brand_id),
+    db: Session = Depends(get_db)
+) -> CampaignDetail:
     """
-    Create a new campaign associated with a product.
-
-    **Path Parameters:**
-    - product_id: UUID of the product to associate campaign with
-
+    Create a new campaign for a perfume.
+    
     **Request Body:**
-    ```json
-    {
-        "name": "Summer Launch",
-        "seasonal_event": "Summer Sale",
-        "year": 2025,
-        "duration": 30,
-        "scene_configs": [
-            {
-                "scene_number": 1,
-                "creative_vision": "Energetic professional in modern kitchen...",
-                "reference_images": ["https://s3.../theme.jpg", "https://s3.../start.jpg", "https://s3.../end.jpg"],
-                "cinematography": {
-                    "camera_aspect": "POV",
-                    "lighting": "natural",
-                    "mood": "energetic",
-                    "transition": "fade",
-                    "environment": "bright",
-                    "setting": "residential"
-                }
-            }
-        ]
-    }
-    ```
-
-    **Response:** CampaignResponse with created campaign data
-
-    **Errors:**
-    - 401: Not authenticated
-    - 404: Product not found or not owned by user
-    - 422: Invalid scene configuration or duration
-    - 500: Database error
+    - `perfume_id`: Perfume UUID (required)
+    - `campaign_name`: Campaign name (2-200 chars, unique within perfume)
+    - `creative_prompt`: Creative prompt (10-2000 chars)
+    - `selected_style`: Video style ('gold_luxe', 'dark_elegance', 'romantic_floral')
+    - `target_duration`: Target duration in seconds (15-60)
+    - `num_variations`: Number of variations (1-3, default: 1)
+    
+    **Returns:**
+    - CampaignDetail: Created campaign with all details
+    
+    **Raises:**
+    - HTTPException 400: Invalid input data
+    - HTTPException 404: Perfume not found or doesn't belong to brand
+    - HTTPException 409: Campaign name already exists for this perfume
     """
     try:
-        # Get authenticated user
-        user_id = get_current_user_id(authorization)
-
-        # Convert scene configs to dicts
-        scene_configs_dicts = [scene.model_dump() for scene in request.scene_configs]
-
-        # Create campaign (validates product ownership)
-        campaign = create_campaign(
-            db=db,
-            user_id=user_id,
-            product_id=product_id,
-            name=request.name,
-            seasonal_event=request.seasonal_event,
-            year=request.year,
-            duration=request.duration,
-            scene_configs=scene_configs_dicts
-        )
-
-        if not campaign:
+        # Verify perfume belongs to brand
+        verify_perfume_ownership(data.perfume_id, brand_id, db)
+        
+        # Check campaign name uniqueness within perfume
+        existing_campaigns, _ = crud.get_campaigns_by_perfume(db, data.perfume_id, page=1, limit=1000)
+        for existing in existing_campaigns:
+            if existing.campaign_name == data.campaign_name:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Campaign name '{data.campaign_name}' already exists for this perfume"
+                )
+        
+        # Verify perfume exists and get it to ensure correct IDs
+        perfume = crud.get_perfume_by_id(db, data.perfume_id)
+        if not perfume:
             raise HTTPException(
-                status_code=404,
-                detail=f"Product {product_id} not found or not owned by user"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfume not found"
             )
-
-        logger.info(f"✅ Created campaign {campaign.id} for product {product_id}")
-
-        # Build response with display_name
-        response = CampaignResponse(
-            id=campaign.id,
-            product_id=campaign.product_id,
-            name=campaign.name,
-            seasonal_event=campaign.seasonal_event,
-            year=campaign.year,
-            display_name=campaign.display_name,
-            duration=campaign.duration,
-            scene_configs=campaign.scene_configs,
-            status=campaign.status,
-            created_at=campaign.created_at,
-            updated_at=campaign.updated_at
+        if perfume.brand_id != brand_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Perfume does not belong to authenticated brand"
+            )
+        logger.info(f"🔍 Verified perfume {perfume.perfume_id} belongs to brand {brand_id}")
+        
+        # Create campaign
+        logger.info(f"💾 Creating campaign '{data.campaign_name}' for perfume {data.perfume_id} (brand {brand_id})")
+        campaign = crud.create_campaign(
+            db=db,
+            perfume_id=data.perfume_id,
+            brand_id=brand_id,
+            campaign_name=data.campaign_name,
+            creative_prompt=data.creative_prompt,
+            selected_style=data.selected_style.value,
+            target_duration=data.target_duration,
+            num_variations=data.num_variations
         )
-
-        return response
-
+        
+        # Verify campaign was created with correct IDs
+        if campaign.perfume_id != data.perfume_id:
+            logger.error(f"❌ CRITICAL: Campaign created with wrong perfume_id! Expected {data.perfume_id}, got {campaign.perfume_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Campaign created with incorrect perfume_id. Expected {data.perfume_id}, got {campaign.perfume_id}"
+            )
+        if campaign.brand_id != brand_id:
+            logger.error(f"❌ CRITICAL: Campaign created with wrong brand_id! Expected {brand_id}, got {campaign.brand_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Campaign created with incorrect brand_id. Expected {brand_id}, got {campaign.brand_id}"
+            )
+        logger.info(f"✅ Verified campaign {campaign.campaign_id} created with correct perfume_id {campaign.perfume_id} and brand_id {campaign.brand_id}")
+        return CampaignDetail.model_validate(campaign)
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to create campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create campaign: {str(e)}")
+        logger.error(f"❌ Failed to create campaign: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create campaign: {str(e)}"
+        )
 
 
-@router.get("/products/{product_id}/campaigns", response_model=List[CampaignResponse])
-async def list_product_campaigns_endpoint(
-    product_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None),
-    limit: int = 50,
-    offset: int = 0
-):
+@router.get(
+    "",
+    response_model=PaginatedCampaigns,
+    summary="List campaigns",
+    description="Get paginated list of campaigns for a perfume. Verifies perfume ownership."
+)
+async def list_campaigns(
+    perfume_id: UUID = Query(..., description="Perfume ID"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page (1-100)"),
+    brand_id: UUID = Depends(get_current_brand_id),
+    db: Session = Depends(get_db)
+) -> PaginatedCampaigns:
     """
-    Get all campaigns for a specific product.
-
-    **Path Parameters:**
-    - product_id: UUID of the product
-
+    Get paginated list of campaigns for a perfume.
+    
     **Query Parameters:**
-    - limit: Maximum number of campaigns to return (default: 50)
-    - offset: Number of campaigns to skip for pagination (default: 0)
-
-    **Response:** Array of CampaignResponse objects
-
-    **Errors:**
-    - 401: Not authenticated
-    - 404: Product not found or not owned by user
-    - 500: Database error
+    - `perfume_id`: Perfume UUID (required)
+    - `page`: Page number (default: 1)
+    - `limit`: Items per page (default: 20, max: 100)
+    
+    **Returns:**
+    - PaginatedCampaigns: Paginated list with total count
+    
+    **Raises:**
+    - HTTPException 404: Perfume not found or doesn't belong to brand
     """
     try:
-        # Get authenticated user
-        user_id = get_current_user_id(authorization)
-
-        # Get campaigns (validates product ownership)
-        campaigns = get_product_campaigns(
-            db=db,
-            user_id=user_id,
-            product_id=product_id,
+        # Verify perfume belongs to brand
+        verify_perfume_ownership(perfume_id, brand_id, db)
+        
+        # Get campaigns for perfume
+        campaigns, total = crud.get_campaigns_by_perfume(db, perfume_id, page, limit)
+        
+        # Convert to response models
+        campaign_details = [CampaignDetail.model_validate(c) for c in campaigns]
+        
+        pages = (total + limit - 1) // limit  # Ceiling division
+        
+        return PaginatedCampaigns(
+            campaigns=campaign_details,
+            total=total,
+            page=page,
             limit=limit,
-            offset=offset
+            pages=pages
         )
-
-        if campaigns is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Product {product_id} not found or not owned by user"
-            )
-
-        logger.info(f"✅ Retrieved {len(campaigns)} campaigns for product {product_id}")
-
-        # Build responses with display_name
-        responses = [
-            CampaignResponse(
-                id=c.id,
-                product_id=c.product_id,
-                name=c.name,
-                seasonal_event=c.seasonal_event,
-                year=c.year,
-                display_name=c.display_name,
-                duration=c.duration,
-                scene_configs=c.scene_configs,
-                status=c.status,
-                created_at=c.created_at,
-                updated_at=c.updated_at
-            )
-            for c in campaigns
-        ]
-
-        return responses
-
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get campaigns: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get campaigns: {str(e)}")
+        logger.error(f"❌ Failed to list campaigns: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve campaigns"
+        )
 
 
-@router.get("/campaigns/{campaign_id}", response_model=CampaignResponse)
-async def get_campaign_endpoint(
+@router.get(
+    "/{campaign_id}",
+    response_model=CampaignDetail,
+    summary="Get campaign",
+    description="Get campaign details by ID. Verifies campaign ownership."
+)
+async def get_campaign(
     campaign_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
-):
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
+) -> CampaignDetail:
     """
-    Get a single campaign by ID.
-
+    Get campaign details by ID.
+    
     **Path Parameters:**
-    - campaign_id: UUID of the campaign
-
-    **Response:** CampaignResponse with campaign data
-
-    **Errors:**
-    - 401: Not authenticated
-    - 404: Campaign not found or not owned by user
-    - 500: Database error
+    - `campaign_id`: Campaign UUID
+    
+    **Returns:**
+    - CampaignDetail: Campaign details
+    
+    **Raises:**
+    - HTTPException 404: Campaign not found or doesn't belong to brand
     """
     try:
-        # Get authenticated user
-        user_id = get_current_user_id(authorization)
-
-        # Get campaign (validates ownership)
-        campaign = get_campaign(
-            db=db,
-            user_id=user_id,
-            campaign_id=campaign_id
-        )
-
+        campaign = crud.get_campaign_by_id(db, campaign_id)
         if not campaign:
             raise HTTPException(
-                status_code=404,
-                detail=f"Campaign {campaign_id} not found or not owned by user"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
             )
-
-        logger.info(f"✅ Retrieved campaign {campaign_id}")
-
-        # Build response with display_name
-        response = CampaignResponse(
-            id=campaign.id,
-            product_id=campaign.product_id,
-            name=campaign.name,
-            seasonal_event=campaign.seasonal_event,
-            year=campaign.year,
-            display_name=campaign.display_name,
-            duration=campaign.duration,
-            scene_configs=campaign.scene_configs,
-            status=campaign.status,
-            created_at=campaign.created_at,
-            updated_at=campaign.updated_at
-        )
-
-        return response
-
+        
+        # Log campaign_json for debugging
+        logger.info(f"🔍 Campaign {campaign_id} campaign_json type: {type(campaign.campaign_json)}")
+        logger.info(f"🔍 Campaign {campaign_id} campaign_json value: {campaign.campaign_json}")
+        if isinstance(campaign.campaign_json, dict):
+            logger.info(f"🔍 Campaign {campaign_id} variationPaths: {campaign.campaign_json.get('variationPaths', 'NOT FOUND')}")
+        
+        # Note: We no longer replace S3 URLs with backend proxy URLs
+        # The S3 URLs are presigned and should work directly from the frontend.
+        # This avoids issues where <video src="..."> requests don't send auth headers
+        # and thus fail against the protected backend proxy endpoint.
+        
+        campaign_detail = CampaignDetail.model_validate(campaign)
+        
+        logger.info(f"🔍 CampaignDetail campaign_json type: {type(campaign_detail.campaign_json)}")
+        logger.info(f"🔍 CampaignDetail campaign_json value: {campaign_detail.campaign_json}")
+        
+        return campaign_detail
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get campaign: {str(e)}")
-
-
-@router.put("/campaigns/{campaign_id}", response_model=CampaignResponse)
-async def update_campaign_endpoint(
-    campaign_id: UUID,
-    request: UpdateCampaignRequest,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
-):
-    """
-    Update an existing campaign (for auto-save).
-
-    **Path Parameters:**
-    - campaign_id: UUID of the campaign to update
-
-    **Request Body:** UpdateCampaignRequest (all fields optional)
-
-    **Response:** CampaignResponse with updated campaign data
-
-    **Errors:**
-    - 401: Not authenticated
-    - 404: Campaign not found or not owned by user
-    - 422: Invalid scene configuration or duration
-    - 500: Database error
-    """
-    try:
-        # Get authenticated user
-        user_id = get_current_user_id(authorization)
-
-        # Build updates dict (only include provided fields)
-        updates = {}
-        if request.name is not None:
-            updates['name'] = request.name
-        if request.seasonal_event is not None:
-            updates['seasonal_event'] = request.seasonal_event
-        if request.year is not None:
-            updates['year'] = request.year
-        if request.duration is not None:
-            updates['duration'] = request.duration
-        if request.scene_configs is not None:
-            updates['scene_configs'] = [scene.model_dump() for scene in request.scene_configs]
-
-        # Update campaign (validates ownership)
-        campaign = update_campaign(
-            db=db,
-            user_id=user_id,
-            campaign_id=campaign_id,
-            **updates
+        logger.error(f"❌ Failed to get campaign: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve campaign"
         )
 
-        if not campaign:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Campaign {campaign_id} not found or not owned by user"
-            )
 
-        logger.info(f"✅ Updated campaign {campaign_id}")
-
-        # Build response with display_name
-        response = CampaignResponse(
-            id=campaign.id,
-            product_id=campaign.product_id,
-            name=campaign.name,
-            seasonal_event=campaign.seasonal_event,
-            year=campaign.year,
-            display_name=campaign.display_name,
-            duration=campaign.duration,
-            scene_configs=campaign.scene_configs,
-            status=campaign.status,
-            created_at=campaign.created_at,
-            updated_at=campaign.updated_at
-        )
-
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Failed to update campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update campaign: {str(e)}")
-
-
-@router.delete("/campaigns/{campaign_id}", status_code=204)
-async def delete_campaign_endpoint(
+@router.delete(
+    "/{campaign_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete campaign",
+    description="Delete a campaign. Only allowed if campaign is not processing."
+)
+async def delete_campaign(
     campaign_id: UUID,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
 ):
     """
     Delete a campaign.
-
+    
     **Path Parameters:**
-    - campaign_id: UUID of the campaign to delete
-
-    **Response:** 204 No Content on success
-
-    **Errors:**
-    - 401: Not authenticated
-    - 404: Campaign not found or not owned by user
-    - 500: Database error
+    - `campaign_id`: Campaign UUID
+    
+    **Raises:**
+    - HTTPException 400: Campaign is processing (cannot delete)
+    - HTTPException 404: Campaign not found
     """
     try:
-        # Get authenticated user
-        user_id = get_current_user_id(authorization)
-
-        # Delete campaign (validates ownership)
-        success = delete_campaign(
-            db=db,
-            user_id=user_id,
-            campaign_id=campaign_id
-        )
-
-        if not success:
+        campaign = crud.get_campaign_by_id(db, campaign_id)
+        if not campaign:
             raise HTTPException(
-                status_code=404,
-                detail=f"Campaign {campaign_id} not found or not owned by user"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
             )
-
+        
+        # Check if campaign is processing
+        if campaign.status == CampaignStatus.PROCESSING.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete campaign while it is processing. Please wait for completion or failure."
+            )
+        
+        # Delete campaign
+        deleted = crud.delete_campaign(db, campaign_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete campaign"
+            )
+        
         logger.info(f"✅ Deleted campaign {campaign_id}")
-
         return None
-
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to delete campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete campaign: {str(e)}")
+        logger.error(f"❌ Failed to delete campaign: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete campaign"
+        )
+

@@ -1,28 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Container, Header } from '@/components/layout'
-import { Button, Card, CardContent, Modal } from '@/components/ui'
-import { TabWizard, TabPanel, FormNavigation } from '@/components/ui'
-import { BrandInfoTab } from '@/components/forms/BrandInfoTab'
-import { CreativeVisionTab } from '@/components/forms/CreativeVisionTab'
-import { AssetsTab } from '@/components/forms/AssetsTab'
-import { ProviderSelector } from '@/components/forms/ProviderSelector'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui'
+import { StepIndicator } from '@/components/ui/StepIndicator'
+import { StyleSelector } from '@/components/ui/StyleSelector'
 import { useProjects } from '@/hooks/useProjects'
-import { useProviderHealth } from '@/hooks/useProviderHealth'
-import { Zap, AlertCircle, Info } from 'lucide-react'
-import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
-
-// Get API base URL from environment
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-// Tab configuration
-const TABS = [
-  { id: 'brand-info', label: 'Brand Info' },
-  { id: 'creative-vision', label: 'Creative Vision' },
-  { id: 'provider-selection', label: 'Provider Selection' },
-  { id: 'assets', label: 'Assets' },
-]
+import { useReferenceImage } from '@/hooks/useReferenceImage'
+import { useStyleSelector } from '@/hooks/useStyleSelector'
+import { Upload, X, Sparkles, ArrowRight, ArrowLeft, FileText, Image as ImageIcon, Video, Palette, UploadCloud } from 'lucide-react'
+import { Slider } from '@/components/ui/slider'
 
 interface FormData {
   // Brand Info
@@ -62,96 +48,148 @@ const INITIAL_FORM_DATA: FormData = {
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
-  const { replicate, ecs, loading: healthLoading, error: healthError, refetch } = useProviderHealth()
+  const { uploadReferenceImage, isLoading: isUploadingReference } = useReferenceImage()
+  const { styles, selectedStyle, setSelectedStyle, clearSelection, isLoading: isLoadingStyles } = useStyleSelector()
 
-  const [currentTab, setCurrentTab] = useState(0)
-  const [completedTabs, setCompletedTabs] = useState<number[]>([])
-  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [autoGenerate, setAutoGenerate] = useState(true)
+  const [currentStep, setCurrentStep] = useState(1)
+  const [formData, setFormData] = useState({
+    title: '',
+    brand_name: '',
+    brand_description: '',
+    creative_prompt: '',
+    target_audience: '',
+    target_duration: 30,
+    perfume_name: '',
+    perfume_gender: 'unisex' as 'masculine' | 'feminine' | 'unisex',
+    num_variations: 1 as 1 | 2 | 3, // Phase 3: Multi-variation support
+  })
+
+  const [productImage, setProductImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const [logoImage, setLogoImage] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [guidelinesFile, setGuidelinesFile] = useState<File | null>(null)
+  const [referenceImage, setReferenceImage] = useState<File | null>(null)
+  const [referencePreview, setReferencePreview] = useState<string>('')
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
-  // Load draft from localStorage on mount
-  useEffect(() => {
-    const savedDraft = localStorage.getItem('draft-project')
-    if (savedDraft) {
-      try {
-        const parsed = JSON.parse(savedDraft)
-        setFormData({ ...INITIAL_FORM_DATA, ...parsed })
-      } catch (e) {
-        console.error('Failed to parse draft:', e)
+  const steps = [
+    { label: 'Project Info', description: 'Basic details' },
+    { label: 'Creative Vision', description: 'Style & settings' },
+    { label: 'Assets', description: 'Upload files' },
+  ]
+
+  // File handlers
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'logo' | 'reference') => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 10 * 1024 * 1024) {
+      setSubmitError(`${type === 'logo' ? 'Logo' : type === 'reference' ? 'Reference image' : 'Image'} must be less than 10MB`)
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setSubmitError('Please select an image file')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const preview = e.target?.result as string
+      if (type === 'product') {
+        setProductImage(file)
+        setImagePreview(preview)
+      } else if (type === 'logo') {
+        setLogoImage(file)
+        setLogoPreview(preview)
+      } else {
+        setReferenceImage(file)
+        setReferencePreview(preview)
       }
     }
-  }, [])
+    reader.readAsDataURL(file)
+    setSubmitError(null)
+  }
 
-  // Save draft to localStorage on change
-  useEffect(() => {
-    localStorage.setItem('draft-project', JSON.stringify(formData))
-  }, [formData])
+  const handleGuidelinesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
 
-  // Handle ECS health status changes - force switch to Replicate if ECS becomes unhealthy
-  useEffect(() => {
-    if (!ecs.healthy && formData.video_provider === 'ecs') {
-      setFormData((prev) => ({ ...prev, video_provider: 'replicate' }))
-      // Could add toast notification here
-      console.warn('ECS provider became unavailable, switching to Replicate')
+    if (file.size > 10 * 1024 * 1024) {
+      setSubmitError('Guidelines file must be less than 10MB')
+      return
     }
-  }, [ecs.healthy, formData.video_provider])
 
-  // Validation functions
-  const isTab1Valid = () => {
-    return formData.title.trim().length >= 3 && formData.brand_name.trim().length >= 2
+    if (!file.type.includes('pdf') && !file.type.includes('text')) {
+      setSubmitError('Please select a PDF or TXT file')
+      return
+    }
+
+    setGuidelinesFile(file)
+    setSubmitError(null)
   }
 
-  const isTab2Valid = () => {
-    return formData.creative_prompt.trim().length >= 20 && formData.aspect_ratios.length > 0
+  const removeFile = (type: 'product' | 'logo' | 'guidelines' | 'reference') => {
+    if (type === 'product') {
+      setProductImage(null)
+      setImagePreview('')
+    } else if (type === 'logo') {
+      setLogoImage(null)
+      setLogoPreview('')
+    } else if (type === 'guidelines') {
+      setGuidelinesFile(null)
+    } else {
+      setReferenceImage(null)
+      setReferencePreview('')
+    }
   }
 
-  const isTab3Valid = () => {
-    // Provider selection is always valid - default is "replicate" and ECS is disabled if unhealthy
+  const validateStep = (step: number): boolean => {
+    setSubmitError(null)
+    
+    if (step === 1) {
+      if (!formData.title.trim()) {
+        setSubmitError('Project title is required')
+        return false
+      }
+      if (!formData.brand_name.trim()) {
+        setSubmitError('Brand name is required')
+        return false
+      }
+      return true
+    }
+    
+    if (step === 2) {
+      if (!formData.creative_prompt.trim()) {
+        setSubmitError('Creative vision is required')
+        return false
+      }
+      if (formData.creative_prompt.trim().length < 20) {
+        setSubmitError('Creative vision must be at least 20 characters')
+        return false
+      }
+      if (!formData.perfume_name.trim()) {
+        setSubmitError('Perfume name is required')
+        return false
+      }
+      return true
+    }
+    
     return true
   }
 
-  const canProceedToNext = () => {
-    if (currentTab === 0) return isTab1Valid()
-    if (currentTab === 1) return isTab2Valid()
-    if (currentTab === 2) return isTab3Valid()
-    return true // Tab 4 (Assets) has no required fields
-  }
-
-  // Navigation handlers
   const handleNext = () => {
-    if (canProceedToNext()) {
-      if (!completedTabs.includes(currentTab)) {
-        setCompletedTabs([...completedTabs, currentTab])
-      }
-
-      if (currentTab < TABS.length - 1) {
-        setCurrentTab(currentTab + 1)
-      } else {
-        // Last tab - show confirmation
-        setShowConfirmation(true)
-      }
+    if (validateStep(currentStep)) {
+      setCurrentStep(Math.min(currentStep + 1, 3))
     }
   }
 
   const handleBack = () => {
-    if (currentTab > 0) {
-      setCurrentTab(currentTab - 1)
-    }
+    setCurrentStep(Math.max(currentStep - 1, 1))
   }
 
-  const handleTabChange = (index: number) => {
-    setCurrentTab(index)
-  }
-
-  const handleSaveDraft = () => {
-    // Already saved via useEffect, just notify user
-    alert('Draft saved! You can come back anytime.')
-    navigate('/dashboard')
-  }
-
-  // File upload helper
   const uploadFileToBackend = async (
     file: File,
     assetType: 'logo' | 'product' | 'guidelines'
@@ -160,81 +198,65 @@ export const CreateProject = () => {
       const uploadFormData = new FormData()
       uploadFormData.append('file', file)
       uploadFormData.append('asset_type', assetType)
-
-      // Get auth token from localStorage
-      const token = localStorage.getItem('authToken')
-      const headers: HeadersInit = {}
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const uploadResponse = await fetch(`${API_BASE_URL}/api/upload-asset`, {
+      
+      const uploadResponse = await fetch('http://localhost:8000/api/upload-asset', {
         method: 'POST',
         body: uploadFormData,
-        headers,
       })
-
+      
       if (!uploadResponse.ok) {
         throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
       }
-
-      const { file_url } = await uploadResponse.json()
-      return file_url
+      
+      const { file_path } = await uploadResponse.json()
+      return file_path
     } catch (error) {
-      console.error(`❌ Failed to upload ${assetType}:`, error)
+      console.error(`Failed to upload ${assetType}:`, error)
       return null
     }
   }
 
-  // Submit handler
-  const handleConfirmCreate = async () => {
-    setShowConfirmation(false)
+  const handleSubmit = async () => {
+    if (!validateStep(3)) return
+
+    setUploading(true)
     setSubmitError(null)
-
-    // Declare upload variables outside try block for catch block access
-    let uploadedProductUrls: string[] = []
-    let uploadedLogoUrls: string[] = []
-    let uploadedGuidelinesUrl: string | null = null
-
+    
     try {
-      // Upload assets in parallel
-      const uploadPromises: Promise<any>[] = []
-
-      // Upload product images
-      if (formData.product_images.length > 0) {
-        formData.product_images.forEach((file) => {
+      let uploadedProductUrl = ''
+      let uploadedLogoUrl = ''
+      let uploadedGuidelinesUrl = ''
+      
+      if (productImage || logoImage || guidelinesFile) {
+        const uploadPromises = []
+        
+        if (productImage) {
           uploadPromises.push(
-            uploadFileToBackend(file, 'product').then((url) => {
-              if (url) uploadedProductUrls.push(url)
+            uploadFileToBackend(productImage, 'product').then(url => {
+              if (url) uploadedProductUrl = url
             })
           )
-        })
-      }
-
-      // Upload logo images
-      if (formData.logo_images.length > 0) {
-        formData.logo_images.forEach((file) => {
+        }
+        
+        if (logoImage) {
           uploadPromises.push(
-            uploadFileToBackend(file, 'logo').then((url) => {
-              if (url) uploadedLogoUrls.push(url)
+            uploadFileToBackend(logoImage, 'logo').then(url => {
+              if (url) uploadedLogoUrl = url
             })
           )
-        })
+        }
+        
+        if (guidelinesFile) {
+          uploadPromises.push(
+            uploadFileToBackend(guidelinesFile, 'guidelines').then(url => {
+              if (url) uploadedGuidelinesUrl = url
+            })
+          )
+        }
+        
+        await Promise.all(uploadPromises)
       }
 
-      // Upload guidelines
-      if (formData.guidelines_file) {
-        uploadPromises.push(
-          uploadFileToBackend(formData.guidelines_file, 'guidelines').then((url) => {
-            uploadedGuidelinesUrl = url
-          })
-        )
-      }
-
-      // Wait for all uploads
-      await Promise.all(uploadPromises)
-
-      // Create project with video provider
       const newProject = await createProject({
         title: formData.title,
         creative_prompt: formData.creative_prompt,
@@ -242,435 +264,520 @@ export const CreateProject = () => {
         brand_description: formData.brand_description || undefined,
         target_audience: formData.target_audience || undefined,
         target_duration: formData.target_duration,
-        aspect_ratio: formData.aspect_ratios[0], // Primary aspect ratio
-        outputFormats: formData.aspect_ratios,
-        video_provider: formData.video_provider, // WAN 2.5: Provider selection
-        product_image_url: uploadedProductUrls[0] || undefined,
-        productImages: uploadedProductUrls.length > 0 ? uploadedProductUrls : undefined,
-        logo_url: uploadedLogoUrls[0] || undefined,
+        perfume_name: formData.perfume_name,
+        perfume_gender: formData.perfume_gender,
+        logo_url: uploadedLogoUrl || undefined,
+        product_image_url: uploadedProductUrl || undefined,
         guidelines_url: uploadedGuidelinesUrl || undefined,
+        selected_style: selectedStyle || undefined,
+        num_variations: formData.num_variations, // Phase 3: Include variation count
       } as any)
 
-      // Clear draft
-      localStorage.removeItem('draft-project')
-
-      // Navigate
-      if (autoGenerate) {
-        navigate(`/projects/${newProject.id}/progress`)
-      } else {
-        navigate('/dashboard')
+      if (referenceImage) {
+        await uploadReferenceImage(referenceImage, newProject.id)
       }
+
+      setUploading(false)
+      navigate(`/projects/${newProject.id}/progress`)
     } catch (err) {
-      console.error('❌ Error creating project:', err)
-
-      // Handle ECS unavailability - retry with Replicate
-      if (
-        err &&
-        typeof err === 'object' &&
-        'response' in err &&
-        (err as any).response?.status === 400 &&
-        formData.video_provider === 'ecs'
-      ) {
-        console.warn('ECS provider rejected by backend, retrying with Replicate')
-        try {
-          const newProject = await createProject({
-            title: formData.title,
-            creative_prompt: formData.creative_prompt,
-            brand_name: formData.brand_name,
-            brand_description: formData.brand_description || undefined,
-            target_audience: formData.target_audience || undefined,
-            target_duration: formData.target_duration,
-            aspect_ratio: formData.aspect_ratios[0],
-            outputFormats: formData.aspect_ratios,
-            video_provider: 'replicate', // Fallback to Replicate
-            product_image_url: uploadedProductUrls[0] || undefined,
-            productImages: uploadedProductUrls.length > 0 ? uploadedProductUrls : undefined,
-            logo_url: uploadedLogoUrls[0] || undefined,
-            guidelines_url: uploadedGuidelinesUrl || undefined,
-          } as any)
-
-          // Clear draft
-          localStorage.removeItem('draft-project')
-
-          // Navigate
-          if (autoGenerate) {
-            navigate(`/projects/${newProject.id}/progress`)
-          } else {
-            navigate('/dashboard')
-          }
-          return
-        } catch (retryErr) {
-          console.error('❌ Retry with Replicate also failed:', retryErr)
-          const retryMessage = retryErr instanceof Error ? retryErr.message : 'Failed to create project with fallback provider'
-          setSubmitError(`ECS unavailable. Fallback to Replicate failed: ${retryMessage}`)
-          setShowConfirmation(true)
-          return
-        }
-      }
-
-      // Handle other errors
       const message = err instanceof Error ? err.message : 'Failed to create project'
       setSubmitError(message)
-      setShowConfirmation(true)
+      setUploading(false)
     }
   }
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  const stepVariants = {
+    hidden: { opacity: 0, x: 20 },
+    visible: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 },
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 flex flex-col">
-      <Header logo="GenAds" title="Create Project" />
-
-      <div className="flex-1">
-        <Container size="lg" className="py-12">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-8"
-          >
-            {/* Title */}
-            <motion.div variants={itemVariants} className="text-center">
-              <h2 className="text-3xl font-bold text-gray-900">Create New Project</h2>
-              <p className="text-gray-600 mt-2">
-                Follow the steps below to create your AI-generated ad video
-              </p>
-            </motion.div>
-
-            {/* Tab Wizard */}
-            <motion.div variants={itemVariants}>
-              <Card>
-                <CardContent className="p-8">
-                  <TabWizard
-                    tabs={TABS}
-                    currentTab={currentTab}
-                    onTabChange={handleTabChange}
-                    completedTabs={completedTabs}
-                  />
-
-                  {/* Tab Content */}
-                  <div className="mt-8">
-                    <TabPanel isActive={currentTab === 0} tabId="brand-info">
-                      <BrandInfoTab
-                        data={{
-                          title: formData.title,
-                          brand_name: formData.brand_name,
-                          brand_description: formData.brand_description,
-                        }}
-                        onChange={(data) =>
-                          setFormData((prev) => ({ ...prev, ...data }))
-                        }
-                      />
-                    </TabPanel>
-
-                    <TabPanel isActive={currentTab === 1} tabId="creative-vision">
-                      <CreativeVisionTab
-                        data={{
-                          creative_prompt: formData.creative_prompt,
-                          target_audience: formData.target_audience,
-                          target_duration: formData.target_duration,
-                          aspect_ratios: formData.aspect_ratios,
-                        }}
-                        onChange={(data) =>
-                          setFormData((prev) => ({ ...prev, ...data }))
-                        }
-                      />
-                    </TabPanel>
-
-                    <TabPanel isActive={currentTab === 2} tabId="provider-selection">
-                      <div className="space-y-6">
-                        {/* Section Header */}
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            Choose Generation Provider
-                          </h3>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Select how you want to generate your video based on cost and performance
-                          </p>
-                        </div>
-
-                        {/* Health Status Error */}
-                        {healthError && (
-                          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <div className="flex items-start gap-3">
-                              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-yellow-900">
-                                  Unable to check provider status
-                                </p>
-                                <p className="text-sm text-yellow-700 mt-1">
-                                  Using Replicate API as fallback. You can retry the health check below.
-                                </p>
-                                <button
-                                  onClick={refetch}
-                                  className="text-sm text-yellow-700 underline hover:text-yellow-900 mt-2"
-                                >
-                                  Retry health check
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Cost Comparison */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <h4 className="font-semibold text-blue-900 mb-3">Cost Comparison</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-3 rounded border border-blue-100">
-                              <div className="font-medium text-gray-900">Replicate Cloud API</div>
-                              <div className="text-2xl font-bold text-gray-900 mt-1">~$0.80</div>
-                              <div className="text-sm text-gray-600">per video</div>
-                              <div className="text-blue-600 text-sm mt-2">✓ Fast & reliable</div>
-                              <div className="text-blue-600 text-sm">✓ Always available</div>
-                            </div>
-                            <div className="bg-white p-3 rounded border border-blue-100">
-                              <div className="font-medium text-gray-900">Self-Hosted GPU</div>
-                              <div className="text-2xl font-bold text-gray-900 mt-1">~$0.20</div>
-                              <div className="text-sm text-gray-600">per video</div>
-                              <div className="text-green-600 font-semibold text-sm mt-2">
-                                ✓ 75% savings
-                              </div>
-                              <div className="text-gray-600 text-sm">
-                                {ecs.healthy ? '✓ Currently available' : '⚠ Currently unavailable'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Provider Selector */}
-                        <ProviderSelector
-                          value={formData.video_provider}
-                          onChange={(provider) =>
-                            setFormData((prev) => ({ ...prev, video_provider: provider }))
-                          }
-                          ecsAvailable={ecs.healthy}
-                        />
-
-                        {/* Info Tooltip for Cold Start */}
-                        <div className="flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                          <Info className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
-                          <div className="text-sm text-gray-600">
-                            <strong>Note:</strong> Self-hosted GPU may have slower cold start during
-                            off-hours (outside 12 PM - 11 PM window). The service scales down
-                            automatically to optimize costs.
-                          </div>
-                        </div>
-                      </div>
-                    </TabPanel>
-
-                    <TabPanel isActive={currentTab === 3} tabId="assets">
-                      <AssetsTab
-                        data={{
-                          product_images: formData.product_images,
-                          logo_images: formData.logo_images,
-                          guidelines_file: formData.guidelines_file,
-                        }}
-                        onChange={(data) =>
-                          setFormData((prev) => ({ ...prev, ...data }))
-                        }
-                      />
-                    </TabPanel>
-                  </div>
-
-                  {/* Navigation */}
-                  <FormNavigation
-                    onBack={currentTab > 0 ? handleBack : undefined}
-                    onNext={handleNext}
-                    onSaveDraft={handleSaveDraft}
-                    canProceed={canProceedToNext()}
-                    backLabel={currentTab > 0 ? '← Back' : undefined}
-                    nextLabel={
-                      currentTab === TABS.length - 1 ? 'Review & Create →' : 'Continue →'
-                    }
-                    isLoading={loading}
-                  />
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Info Box */}
-            <motion.div variants={itemVariants}>
-              <div className="p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
-                <p className="text-primary-600 text-sm">
-                  💡 <strong>Pro Tip:</strong> Your progress is automatically saved. You can come
-                  back anytime to continue where you left off.
-                </p>
-              </div>
-            </motion.div>
-          </motion.div>
-        </Container>
+    <div className="min-h-screen bg-gradient-hero">
+      {/* Background decoration */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
       </div>
 
-      {/* Confirmation Modal */}
-      <Modal
-        isOpen={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        title="Review Your Project"
-        description="Confirm the details before creating your project"
-        size="lg"
-      >
-        <div className="space-y-6">
-          {/* Error Message */}
-          {submitError && (
-            <div className="p-4 bg-error-500/10 border border-error-500/50 rounded-lg text-error-600 text-sm">
-              {submitError}
+      {/* Navigation Header */}
+      <nav className="relative z-10 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-olive-800/50 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-muted-gray hover:text-gold" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-gold rounded-lg shadow-gold">
+                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                </div>
+                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+              </div>
             </div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-semibold text-off-white">Create New Project</h1>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="relative z-10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-4xl">
+          {/* Step Indicator */}
+          <div className="mb-4">
+            <StepIndicator currentStep={currentStep} totalSteps={3} steps={steps} />
+          </div>
+
+          {/* Error Message */}
+          {(error || submitError) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm backdrop-blur-sm"
+            >
+              {error || submitError}
+            </motion.div>
           )}
 
-          {/* Project Details */}
-          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase">
-                  Project Title
-                </label>
-                <p className="text-gray-900 mt-1">{formData.title}</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase">Brand Name</label>
-                <p className="text-gray-900 mt-1">{formData.brand_name}</p>
-              </div>
-            </div>
+          {/* Step Content */}
+          <AnimatePresence mode="wait">
+            {currentStep === 1 && (
+              <motion.div
+                key="step1"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Project Information</h2>
+                    <p className="text-sm text-muted-gray">Tell us about your project and brand</p>
+                  </div>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Creative Vision
-              </label>
-              <p className="text-gray-900 mt-1 text-sm">{formData.creative_prompt}</p>
-            </div>
+                  <div className="space-y-4">
+                    {/* Project Title */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Project Title <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Chanel Noir TikTok Ad"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
+                    </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase">Duration</label>
-                <p className="text-gray-900 mt-1">{formData.target_duration}s</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase">
-                  Output Formats
-                </label>
-                <p className="text-gray-900 mt-1 text-sm">
-                  {formData.aspect_ratios
-                    .map((ar) =>
-                      ar === '9:16' ? '📱 Vertical' : ar === '1:1' ? '⬜ Square' : '🖥️ Horizontal'
-                    )
-                    .join(', ')}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase">
-                  Video Provider
-                </label>
-                <p className="text-gray-900 mt-1 text-sm">
-                  {formData.video_provider === 'ecs' ? '🖥️ Self-Hosted GPU' : '☁️ Replicate Cloud'}
-                </p>
-              </div>
-            </div>
+                    {/* Brand Name */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Brand Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Your brand name"
+                        value={formData.brand_name}
+                        onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
+                    </div>
 
-            {/* Assets */}
-            {(formData.product_images.length > 0 ||
-              formData.logo_images.length > 0 ||
-              formData.guidelines_file) && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">
-                  Uploaded Assets
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {formData.product_images.length > 0 && (
-                    <span className="px-3 py-1 bg-primary-500/10 text-primary-600 rounded-full text-xs">
-                      ✓ {formData.product_images.length} Product Image
-                      {formData.product_images.length > 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {formData.logo_images.length > 0 && (
-                    <span className="px-3 py-1 bg-secondary-500/10 text-secondary-600 rounded-full text-xs">
-                      ✓ {formData.logo_images.length} Logo{formData.logo_images.length > 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {formData.guidelines_file && (
-                    <span className="px-3 py-1 bg-success-500/10 text-success-600 rounded-full text-xs">
-                      ✓ Brand Guidelines
-                    </span>
-                  )}
+                    {/* Brand Description */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Brand Description <span className="text-muted-gray text-xs font-normal">(Optional)</span>
+                      </label>
+                      <textarea
+                        placeholder="Tell us about your brand's story, values, and personality..."
+                        value={formData.brand_description}
+                        onChange={(e) => setFormData({ ...formData, brand_description: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all resize-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             )}
-          </div>
 
-          {/* Cost Estimate */}
-          <div className="bg-success-500/10 border border-success-500/20 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-success-600" />
-              <span className="text-xs font-semibold text-success-600 uppercase">
-                Estimated Cost
-              </span>
-            </div>
-            <p className="text-2xl font-bold text-success-600">
-              {formData.video_provider === 'ecs' ? '~$0.20' : '~$0.80'}
-            </p>
-            <p className="text-xs text-success-700 mt-1">
-              {formData.video_provider === 'ecs'
-                ? 'Self-hosted GPU - 75% cost savings'
-                : 'Replicate Cloud API - Fast & reliable'}
-            </p>
-          </div>
+            {currentStep === 2 && (
+              <motion.div
+                key="step2"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Creative Vision</h2>
+                    <p className="text-sm text-muted-gray">Define your video style and settings</p>
+                  </div>
 
-          {/* Auto-Generate Toggle */}
-          <div className="flex items-center gap-3 p-3 bg-primary-500/10 border border-primary-500/20 rounded-lg">
-            <input
-              type="checkbox"
-              id="autoGenerate"
-              checked={autoGenerate}
-              onChange={(e) => setAutoGenerate(e.target.checked)}
-              className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
-            />
-            <label htmlFor="autoGenerate" className="flex-1 cursor-pointer">
-              <p className="text-sm font-medium text-gray-900">Start generation immediately</p>
-              <p className="text-xs text-gray-600">
-                {autoGenerate
-                  ? 'You will be taken to the progress page'
-                  : 'Project will be saved as draft'}
-              </p>
-            </label>
-          </div>
+                  <div className="space-y-4">
+                    {/* Creative Prompt */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Creative Vision <span className="text-red-400">*</span>
+                      </label>
+                      <textarea
+                        placeholder="Describe your vision for the video. How should it look and feel? What story should it tell?"
+                        value={formData.creative_prompt}
+                        onChange={(e) => setFormData({ ...formData, creative_prompt: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all resize-none"
+                        required
+                      />
+                    </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+                    {/* Target Audience */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Target Audience <span className="text-muted-gray text-xs font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Women 30-55 interested in natural beauty"
+                        value={formData.target_audience}
+                        onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                      />
+                    </div>
+
+                    {/* Video Style Selector */}
+                    <div className="p-3 bg-olive-700/30 rounded-lg border border-olive-600/50">
+                      <StyleSelector
+                        styles={styles}
+                        selectedStyle={selectedStyle}
+                        onSelectStyle={setSelectedStyle}
+                        onClearStyle={clearSelection}
+                        isLoading={isLoadingStyles}
+                      />
+                    </div>
+
+                    {/* Perfume Name */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-1.5">
+                        Perfume Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Noir Élégance"
+                        value={formData.perfume_name}
+                        onChange={(e) => setFormData({ ...formData, perfume_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-olive-700/50 border border-olive-600 rounded-lg text-sm text-off-white placeholder-muted-gray focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 transition-all"
+                        required
+                      />
+                    </div>
+
+                    {/* Perfume Gender */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-2">
+                        Perfume Gender <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['masculine', 'feminine', 'unisex'] as const).map((gender) => (
+                          <button
+                            key={gender}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, perfume_gender: gender })}
+                            className={`p-2.5 rounded-lg border-2 transition-all duration-200 ${
+                              formData.perfume_gender === gender
+                                ? 'border-gold bg-gold/10 shadow-gold'
+                                : 'border-olive-600 bg-olive-700/30 hover:border-olive-500'
+                            }`}
+                          >
+                            <div className={`text-sm font-semibold capitalize ${formData.perfume_gender === gender ? 'text-gold' : 'text-off-white'}`}>
+                              {gender}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Duration Slider */}
+                    <div>
+                      <label className="block text-sm font-semibold text-off-white mb-2">
+                        Target Duration: <span className="text-gold font-bold">{formData.target_duration}s</span>
+                      </label>
+                      <div className="space-y-2">
+                        <Slider
+                          value={[formData.target_duration]}
+                          onValueChange={(value) => setFormData({ ...formData, target_duration: value[0] })}
+                          min={15}
+                          max={60}
+                          step={5}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-xs text-muted-gray">
+                          <span>15s</span>
+                          <span>30s</span>
+                          <span>60s</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Variation Count Selector */}
+                    <div className="p-4 bg-olive-700/30 rounded-lg border border-olive-600/50">
+                      <label className="block text-sm font-semibold text-off-white mb-3">
+                        How many variations would you like?
+                      </label>
+                      <div className="flex gap-3 flex-wrap">
+                        {([1, 2, 3] as const).map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, num_variations: num })}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 ${
+                              formData.num_variations === num
+                                ? 'bg-gold text-gold-foreground shadow-gold'
+                                : 'bg-olive-700/50 text-off-white hover:bg-olive-600/50 border border-olive-600'
+                            }`}
+                          >
+                            {num} Variation{num > 1 ? 's' : ''}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-gray mt-3">
+                        {formData.num_variations === 1
+                          ? 'Generate one video with your selected style.'
+                          : `Generate ${formData.num_variations} videos with slightly different storylines. You'll select your favorite.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {currentStep === 3 && (
+              <motion.div
+                key="step3"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+                className="bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-2xl p-5 sm:p-6 shadow-gold-lg"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-off-white mb-1">Upload Assets</h2>
+                    <p className="text-sm text-muted-gray">Add images and files to enhance your video (all optional)</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Product Image */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-off-white">
+                        <ImageIcon className="w-4 h-4 inline mr-2 text-gold" />
+                        Product Image
+                      </label>
+                      {imagePreview ? (
+                        <div className="relative group">
+                          <img
+                            src={imagePreview}
+                            alt="Product preview"
+                            className="w-full h-32 object-cover rounded-lg border border-olive-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFile('product')}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                          <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                          <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload product</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'product')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Brand Logo */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-off-white">
+                        <Sparkles className="w-4 h-4 inline mr-2 text-gold" />
+                        Brand Logo
+                      </label>
+                      {logoPreview ? (
+                        <div className="relative group">
+                          <img
+                            src={logoPreview}
+                            alt="Logo preview"
+                            className="w-full h-32 object-contain bg-olive-700/30 rounded-lg border border-olive-600 p-3"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFile('logo')}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                          <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                          <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload logo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'logo')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Brand Guidelines */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-off-white">
+                      <FileText className="w-4 h-4 inline mr-2 text-gold" />
+                      Brand Guidelines
+                    </label>
+                    {guidelinesFile ? (
+                      <div className="flex items-center justify-between p-3 bg-olive-700/30 border border-olive-600 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-gold/10 rounded-lg border border-gold/20">
+                            <FileText className="w-4 h-4 text-gold" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-off-white">{guidelinesFile.name}</p>
+                            <p className="text-xs text-muted-gray">
+                              {(guidelinesFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile('guidelines')}
+                          className="p-1.5 text-muted-gray hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                        <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                        <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload guidelines</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.txt,text/plain,application/pdf"
+                          onChange={handleGuidelinesChange}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Reference Image */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-off-white">
+                      <Palette className="w-4 h-4 inline mr-2 text-gold" />
+                      Reference Image <span className="text-muted-gray text-xs font-normal">(Optional)</span>
+                    </label>
+                    {referencePreview ? (
+                      <div className="relative group">
+                        <img
+                          src={referencePreview}
+                          alt="Reference preview"
+                          className="w-full h-32 object-cover rounded-lg border border-gold/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFile('reference')}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500/90 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <X className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold/50 hover:bg-olive-700/20 transition-all duration-200 group">
+                        <UploadCloud className="w-6 h-6 text-muted-gray group-hover:text-gold mb-1 transition-colors" />
+                        <span className="text-xs text-muted-gray group-hover:text-gold transition-colors">Upload reference</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageChange(e, 'reference')}
+                          className="hidden"
+                          disabled={isUploadingReference}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Navigation Buttons */}
+          <div className="flex items-center justify-between gap-4 mt-6">
             <Button
               type="button"
               variant="outline"
-              fullWidth
-              onClick={() => setShowConfirmation(false)}
-              disabled={loading}
+              onClick={currentStep === 1 ? () => navigate('/dashboard') : handleBack}
+              className="gap-2 border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
             >
-              Edit
+              <ArrowLeft className="w-4 h-4" />
+              {currentStep === 1 ? 'Cancel' : 'Back'}
             </Button>
-            <Button
-              type="button"
-              variant="default"
-              fullWidth
-              onClick={handleConfirmCreate}
-              disabled={loading}
-              isLoading={loading}
-            >
-              {loading ? 'Creating...' : 'Create Project'}
-            </Button>
+
+            {currentStep < 3 ? (
+              <Button
+                type="button"
+                variant="hero"
+                onClick={handleNext}
+                className="gap-2 transition-transform duration-200 hover:scale-105"
+              >
+                Next
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="hero"
+                onClick={handleSubmit}
+                disabled={loading || uploading}
+                className="gap-2 transition-transform duration-200 hover:scale-105"
+              >
+                {loading || uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-gold-foreground/30 border-t-gold-foreground rounded-full animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-4 h-4" />
+                    Start Creating Video
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
-      </Modal>
+      </div>
     </div>
   )
 }

@@ -1,15 +1,14 @@
 /**
- * PHASE 7: StyleSelector Component
+ * PHASE 7: StyleSelector Component - Luxury Theme
  * 
  * Displays 5 video styles for user selection in CreateProject
- * Styles: Cinematic, Dark Premium, Minimal Studio, Lifestyle, 2D Animated
- * 
- * Shows style cards with descriptions, keywords, and use cases.
+ * Styles: Cinematic, Dark Premium, Minimal Studio, Lifestyle, 2D Animated  (Shows style cards with descriptions, keywords, and use cases.)
  * User can select one style or leave blank for LLM to choose.
  */
 
 import type { VideoStyle } from '../../hooks/useStyleSelector';
 import { cn } from '../../utils/cn';
+import { Check } from 'lucide-react';
 
 interface StyleSelectorProps {
   styles: VideoStyle[];

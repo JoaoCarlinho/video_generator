@@ -1,15 +1,15 @@
-"""Database CRUD operations for projects and brands."""
+"""Database CRUD operations for projects, brands, products, and campaigns."""
 
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from app.database.models import Project, Brand, Product, Campaign
+from sqlalchemy import desc, func
+from app.database.models import Project, Brand, Product, Campaign, AuthUser  # AuthUser needed for FK resolution
 from app.models.schemas import (
     CreateProjectRequest,
     ProjectResponse,
     ProjectDetailResponse
 )
 from uuid import UUID
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,13 +43,16 @@ def create_project(
         title: Project title
         brief: Product brief/description
         ad_project_json: Complete ad project configuration as JSON
-        mood: Video mood/style
+        mood: Video mood/style (deprecated, kept for compatibility)
         duration: Video duration in seconds
         aspect_ratio: DEPRECATED - Video aspect ratio (9:16, 1:1, or 16:9)
         product_images: STORY 3 - Array of product image URLs (max 10)
         scene_backgrounds: STORY 3 - Array of scene background mappings
         output_formats: STORY 3 - Array of desired aspect ratios
         selected_style: (PHASE 7) User-selected video style or None
+        product_name: (Phase 9) Product product name (e.g., "Noir Élégance")
+        product_gender: (Phase 9) Product gender ('masculine', 'feminine', 'unisex')
+        num_variations: (MULTI-VARIATION) Number of video variations to generate (1-3)
 
     Returns:
         Project: Created project object
@@ -74,7 +77,11 @@ def create_project(
             # STORY 3: New fields
             product_images=product_images,
             scene_backgrounds=scene_backgrounds,
-            output_formats=output_formats
+            output_formats=output_formats,
+            product_name=product_name,  # Phase 9: Store product name
+            product_gender=product_gender,  # Phase 9: Store product gender
+            num_variations=num_variations,  # MULTI-VARIATION: Store variation count
+            selected_variation_index=None  # MULTI-VARIATION: No selection yet
         )
         db.add(project)
         db.commit()
@@ -439,6 +446,7 @@ def update_project_output(
             from sqlalchemy.orm.attributes import flag_modified
             flag_modified(project, "ad_project_json")
 
+        
         project.cost = round(float(total_cost), 2)
         project.status = "COMPLETED"
         project.progress = 100
@@ -677,7 +685,7 @@ def get_projects_without_s3_paths(
 
 
 # ============================================================================
-# BRAND CRUD Operations
+# Brand CRUD Operations (Phase 2 B2B SaaS)
 # ============================================================================
 
 def create_brand(
@@ -874,6 +882,32 @@ def delete_brand(
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to delete brand {brand_id}: {e}")
+def get_brand_stats(db: Session, brand_id: UUID) -> Dict[str, Any]:
+    """
+    Get brand statistics (perfumes count, campaigns count, total cost).
+    
+    Args:
+        db: Database session
+        brand_id: Brand ID
+    
+    Returns:
+        Dict with statistics
+    """
+    try:
+        perfumes_count = db.query(Product).filter(Product.brand_id == brand_id).count()
+        campaigns_count = db.query(Campaign).filter(Campaign.brand_id == brand_id).count()
+        total_cost = db.query(func.sum(Campaign.cost)).filter(Campaign.brand_id == brand_id).scalar() or 0
+        
+        stats = {
+            "total_perfumes": perfumes_count,
+            "total_campaigns": campaigns_count,
+            "total_cost": float(total_cost)
+        }
+        
+        logger.debug(f"✅ Generated stats for brand {brand_id}: {stats}")
+        return stats
+    except Exception as e:
+        logger.error(f"❌ Failed to get stats for brand {brand_id}: {e}")
         raise
 
 
@@ -1102,6 +1136,23 @@ def delete_product(
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to delete product {product_id}: {e}")
+
+def get_perfume_campaigns_count(db: Session, perfume_id: UUID) -> int:
+    """
+    Get count of campaigns for a perfume.
+    
+    Args:
+        db: Database session
+        perfume_id: Product ID
+    
+    Returns:
+        int: Number of campaigns
+    """
+    try:
+        count = db.query(Campaign).filter(Campaign.perfume_id == perfume_id).count()
+        return count
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaigns count for perfume {perfume_id}: {e}")
         raise
 
 
@@ -1113,11 +1164,15 @@ def create_campaign(
     db: Session,
     user_id: UUID,
     product_id: UUID,
+    brand_id: UUID,
     name: str,
     seasonal_event: str,
     year: int,
     duration: int,
-    scene_configs: List[Dict[str, Any]]
+    scene_configs: List[Dict[str, Any]],
+    selected_style: str,
+    target_duration: int,
+    num_variations: int = 1
 ) -> Optional[Campaign]:
     """
     Create a new campaign associated with a product.
@@ -1152,12 +1207,19 @@ def create_campaign(
         # Create campaign
         campaign = Campaign(
             product_id=product_id,
+            brand_id=brand_id,
             name=name,
+            num_variations=num_variations,
+            creative_prompt=creative_prompt,
             seasonal_event=seasonal_event,
+            selected_style=selected_style,
             year=year,
             duration=duration,
             scene_configs=scene_configs,
-            status="draft"
+            status="draft",
+            progress=0,
+            cost=0,
+            campaign_json={}
         )
         db.add(campaign)
         db.commit()

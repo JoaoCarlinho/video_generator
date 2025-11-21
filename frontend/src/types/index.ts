@@ -131,27 +131,28 @@ export interface Project {
   adProjectJson?: Record<string, any>
   createdAt: string
   updatedAt: string
+  num_variations?: number // 1-3
+  selected_variation_index?: number | null // 0-2 or null
 }
 
 export interface CreateProjectInput {
   title: string
-  creative_prompt: string
-  brand_name: string
-  brand_description?: string
-  target_audience?: string
-  target_duration: number
-  primary_color: string
-  secondary_color?: string
-  aspect_ratio?: '9:16' | '1:1' | '16:9'
-  product_image_url?: string
-  productImages?: string[]
-  sceneBackgrounds?: SceneBackground[]
-  outputFormats?: AspectRatio[]
-  logo_url?: string
-  guidelines_url?: string
   brief?: string
+  brand_name: string
   mood?: string
   duration?: number
+  product_image_url?: string
+  logo_url?: string
+  guidelines_url?: string
+  creative_prompt?: string
+  brand_description?: string
+  target_audience?: string
+  target_duration?: number
+  // Phase 9: Perfume-specific fields
+  perfume_name: string
+  perfume_gender: 'masculine' | 'feminine' | 'unisex'
+  // Phase 3: Multi-variation support
+  num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }
 
 // Generation Types
@@ -197,8 +198,8 @@ export interface SignupFormData {
   agreeToTerms: boolean
 }
 
-// PHASE 7: Video Style Types
-export type VideoStyleType = 'cinematic' | 'dark_premium' | 'minimal_studio' | 'lifestyle' | '2d_animated'
+// PHASE 9: Video Style Types (Updated to 3 perfume styles only)
+export type VideoStyleType = 'gold_luxe' | 'dark_elegance' | 'romantic_floral'
 
 export interface VideoStyle {
   id: string

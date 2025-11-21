@@ -48,24 +48,29 @@ async def create_new_project(
     authorization: str = Header(None)
 ):
     """
-    Create a new ad generation project.
+    Create a new luxury perfume TikTok ad project.
+    
+    Logs request data for debugging validation errors.
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
     
     **Request Body:**
     - title: Project title (max 200 chars)
-    - creative_prompt: User's creative vision for the video (20-3000 chars)
-    - target_duration: Target video duration (15-120 seconds, flexible)
+    - creative_prompt: User's creative vision for the perfume ad (20-3000 chars)
+    - target_duration: Target video duration (15-60 seconds for TikTok)
     - brand_name: Brand name (max 100 chars)
     - brand_description: (optional) Brand story, values, personality
     - target_audience: (optional) Target audience description
-    - aspect_ratio: (optional) Video aspect ratio - '9:16' (vertical), '1:1' (square), or '16:9' (horizontal). Defaults to '16:9'
+    - perfume_name: Perfume product name (required, e.g., "Noir Élégance")
+    - perfume_gender: Perfume gender - 'masculine', 'feminine', or 'unisex' (default: 'unisex')
     - logo_url: (optional) S3 URL of uploaded brand logo
-    - product_image_url: (optional) S3 URL of uploaded product image
+    - product_image_url: (optional) S3 URL of uploaded perfume bottle image
     - guidelines_url: (optional) S3 URL of uploaded brand guidelines
+    - selected_style: (optional) Perfume video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
+    - num_variations: (optional) Number of video variations to generate (1-3, default: 1)
     
-    **Note:** Colors are now determined by the LLM based on creative_prompt and brand_guidelines for optimal visual consistency.
+    **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all perfume ads.
     
     **Response:** ProjectResponse with newly created project
     
@@ -77,17 +82,31 @@ async def create_new_project(
     **Example:**
     ```json
     {
-      "title": "Summer Skincare Campaign",
-      "creative_prompt": "Create an uplifting video showing how our serum transforms skin. Start with a hook about sun damage, then showcase the product benefits, and end with happy customers.",
+      "title": "Chanel Noir TikTok Ad",
+      "creative_prompt": "Create a mysterious luxury perfume ad for our new noir fragrance. Start with dramatic bottle reveal, show elegant textures, end with brand moment.",
       "target_duration": 30,
-      "brand_name": "HydraGlow",
-      "brand_description": "Premium skincare for conscious consumers",
-      "target_audience": "Women 30-55 interested in natural beauty",
-      "aspect_ratio": "16:9"
+      "brand_name": "Chanel",
+      "brand_description": "Luxury French perfume house",
+      "target_audience": "Sophisticated adults 30-50",
+      "perfume_name": "Noir Élégance",
+      "perfume_gender": "masculine",
+      "selected_style": "dark_elegance"
     }
     ```
     """
     try:
+        # Log request data for debugging
+        logger.info(f"Creating project with data: title={request.title}, brand_name={request.brand_name}, perfume_name={request.perfume_name}, creative_prompt length={len(request.creative_prompt) if request.creative_prompt else 0}")
+        
+        # Validate required fields
+        if not request.perfume_name or not request.perfume_name.strip():
+            logger.error("perfume_name is required but missing or empty")
+            raise HTTPException(status_code=422, detail="perfume_name is required")
+        
+        if not request.creative_prompt or len(request.creative_prompt.strip()) < 20:
+            logger.error(f"creative_prompt validation failed: length={len(request.creative_prompt) if request.creative_prompt else 0}")
+            raise HTTPException(status_code=422, detail="creative_prompt must be at least 20 characters")
+        
         # Initialize database if needed
         init_db()
 
@@ -167,12 +186,15 @@ async def create_new_project(
             # WAN 2.5: Video provider selection
             "video_provider": request.video_provider,
             # Continue with existing fields
+            "product_name": request.product_name,  # Phase 9: Perfume product name
+            "product_gender": request.product_gender,  # Phase 9: Perfume gender\
             "selectedStyle": selected_style_config,  # PHASE 7: User-selected or LLM-inferred style
             "style_spec": None,
             "scenes": [],
             "video_settings": {
                 "aspect_ratio": request.aspect_ratio,  # Kept for backward compat
                 "resolution": "1080p",
+                "platform": "tiktok",  # Phase 9: Platform identifier
                 "fps": 30,
                 "codec": "h264"
             },
@@ -199,6 +221,9 @@ async def create_new_project(
             scene_backgrounds=scene_backgrounds_list,
             output_formats=output_formats_list,
             selected_style=request.selected_style  # PHASE 7: Store selected style
+            product_name=request.product_name,  # Phase 9: Store product name
+            product_gender=request.product_gender,  # Phase 9: Store product gender
+            num_variations=request.num_variations  # MULTI-VARIATION: Store variation count
         )
         
         # S3 RESTRUCTURING: Initialize S3 folder structure for new project
@@ -224,8 +249,7 @@ async def create_new_project(
             "status": project.status,
             "progress": project.progress,
             "cost": float(project.cost) if project.cost else 0.0,
-            "s3_project_folder": getattr(project, 's3_project_folder', None),
-            "s3_project_folder_url": getattr(project, 's3_project_folder_url', None),
+            "aspect_ratio": getattr(project, 'aspect_ratio', '9:16'),  # Phase 9: Default to 9:16
             "created_at": project.created_at,
             "updated_at": project.updated_at,
         })
@@ -272,7 +296,7 @@ async def get_project_details(
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        return ProjectDetailResponse.from_orm(project)
+        return ProjectDetailResponse.model_validate(project)
     
     except HTTPException:
         raise
@@ -332,8 +356,7 @@ async def list_user_projects(
                 "status": p.status,
                 "progress": p.progress,
                 "cost": float(p.cost) if p.cost else 0.0,
-                "s3_project_folder": getattr(p, 's3_project_folder', None),
-                "s3_project_folder_url": getattr(p, 's3_project_folder_url', None),
+                "aspect_ratio": getattr(p, 'aspect_ratio', '9:16'),  # Phase 9: Default to 9:16
                 "created_at": p.created_at,
                 "updated_at": p.updated_at,
             })
@@ -400,22 +423,39 @@ async def get_user_stats(
 @router.get("/styles/available", response_model=dict)
 async def get_available_styles():
     """
-    Get all available video styles for UI selection.
+    Get all available product video styles for UI selection.
     
     **Response:**
     ```json
     {
       "styles": [
         {
-          "id": "cinematic",
-          "name": "Cinematic",
-          "description": "High-quality camera feel, dramatic lighting, depth of field...",
-          "short_description": "Professional, dramatic",
-          "examples": ["Nike", "Apple", "Samsung"],
-          "keywords": ["professional", "dramatic", "premium"],
-          "best_for": ["Luxury brands", "Premium products"]
+          "id": "gold_luxe",
+          "name": "Gold Luxe",
+          "description": "Warm golden lighting, rich textures, opulent feel",
+          "short_description": "Luxurious, warm",
+          "examples": ["Chanel", "Dior", "Tom Ford"],
+          "keywords": ["luxury", "gold", "warm", "opulent"],
+          "best_for": ["High-end perfumes", "Premium fragrances", "Luxury brands"]
         },
-        ...
+        {
+          "id": "dark_elegance",
+          "name": "Dark Elegance",
+          "description": "Black background, dramatic rim lighting, mysterious",
+          "short_description": "Mysterious, sophisticated",
+          "examples": ["Yves Saint Laurent", "Versace", "Armani"],
+          "keywords": ["dark", "elegant", "mysterious", "dramatic"],
+          "best_for": ["Masculine fragrances", "Exclusive perfumes", "Evening scents"]
+        },
+        {
+          "id": "romantic_floral",
+          "name": "Romantic Floral",
+          "description": "Soft pastels, floral elements, feminine aesthetic",
+          "short_description": "Romantic, delicate",
+          "examples": ["Marc Jacobs", "Viktor & Rolf", "Valentino"],
+          "keywords": ["romantic", "floral", "feminine", "delicate"],
+          "best_for": ["Feminine fragrances", "Floral perfumes", "Spring/Summer scents"]
+        }
       ]
     }
     ```
@@ -477,7 +517,7 @@ async def update_project_details(
         if not updated:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        return ProjectResponse.from_orm(updated)
+        return ProjectResponse.model_validate(updated)
     
     except HTTPException:
         raise

@@ -75,4 +75,5 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button'
 
 export { Button, buttonVariants }
+export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'gradient' | 'hero' | 'gold'
 

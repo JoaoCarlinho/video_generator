@@ -86,11 +86,11 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
             onClick={() => !disabled && setIsOpen(!isOpen)}
             disabled={disabled}
             className={cn(
-              'w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-left flex items-center justify-between transition-all duration-200',
-              'focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent',
+              'w-full px-4 py-3 bg-charcoal-900/70 border border-charcoal-700/70 rounded-xl text-off-white text-left flex items-center justify-between transition-all duration-200',
+              'focus:outline-none focus:ring-2 focus:ring-gold focus:border-gold/40',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              'hover:border-slate-600',
-              isOpen && 'ring-2 ring-indigo-600 border-transparent',
+              'hover:border-gold/30',
+              isOpen && 'ring-2 ring-gold border-transparent',
               error && 'border-red-500 focus:ring-red-600',
               icon && 'pl-10'
             )}
@@ -104,10 +104,10 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
 
           {/* Dropdown Menu */}
           {isOpen && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50 animate-scale-in">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-charcoal-900 border border-charcoal-700 rounded-xl shadow-lg z-50 animate-scale-in">
               {/* Search Input */}
               {searchable && (
-                <div className="p-2 border-b border-slate-700">
+                <div className="p-2 border-b border-charcoal-700/70">
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -115,8 +115,8 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className={cn(
-                      'w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-100 text-sm placeholder-slate-500',
-                      'focus:outline-none focus:ring-2 focus:ring-indigo-600'
+                      'w-full px-3 py-2 bg-charcoal-800 border border-charcoal-700/70 rounded text-off-white text-sm placeholder-muted-gray',
+                      'focus:outline-none focus:ring-2 focus:ring-gold focus:border-gold/40'
                     )}
                   />
                 </div>
@@ -150,14 +150,14 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
 
               {/* Clear Button */}
               {clearable && value && (
-                <div className="border-t border-slate-700 p-2">
+                <div className="border-t border-charcoal-700/70 p-2">
                   <button
                     onClick={() => {
                       onChange?.('')
                       setIsOpen(false)
                       setSearchTerm('')
                     }}
-                    className="w-full px-3 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors text-left"
+                    className="w-full px-3 py-2 text-sm text-muted-gray hover:text-off-white hover:bg-charcoal-800 rounded transition-colors text-left"
                   >
                     Clear
                   </button>

@@ -1,7 +1,7 @@
-"""Renderer Service - Final video rendering and multi-aspect export.
+"""Renderer Service - Final video rendering for TikTok vertical (9:16 only).
 
 This service combines composited video scenes with audio and generates
-final videos in multiple aspect ratios (9:16, 1:1, 16:9).
+final TikTok vertical video (1080x1920).
 """
 
 import logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class Renderer:
-    """Renders final videos in multiple aspect ratios."""
+    """Renders final TikTok vertical video (9:16, 1080x1920)."""
 
     def __init__(
         self,
@@ -45,25 +45,20 @@ class Renderer:
         scene_video_urls: List[str],
         audio_url: str,
         project_id: str,
-        output_aspect_ratios: List[str] = None,
-    ) -> Dict[str, str]:
+        variation_index: int = None,
+    ) -> str:
         """
-        Render final video with multiple aspect ratios.
+        Render final TikTok vertical video (9:16, 1080x1920).
 
         Args:
-            scene_video_urls: List of S3 URLs of scene videos (in order)
-            audio_url: S3 URL of background music
+            scene_video_urls: List of URLs/paths of scene videos (in order)
+            audio_url: URL/path of background music
             project_id: Project UUID
-            output_aspect_ratios: Aspect ratios to generate (default: all 3)
 
         Returns:
-            Dict mapping aspect ratio to S3 URL
-            e.g., {"16:9": "https://..."}
+            Local file path of final video
         """
-        if output_aspect_ratios is None:
-            output_aspect_ratios = ["16:9"]
-
-        logger.info(f"Rendering final video in {output_aspect_ratios} aspect ratios")
+        logger.info("Rendering final TikTok vertical video (9:16, 1080x1920)")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -86,26 +81,22 @@ class Renderer:
                 mixed_path = Path(tmpdir) / "with_audio.mp4"
                 await self._mix_audio(concat_path, audio_path, mixed_path)
 
-                # Generate outputs for each aspect ratio
-                outputs = {}
-                for aspect_ratio in output_aspect_ratios:
-                    logger.info(f"Rendering {aspect_ratio} aspect ratio...")
+                # Render TikTok vertical (9:16, 1080x1920)
+                output_path = Path(tmpdir) / "final.mp4"
+                await self._apply_aspect_ratio(mixed_path, output_path, "9:16")
 
-                    output_path = Path(tmpdir) / "final.mp4"
-                    await self._apply_aspect_ratio(mixed_path, output_path, aspect_ratio)
+                # Save to local storage
+                from app.utils.local_storage import LocalStorageManager
+                from uuid import UUID
+                local_path = LocalStorageManager.save_final_video(
+                    UUID(project_id),
+                    "9:16",
+                    str(output_path),
+                    variation_index=variation_index
+                )
 
-                    # Save to local storage (no S3 upload)
-                    from app.utils.local_storage import LocalStorageManager
-                    from uuid import UUID
-                    local_path = LocalStorageManager.save_final_video(
-                        UUID(project_id),
-                        aspect_ratio,
-                        str(output_path)
-                    )
-                    outputs[aspect_ratio] = local_path
-
-                logger.info(f"✅ Final videos rendered: {outputs}")
-                return outputs
+                logger.info(f"✅ Final TikTok vertical video rendered: {local_path}")
+                return local_path
 
             except Exception as e:
                 logger.error(f"Error rendering final video: {e}")
@@ -128,21 +119,19 @@ class Renderer:
                 return
             
             # Check if it's an S3 URL
-            if f"s3.{self.aws_region}.amazonaws.com" in url_or_path or f"s3.amazonaws.com/{self.s3_bucket_name}" in url_or_path:
-                # Extract S3 key from URL
-                # Format: https://bucket.s3.region.amazonaws.com/projects/id/file.mp4
-                if f"s3.{self.aws_region}.amazonaws.com" in url_or_path:
-                    s3_key = url_or_path.split(f".s3.{self.aws_region}.amazonaws.com/")[1]
-                else:
-                    s3_key = url_or_path.split(f"s3.amazonaws.com/{self.s3_bucket_name}/")[1]
+            if '.s3.' in url_or_path or 's3.amazonaws.com' in url_or_path:
+                from app.utils.s3_utils import parse_s3_url
+                
+                # Parse S3 URL to get bucket and key
+                bucket_name, s3_key = parse_s3_url(url_or_path)
                 
                 # Download using boto3
                 self.s3_client.download_file(
-                    self.s3_bucket_name,
+                    bucket_name,
                     s3_key,
                     str(output_path)
                 )
-                logger.debug(f"Downloaded from S3: {output_path.name}")
+                logger.info(f"✅ Downloaded from S3: {s3_key} → {output_path.name}")
             else:
                 # Use HTTP for non-S3 URLs (e.g., Replicate URLs)
                 async with aiohttp.ClientSession() as session:
@@ -226,20 +215,10 @@ class Renderer:
             raise
 
     async def _apply_aspect_ratio(self, input_path: Path, output_path: Path, aspect_ratio: str):
-        """Apply aspect ratio using FFmpeg with padding."""
+        """Apply TikTok vertical aspect ratio (9:16, 1080x1920) using FFmpeg with padding."""
         try:
-            # Aspect ratio dimensions
-            aspect_map = {
-                "16:9": (1920, 1080),
-                "9:16": (1080, 1920),  # Portrait
-                "1:1": (1080, 1080),  # Square
-            }
-
-            if aspect_ratio not in aspect_map:
-                logger.warning(f"Unknown aspect ratio: {aspect_ratio}, using 16:9")
-                aspect_ratio = "16:9"
-
-            width, height = aspect_map[aspect_ratio]
+            # TikTok vertical dimensions (hardcoded)
+            width, height = (1080, 1920)
 
             # Use scale and pad to achieve aspect ratio
             # This ensures content isn't cropped, just padded

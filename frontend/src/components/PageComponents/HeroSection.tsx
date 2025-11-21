@@ -74,7 +74,7 @@ export const HeroSection = ({
       >
         <span className="text-gray-900">{title.split('In Minutes')[0]}</span>
         {gradient && (
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold via-gold to-gold-dark">
             {' '}In Minutes
           </span>
         )}

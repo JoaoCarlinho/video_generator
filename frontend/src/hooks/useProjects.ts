@@ -27,6 +27,8 @@ export interface Project {
     endpoint?: string
     generation_duration_ms?: number
   }
+  num_variations?: number // 1-3
+  selected_variation_index?: number | null // 0-2 or null
 }
 
 interface CreateProjectInput {
@@ -48,6 +50,11 @@ interface CreateProjectInput {
   target_duration?: number
   // WAN 2.5: Video provider selection
   video_provider?: 'replicate' | 'ecs'
+  // Phase 9: Perfume-specific fields
+  perfume_name: string
+  perfume_gender: 'masculine' | 'feminine' | 'unisex'
+  // Phase 3: Multi-variation support
+  num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }
 
 export const useProjects = () => {
@@ -104,38 +111,32 @@ export const useProjects = () => {
         })
 
         return newProject
-      } catch (err) {
-        // Enhanced error handling for provider-related errors
-        if (err && typeof err === 'object' && 'response' in err) {
-          const axiosError = err as any
-
-          // Handle 400 errors (validation failures)
-          if (axiosError.response?.status === 400) {
-            const errorDetail = axiosError.response.data?.detail || ''
-
-            // Check if error is related to ECS provider unavailability
-            if (
-              errorDetail.toLowerCase().includes('ecs') ||
-              errorDetail.toLowerCase().includes('provider')
-            ) {
-              const providerError = new Error(
-                'VPC endpoint is currently unavailable. Please select Replicate API or try again later.'
-              )
-              providerError.name = 'ProviderUnavailableError'
-              setError(providerError.message)
-              throw providerError
+      } catch (err: any) {
+        // Extract error message from API response
+        let message = 'Failed to create project'
+        if (err?.response?.data) {
+          const errorData = err.response.data
+          if (errorData.detail) {
+            // Handle validation errors
+            if (Array.isArray(errorData.detail)) {
+              const validationErrors = errorData.detail.map((e: any) => 
+                `${e.loc?.join('.')}: ${e.msg}`
+              ).join(', ')
+              message = `Validation error: ${validationErrors}`
+            } else if (typeof errorData.detail === 'string') {
+              message = errorData.detail
+            } else {
+              message = errorData.message || JSON.stringify(errorData.detail)
             }
-
-            // Other validation errors
-            setError(errorDetail)
-            throw new Error(errorDetail)
+          } else if (errorData.message) {
+            message = errorData.message
           }
+        } else if (err instanceof Error) {
+          message = err.message
         }
-
-        // Generic error handling
-        const message = err instanceof Error ? err.message : 'Failed to create project'
         setError(message)
-        throw err
+        console.error('Create project error:', err)
+        throw new Error(message)
       } finally {
         setLoading(false)
       }

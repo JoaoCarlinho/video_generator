@@ -45,7 +45,6 @@ async def get_preview_video(
     try:
         init_db()
         user_id = get_current_user_id(authorization)
-
         # Get project and verify ownership
         project = get_project_by_user(db, project_id, user_id)
         if not project:
@@ -72,17 +71,21 @@ async def get_preview_video(
                 local_video_path,
                 media_type="video/mp4",
                 headers={
-                    "Content-Disposition": f"inline; filename=preview.mp4",
-                    "Cache-Control": "no-cache"
+                    "Content-Disposition": f"inline; filename=preview_variation_{variation}.mp4",
+                    "Cache-Control": "public, max-age=3600",
+                    "Accept-Ranges": "bytes",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Access-Control-Allow-Headers": "Range",
                 }
             )
-
-        # No video found anywhere
+        
+        # No video found in local storage
         raise HTTPException(
             status_code=404,
-            detail=f"Preview video not available"
+            detail=f"Preview video not available at path: {local_video_path}"
         )
-
+    
     except HTTPException:
         raise
     except Exception as e:

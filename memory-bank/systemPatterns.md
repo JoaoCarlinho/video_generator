@@ -4,6 +4,65 @@
 
 ---
 
+## Database Schema (Phase 2 B2B Transformation)
+
+### New B2B Schema (Phase 2)
+
+**3-Tier Hierarchy:**
+```
+auth.users (Supabase Auth)
+  └── brands (1:1 relationship - one user = one brand)
+       ├── perfumes (1:many - many perfumes per brand)
+       │    └── campaigns (1:many - many campaigns per perfume)
+       └── campaigns (1:many - campaigns also reference brand_id)
+```
+
+**Tables:**
+
+**brands:**
+- `brand_id` (UUID, PK)
+- `user_id` (UUID, FK → auth.users, UNIQUE, CASCADE DELETE)
+- `brand_name` (VARCHAR(100), UNIQUE)
+- `brand_logo_url` (VARCHAR(500))
+- `brand_guidelines_url` (VARCHAR(500))
+- `onboarding_completed` (BOOLEAN, default false)
+- Indexes: user_id, onboarding_completed, brand_name (unique)
+
+**perfumes:**
+- `perfume_id` (UUID, PK)
+- `brand_id` (UUID, FK → brands, CASCADE DELETE)
+- `perfume_name` (VARCHAR(200))
+- `perfume_gender` (VARCHAR(20), CHECK: masculine/feminine/unisex)
+- `front_image_url` (VARCHAR(500), REQUIRED)
+- `back_image_url`, `top_image_url`, `left_image_url`, `right_image_url` (optional)
+- Unique constraint: (brand_id, perfume_name)
+- Indexes: brand_id, perfume_gender
+
+**campaigns:**
+- `campaign_id` (UUID, PK)
+- `perfume_id` (UUID, FK → perfumes, CASCADE DELETE)
+- `brand_id` (UUID, FK → brands, CASCADE DELETE)
+- `campaign_name` (VARCHAR(200))
+- `creative_prompt` (TEXT)
+- `selected_style` (VARCHAR(50), CHECK: gold_luxe/dark_elegance/romantic_floral)
+- `target_duration` (INTEGER, CHECK: 15-60)
+- `num_variations` (INTEGER, CHECK: 1-3, default 1)
+- `status` (VARCHAR(50))
+- `campaign_json` (JSONB) - All generation data
+- Indexes: perfume_id, brand_id, status, created_at
+
+**Key Constraints:**
+- 1:1 User-Brand relationship (enforced by UNIQUE on user_id)
+- Cascade delete: Brand → Perfumes → Campaigns
+- CHECK constraints: gender, style, duration, variations
+- UNIQUE constraints: brand_name, (brand_id, perfume_name)
+
+**Migration:** `008_create_b2b_schema.py` (applied Nov 18, 2025)
+
+**Legacy:** `projects` table kept temporarily (DEPRECATED) for backward compatibility. Will be removed in Phase 3-4.
+
+---
+
 ## High-Level Architecture
 
 ```
@@ -245,9 +304,11 @@ VideoGenerator
   └─> Output: Background video (S3 URL)
 
 Compositor
-  └─> Input: Background video + Product PNG + Scene config
-  └─> Uses: OpenCV + PIL
-  └─> Output: Composited video (S3 URL)
+  └─> Input: Background video + Product PNG + Scene config + Scene role
+  └─> Uses: OpenCV + PIL, TikTok vertical safe zones (15-75%)
+  └─> Positioning: center, center_upper, center_lower (perfume-specific)
+  └─> Scaling: Role-based (hook: 0.5, showcase: 0.6, cta: 0.5) or explicit override
+  └─> Output: Composited video (local path)
 
 TextOverlayRenderer
   └─> Input: Video + Overlay config + Brand
@@ -255,14 +316,16 @@ TextOverlayRenderer
   └─> Output: Video with text (S3 URL)
 
 AudioEngine
-  └─> Input: Mood + Duration
+  └─> Input: Duration + Gender (masculine/feminine/unisex)
   └─> Uses: Replicate MusicGen
-  └─> Output: Music track (S3 URL)
+  └─> Method: generate_perfume_background_music() (perfume-specific)
+  └─> Prompt: Luxury ambient cinematic with gender-aware descriptors
+  └─> Output: Music track (local path)
 
 Renderer
   └─> Input: Scene videos + Audio
   └─> Uses: FFmpeg concat + mux
-  └─> Output: Final videos [9:16, 1:1, 16:9] (S3 URLs)
+  └─> Output: Final TikTok vertical video (9:16 only) (local path as string)
 ```
 
 **Dependency Direction:** Always forward, no cycles.
@@ -457,5 +520,294 @@ async def test_full_pipeline():
 
 ---
 
-**Last Updated:** November 14, 2025
+## Perfume-Specific Patterns (Phase 8)
+
+### Grammar Validation Pattern
+```python
+# After scene planning, validate against perfume shot grammar
+from app.services.perfume_grammar_loader import PerfumeGrammarLoader
+grammar_loader = PerfumeGrammarLoader()
+is_valid, violations = grammar_loader.validate_scene_plan(plan_scenes_list)
+
+if not is_valid:
+    logger.warning(f"⚠️ Grammar violations detected: {violations}")
+else:
+    logger.info("✅ Scene plan validated against perfume shot grammar")
+```
+
+**Why:** Ensures all scenes follow perfume shot grammar rules. Scene planner already has 3-retry system with fallback templates, so violations are rare. This validation is for observability.
+
+### Perfume Name Extraction Pattern
+```python
+# Extract perfume_name from ad_project_json or fallback to brand name
+perfume_name = None
+if project.ad_project_json and isinstance(project.ad_project_json, dict):
+    perfume_name = project.ad_project_json.get("perfume_name")
+if not perfume_name:
+    perfume_name = ad_project.brand.get('name', 'Perfume')
+    
+# Store for future use
+project.ad_project_json['perfume_name'] = perfume_name
+```
+
+**Why:** Perfume name is required for perfume-specific scene planning. Stored in JSON for future use (Phase 9 will add database field).
+
+### TikTok Vertical Hardcoding Pattern
+```python
+# All rendering returns single string path (not dict)
+final_video_path = await renderer.render_final_video(...)  # Returns str
+
+# Pipeline stores as dict for backward compatibility
+local_video_paths = {"9:16": final_video_path}
+```
+
+**Why:** Maintains backward compatibility with existing data structures while simplifying code (no multi-aspect logic).
+
+---
+
+## Multi-Variation Generation Pattern (Nov 18, 2025)
+
+### Parallel Variation Processing
+
+```python
+# Key insight: Generate all variations concurrently, not sequentially
+import asyncio
+
+async def run():
+    # Plan N different scene variations upfront
+    scene_variations = await self._plan_scenes_variations(num_variations=3)
+    # [[scene1_v1, scene2_v1], [scene1_v2, scene2_v2], [scene1_v3, scene2_v3]]
+    
+    # Process all variations IN PARALLEL
+    tasks = [
+        self._process_variation(scenes, var_idx, num_variations)
+        for var_idx, scenes in enumerate(scene_variations)
+    ]
+    final_videos = await asyncio.gather(*tasks)
+    # All 3 variations complete ~simultaneously = 5-7 min (not 15-21!)
+```
+
+**Why This Works:**
+- Each variation is independent
+- No shared state conflicts
+- asyncio coordinates the waiting
+- API requests happen concurrently (Replicate handles parallel requests)
+- Worker isn't blocked (just awaiting)
+
+### Variation Uniqueness Pattern
+
+```python
+# Each variation gets different "approach"
+def _build_variation_prompt(variation_index):
+    approaches = [
+        "Cinematic: dramatic lighting, wide shots",
+        "Minimal: clean aesthetic, macro shots",
+        "Lifestyle: real-world moments, atmospheric"
+    ]
+    
+    # Also use different seed for video generation
+    seed = 1000 + variation_index  # 1000, 1001, 1002
+    
+    # Combine: different scenes + different seeds = visibly different videos
+    return {
+        "prompt": base_prompt + approaches[variation_index],
+        "seed": seed
+    }
+```
+
+**Why This Works:**
+- Scene prompt variation creates different storylines
+- Video seed variation creates different visual treatments
+- Together = meaningful choice for user
+- Not "completely different" (same brand/requirements maintained)
+
+### Storage & Selection Pattern
+
+```python
+# Multi-variation storage pattern
+if num_variations > 1:
+    # Store as array
+    local_video_paths["9:16"] = [
+        "/path/to/variation_0.mp4",
+        "/path/to/variation_1.mp4",
+        "/path/to/variation_2.mp4"
+    ]
+else:
+    # Store as string (backward compat)
+    local_video_paths["9:16"] = "/path/to/video.mp4"
+
+# After user selection
+selected_index = 1  # User picked Option 2
+selected_video = local_video_paths["9:16"][selected_index]
+
+# After finalization (keep only selected)
+# Delete unselected videos
+# Upload selected to S3
+# Keep only in final project
+```
+
+**Why This Works:**
+- Flexible data structure (array or string)
+- No database schema changes needed (JSONB)
+- Selection preserved for audit trail
+- Easy cleanup (delete unselected)
+
+### Routing Pattern
+
+```typescript
+// Conditional routing based on variation count
+if (project.num_variations === 1) {
+    // Skip selection page entirely
+    navigate(`/project/${projectId}`);  // → VideoResults
+} else {
+    // Show selection page
+    navigate(`/project/${projectId}/select`);  // → VideoSelection
+    // After selection:
+    navigate(`/project/${projectId}`);  // → VideoResults
+}
+```
+
+**Why This Works:**
+- Better UX (no unnecessary pages)
+- Single variation same as current flow
+- Multi-variation adds selection page
+- No breaking changes
+
+### Preview Endpoint Pattern (Nov 18, 2025)
+
+```python
+# Preview endpoint supports variation selection
+GET /api/local-generation/projects/{id}/preview?variation={0|1|2}
+
+# Backend handles array vs string
+if isinstance(video_paths, list):
+    return video_paths[variation_index]  # Multi-variation
+else:
+    return video_paths  # Single video (ignores variation param)
+```
+
+**Why This Works:**
+- Single endpoint serves all variations
+- Query parameter selects which variation
+- Backward compatible (single video still works)
+- Frontend constructs URLs with variation index
+
+---
+
+## S3 Storage Patterns (Phase 2)
+
+### Hierarchical Path Generation
+
+**Pattern:** Path functions build hierarchical S3 structure
+```python
+# Brand level
+brand_path = get_brand_s3_path(brand_id)  
+# → "brands/{brand_id}/"
+
+# Perfume level
+perfume_path = get_perfume_s3_path(brand_id, perfume_id)
+# → "brands/{brand_id}/perfumes/{perfume_id}/"
+
+# Campaign level
+campaign_path = get_campaign_s3_path(brand_id, perfume_id, campaign_id)
+# → "brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+```
+
+**Benefits:**
+- Clear hierarchy matches database structure
+- Easy to navigate in S3 console
+- Supports lifecycle policies via prefix filtering
+- Enables brand-level operations (delete all brand data)
+
+### S3 Tagging Pattern
+
+**Pattern:** All uploads apply tags for lifecycle management
+```python
+# Brand assets (permanent)
+tags = {
+    "type": "brand_asset",
+    "brand_id": brand_id,
+    "lifecycle": "permanent"
+}
+
+# Draft videos (30-day lifecycle)
+tags = {
+    "type": "campaign_video",
+    "subtype": "draft",
+    "brand_id": brand_id,
+    "perfume_id": perfume_id,
+    "campaign_id": campaign_id,
+    "variation_index": str(variation_index),
+    "lifecycle": "30days"
+}
+
+# Final videos (90-day lifecycle)
+tags = {
+    "type": "campaign_video",
+    "subtype": "final",
+    "brand_id": brand_id,
+    "perfume_id": perfume_id,
+    "campaign_id": campaign_id,
+    "variation_index": str(variation_index),
+    "lifecycle": "90days"
+}
+```
+
+**Tag Format:**
+- URL-encoded string: `key1=value1&key2=value2`
+- Applied via `Tagging` parameter in `put_object()`
+- Used by lifecycle policy for automatic deletion
+
+**Lifecycle Rules:**
+- Draft videos: Delete after 30 days (tagged `subtype=draft`)
+- Final videos: Delete after 90 days (tagged `subtype=final`)
+- Brand assets: No lifecycle (permanent)
+- Perfume images: No lifecycle (permanent)
+
+### Upload Function Pattern
+
+**Pattern:** Consistent function signatures across all upload types
+```python
+# Brand assets (file_content: bytes)
+async def upload_brand_logo(brand_id, file_content, filename) -> dict
+
+# Perfume images (file_content: bytes)
+async def upload_perfume_image(brand_id, perfume_id, angle, file_content, filename) -> dict
+
+# Campaign videos (file_path: str - local file)
+async def upload_draft_video(brand_id, perfume_id, campaign_id, variation_index, scene_index, file_path) -> dict
+async def upload_final_video(brand_id, perfume_id, campaign_id, variation_index, file_path) -> dict
+```
+
+**Return Format:**
+```python
+{
+    "url": "https://bucket.s3.region.amazonaws.com/path",
+    "s3_key": "brands/.../path",
+    "size_bytes": 12345,
+    "filename": "file.ext"
+}
+```
+
+**Error Handling:**
+- All functions raise `RuntimeError` on failure
+- Comprehensive logging at each step
+- Validation before upload (file types, sizes, indexes)
+
+### Modern S3 Bucket Pattern
+
+**Pattern:** No ACL support (modern buckets)
+- Removed `ACL="public-read"` from all `put_object()` calls
+- Bucket uses bucket policies for access control
+- Files accessible via presigned URLs if needed
+
+**Bucket Configuration:**
+- **Name:** `genads-gauntlet`
+- **Region:** `us-east-1`
+- **ACL:** Disabled (modern bucket)
+- **Lifecycle:** Applied via JSON policy file
+
+---
+
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
 

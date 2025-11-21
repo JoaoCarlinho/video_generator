@@ -7,7 +7,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import LoginForm from '../components/forms/LoginForm'
-import { Zap } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
 export const LoginPage: React.FC = () => {
   const { isAuthenticated } = useAuth()

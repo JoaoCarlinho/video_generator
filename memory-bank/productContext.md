@@ -1,79 +1,126 @@
-# Product Context — AI Ad Video Generator
+# Product Context — AI Ad Video Generator (Luxury Perfume Specialist)
 
-**Why this exists, what problems it solves, how it should work**
-
----
-
-## The Problem Space
-
-### Current State of AI Video Generation
-
-**Existing tools fail at product advertising because:**
-
-1. **Product Inconsistency**
-   - AI models warp logos and distort products
-   - Colors change between scenes
-   - Brand elements become unrecognizable
-   - Result: Unusable for professional advertising
-
-2. **Visual Incoherence**
-   - Each scene has different lighting
-   - Art styles vary wildly
-   - No unified aesthetic
-   - Result: Looks amateur, not brand-consistent
-
-3. **No Editing Capability**
-   - Generate once, can't modify
-   - Must regenerate entire video for small changes
-   - Expensive and time-consuming iteration
-   - Result: Locked into first generation
-
-4. **Platform Fragmentation**
-   - Need 9:16 for TikTok
-   - Need 16:9 for YouTube  
-   - Need 1:1 for Instagram
-   - Result: Manual resizing or multiple tools
-
-### Market Opportunity
-
-- Digital ad market: $786B by 2026
-- Video ads: Fastest-growing segment
-- Brands need hundreds of variations for A/B testing
-- Current solution: $5K-50K per ad, weeks of turnaround
-
-**Gap:** No tool maintains product consistency while generating professional ads at scale.
+**Version 2.0 - Refactored for Luxury Perfume TikTok Ads**
 
 ---
 
-## Our Solution
+## The Problem Space (REFINED FOR PERFUME NICHE)
 
-### Core Innovation: Compositing, Not Generation
+### Why Luxury Perfume Brands Need Specialized Tools
 
-**The Insight:** Treat product as sacred, background as variable.
+**Existing generic AI tools fail for perfume advertising because:**
+
+1. **No Understanding of Perfume Visual Language**
+   - Generic AI doesn't know perfume shot grammar
+   - Produces random scenes (product demos, people talking, generic b-roll)
+   - Missing: Macro bottle shots, atmospheric lighting, luxury materials
+   - Result: Videos don't "feel like" perfume ads
+
+2. **Can't Maintain Luxury Aesthetic**
+   - Freeform LLM generation = inconsistent style
+   - One scene dark/moody, next scene bright/colorful
+   - No theme consistency across video
+   - Result: Looks amateurish, not high-end
+
+3. **Ignores Brand Identity**
+   - Can't respect brand guidelines (colors, tone, dos/donts)
+   - User style preferences get ignored
+   - Reference image inspiration not applied consistently
+   - Result: Off-brand, can't use professionally
+
+4. **Wrong Platform Optimization**
+   - Tools default to horizontal (16:9)
+   - TikTok vertical (9:16) is afterthought
+   - Text positioning wrong for mobile UI
+   - Result: Crops badly, UI elements covered
+
+### Market Opportunity (PERFUME NICHE)
+
+- **Perfume market:** $65B globally, growing 5-7% yearly
+- **TikTok dominance:** #1 platform for perfume discovery (Gen Z/Millennial)
+- **Ad volume need:** Brands test 10-50 variations per campaign
+- **Current cost:** $5K-50K per 30s ad, 2-4 weeks turnaround
+- **Agency bottleneck:** Can't iterate fast enough for TikTok's pace
+
+**Gap:** No AI tool specializes in luxury perfume TikTok ads with consistent brand elegance and proper shot grammar.
+
+### Next-Generation Feature: Multi-Variation Generation (Nov 18, 2025)
+
+Users can now generate 1-3 variations per request:
+- **Purpose:** Let users compare different creative approaches on the fly
+- **UX:** Select variation count upfront (1, 2, or 3)
+- **Experience:** Side-by-side preview of variations, pick favorite
+- **Performance:** Parallel generation = 3 variations in same time as 1!
+- **Variation types:** Cinematic (dramatic), Minimal (clean), Lifestyle (atmospheric)
+- **Result:** Users get options, not forced into single creative direction
+
+This is a pure user experience enhancement - leverages existing infrastructure, adds intelligent variation at scene-planning level.
+
+---
+
+## Our Solution (PERFUME-SPECIALIZED)
+
+### 1. Constrained-Creative AI (NEW)
+
+**The Insight:** LLM creativity WITHIN perfume shot grammar constraints.
 
 **Traditional Approach (BAD):**
 ```
-User Prompt → AI generates everything → Inconsistent product ❌
+User Brief → LLM generates any scenes → Random, non-perfume results ❌
 ```
 
 **Our Approach (GOOD):**
 ```
-1. Extract product from uploaded image (pixel-perfect)
-2. Generate background only (no product in prompt)
-3. Composite product onto background with OpenCV
-   → Product stays exactly the same ✓
+1. Load Perfume Shot Grammar (5 categories, 30+ variations)
+2. LLM generates scenes BUT MUST use allowed shot types
+3. Validate: All scenes follow grammar? Style consistent?
+4. If fails → Retry 3x → Use predefined template
+   → Creative scenes that always look "perfume-like" ✓
+```
+
+**5 Allowed Shot Categories:**
+- **Macro Bottle Shots:** Extreme close-up, slow pan, spray mist
+- **Luxury B-roll:** Silk fabric, roses/petals, jewelry, candle flame
+- **Atmospheric Scenes:** Light rays, shadows, reflections, dust motes
+- **Minimal Human Silhouettes:** Hand picking bottle, neck/shoulder, shadowed movement (optional)
+- **Final Brand Moment:** Product centered, tagline, black/gold theme
+
+### 2. Style Cascading System (NEW)
+
+**The Insight:** Merge style inputs with clear priority hierarchy.
+
+**Priority:**
+1. **Brand Guidelines** (Highest) - Colors, tone, fonts from PDF/DOCX
+2. **User Style/Prompt** (More Weight) - GOLD_LUXE, DARK_ELEGANCE, or ROMANTIC_FLORAL
+3. **Reference Image** (Some Weight) - Visual inspiration
+
+**Apply unified style to ALL scenes → Theme consistency guaranteed ✓**
+
+### 3. Product Compositing (KEPT)
+
+**The Insight:** Treat perfume bottle as sacred, background as variable.
+
+```
+1. Extract bottle from uploaded image (pixel-perfect)
+2. Generate luxury backgrounds WITHOUT bottle
+3. Composite bottle onto backgrounds with OpenCV
+   → Bottle stays exactly the same ✓
 ```
 
 ### How It Works (User Journey)
 
 #### 1. Input Stage
 User provides:
-- Product brief (2-3 sentences)
-- Brand colors
-- Target audience
-- Video duration (15-60s)
-- Mood (uplifting, dramatic, energetic, calm)
-- Product image (PNG/JPG)
+- Creative prompt (2-3 sentences describing perfume ad vision)
+- Brand name and description
+- Perfume name (required, e.g., "Noir Élégance")
+- Perfume gender (required: 'masculine', 'feminine', or 'unisex')
+- Target audience (optional)
+- Video duration (15-60s for TikTok)
+- Selected style (optional: 'gold_luxe', 'dark_elegance', or 'romantic_floral')
+- Product image (perfume bottle PNG/JPG)
+- Brand guidelines (optional PDF/DOCX)
+- Reference image (optional mood board)
 
 #### 2. Planning Stage (Automatic)
 **Scene Planner (LLM):**
@@ -110,19 +157,23 @@ User provides:
 - Negative prompt: "product, logo, text, watermark"
 - Output: Clean backgrounds, 3-4s each
 
-#### 4. Compositing Stage (Automatic)
+#### 4. Compositing Stage (Automatic) - PERFUME-OPTIMIZED
 **For each scene:**
-- If productUsage = "none" → Use background as-is
-- If productUsage = "static_insert" → Overlay product (centered)
-- If productUsage = "animated_insert" → Overlay with zoom/float
-- If productUsage = "dominant_center" → Product as focal point
+- If use_product = False → Use background as-is
+- If use_product = True → Overlay perfume bottle with TikTok-safe positioning
 
-**Process:**
-1. Download background video
-2. Scale product to 60% of frame height
-3. Position product (center, custom, etc.)
+**Process (Perfume-Specific):**
+1. Download background video (TikTok vertical 1080x1920)
+2. Determine scale based on scene role:
+   - Hook scenes: 50% of frame height
+   - Showcase scenes: 60% of frame height (larger for product focus)
+   - CTA scenes: 50% of frame height
+3. Position in TikTok safe zone (15-75% vertical space):
+   - center: Centered horizontally, centered in safe zone
+   - center_upper: Centered horizontally, upper third of safe zone
+   - center_lower: Centered horizontally, lower third of safe zone
 4. Frame-by-frame alpha blending with OpenCV
-5. Upload composited video to S3
+5. Save composited video locally (not S3 until final render)
 
 #### 5. Enhancement Stage (Automatic)
 **Text Overlays:**
@@ -135,30 +186,26 @@ User provides:
 - Fade in/out animations
 
 **Background Music:**
-- MusicGen creates mood-matched track
+- MusicGen creates luxury ambient cinematic track
+- Gender-aware prompts (masculine: deep/confident, feminine: elegant/delicate, unisex: sophisticated/modern)
+- Automatic gender inference from style selection or creative prompt
 - Trim to exact video duration
 - Normalize to -6dB
 - Sync with scene transitions
 
 #### 6. Rendering Stage (Automatic)
-**Master Video (9:16):**
+**TikTok Vertical Video (9:16, 1080x1920):**
 - Concatenate all scenes
 - Crossfade transitions (0.5s)
 - Mux audio with video
-- 1080p, 30fps, H.264
-
-**Other Aspects:**
-- 1:1 (Square) → Center crop
-- 16:9 (Horizontal) → Letterbox or regenerate
-- Upload all to S3
+- 1080x1920 resolution, 30fps, H.264
+- Upload to S3
 
 #### 7. Delivery
 User receives:
-- Master video (9:16) for TikTok/Reels
-- Square video (1:1) for Instagram Feed
-- Horizontal video (16:9) for YouTube
+- TikTok vertical video (9:16, 1080x1920) - ONLY format
 - Generation cost breakdown
-- Download links (expire in 7 days)
+- Download link (expires in 7 days)
 
 ---
 
@@ -166,10 +213,10 @@ User receives:
 
 ### MVP Experience
 **Simple, fast, reliable:**
-- Fill form in 2 minutes
+- Fill form in 2 minutes (includes perfume name, gender, style)
 - See progress in real-time
-- Get video in 8-10 minutes
-- Download all formats instantly
+- Get TikTok vertical video in 8-10 minutes
+- Download video instantly
 
 **Key Moments:**
 1. Upload product image → See preview
@@ -261,5 +308,5 @@ User receives:
 
 ---
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete)
 

@@ -146,7 +146,7 @@ OPENAI_API_KEY=sk-xxx
 # Storage (AWS S3)
 AWS_ACCESS_KEY_ID=AKIAxxx
 AWS_SECRET_ACCESS_KEY=xxx
-S3_BUCKET_NAME=adgen-videos-xxx
+S3_BUCKET_NAME=genads-gauntlet  # Phase 2 bucket
 AWS_REGION=us-east-1
 
 # Supabase
@@ -169,7 +169,24 @@ VITE_API_URL=http://localhost:8000
 
 ## Database Schema
 
-### Supabase Table: `projects`
+### Phase 2 B2B Schema (Current)
+
+**Tables:** `brands`, `perfumes`, `campaigns`
+
+See `systemPatterns.md` for complete schema details.
+
+**Migration:** `008_create_b2b_schema.py` (applied Nov 18, 2025)
+
+**Key Changes:**
+- Dropped `projects` table
+- Created 3-tier hierarchy: brands → perfumes → campaigns
+- 1:1 User-Brand relationship
+- Cascade delete enforced
+- CHECK constraints for validation
+
+### Legacy Schema (Temporary - DEPRECATED)
+
+### Supabase Table: `projects` (DEPRECATED - will be removed in Phase 3-4)
 ```sql
 CREATE TABLE projects (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -180,12 +197,43 @@ CREATE TABLE projects (
   progress INTEGER DEFAULT 0,
   cost DECIMAL(10,2) DEFAULT 0,
   error_message TEXT,
+  
+  -- S3 paths (Phase 1)
+  s3_project_folder TEXT,
+  s3_project_folder_url TEXT,
+  
+  -- Video settings (Phase 3)
+  aspect_ratio TEXT DEFAULT '9:16',  -- TikTok vertical (hardcoded)
+  
+  -- Perfume-specific fields (Phase 9)
+  perfume_name VARCHAR(200),
+  perfume_gender VARCHAR(20),  -- 'masculine', 'feminine', 'unisex'
+  
+  -- Local storage paths
+  local_project_path VARCHAR(500),
+  local_video_paths JSONB,  -- Backward compat (deprecated)
+  local_video_path VARCHAR(500),  -- Single TikTok vertical video (Phase 9)
+  local_input_files JSONB,
+  local_draft_files JSONB,
+  
+  -- Style selection (Phase 7, updated Phase 4)
+  selected_style VARCHAR(50),  -- 'gold_luxe', 'dark_elegance', 'romantic_floral'
+  
+  -- Multi-variation generation (Phase 1, Nov 18, 2025)
+  num_variations INTEGER DEFAULT 1 NOT NULL,  -- Number of variations (1-3)
+  selected_variation_index INTEGER,  -- Selected variation index (0-2), NULL if not selected
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_projects_selected_style ON projects(selected_style);
+CREATE INDEX idx_projects_perfume_name ON projects(perfume_name);  -- Phase 9
+CREATE INDEX idx_projects_perfume_gender ON projects(perfume_gender);  -- Phase 9
+CREATE INDEX idx_projects_num_variations ON projects(num_variations);  -- Multi-Variation Phase 1
+CREATE INDEX idx_projects_selected_variation ON projects(selected_variation_index);  -- Multi-Variation Phase 1
 ```
 
 **Why JSONB:**
@@ -196,38 +244,79 @@ CREATE INDEX idx_projects_status ON projects(status);
 
 ---
 
-## Storage Structure (S3)
+## Storage Structure (S3) - Phase 2 B2B Hierarchy
 
+### Current Structure (Phase 2)
 ```
-s3://adgen-videos-xxx/
-├── projects/{project_id}/
-│   ├── product/
-│   │   ├── original.jpg          # User upload
-│   │   ├── masked.png             # Background removed
-│   │   └── mask.png               # Alpha mask
-│   ├── scenes/
-│   │   ├── scene_1_bg.mp4         # Generated background
-│   │   ├── scene_1_comp.mp4       # With product
-│   │   ├── scene_1_overlay.mp4    # With text
-│   │   └── ...
-│   ├── audio/
-│   │   └── background_music.mp3
-│   └── outputs/
-│       ├── final_9x16.mp4         # Master (vertical)
-│       ├── final_1x1.mp4          # Square
-│       └── final_16x9.mp4         # Horizontal
+s3://genads-gauntlet/
+├── brands/{brand_id}/
+│   ├── brand_logo.png              # Permanent (no lifecycle)
+│   ├── brand_guidelines.pdf        # Permanent (no lifecycle)
+│   └── perfumes/{perfume_id}/
+│       ├── front.png               # Permanent (required)
+│       ├── back.png                # Permanent (optional)
+│       ├── top.png                 # Permanent (optional)
+│       ├── left.png                # Permanent (optional)
+│       ├── right.png               # Permanent (optional)
+│       └── campaigns/{campaign_id}/
+│           └── variations/variation_{0|1|2}/
+│               ├── draft/          # Delete after 30 days
+│               │   ├── scene_1_bg.mp4
+│               │   ├── scene_2_bg.mp4
+│               │   ├── scene_3_bg.mp4
+│               │   ├── scene_4_bg.mp4
+│               │   └── music.mp3
+│               └── final_video.mp4  # Delete after 90 days
 ```
 
-**Lifecycle Policy:**
+**S3 Bucket:** `genads-gauntlet`  
+**Region:** `us-east-1`  
+**ACL:** Disabled (modern bucket, no ACL support)
+
+**Lifecycle Policy (Applied):**
 ```json
 {
-  "Rules": [{
-    "Id": "DeleteAfter7Days",
-    "Prefix": "projects/",
-    "Status": "Enabled",
-    "Expiration": { "Days": 7 }
-  }]
+  "Rules": [
+    {
+      "ID": "DeleteDraftVideosAfter30Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {"Key": "type", "Value": "campaign_video"},
+            {"Key": "subtype", "Value": "draft"}
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {"Days": 30}
+    },
+    {
+      "ID": "DeleteFinalVideosAfter90Days",
+      "Filter": {
+        "And": {
+          "Prefix": "brands/",
+          "Tags": [
+            {"Key": "type", "Value": "campaign_video"},
+            {"Key": "subtype", "Value": "final"}
+          ]
+        }
+      },
+      "Status": "Enabled",
+      "Expiration": {"Days": 90}
+    }
+  ]
 }
+```
+
+**S3 Tagging Format:**
+- Tags formatted as URL-encoded string: `key1=value1&key2=value2`
+- Applied via `Tagging` parameter in `put_object()` calls
+- Tags used for lifecycle policy filtering
+
+**Legacy Structure (DEPRECATED):**
+```
+s3://adgen-videos-xxx/projects/{project_id}/...
 ```
 
 ---
@@ -255,9 +344,11 @@ cost_per_scene = ~$0.20
 ```python
 model = "meta/musicgen"
 input = {
-    "prompt": f"{mood} background music, instrumental",
+    "prompt": f"Luxury ambient cinematic background music for perfume commercial. Mood: {gender_descriptor}. Style: elegant, sophisticated, premium, ambient.",
     "duration": video_duration
 }
+# Gender descriptors: masculine (deep/confident), feminine (elegant/delicate), unisex (sophisticated/modern)
+# Method: generate_perfume_background_music() (perfume-specific)
 cost = ~$0.20
 ```
 
@@ -273,7 +364,7 @@ cost = ~$0.01 per request
 
 ## Performance Characteristics
 
-### Generation Time (30s video)
+### Generation Time (30s TikTok vertical video)
 ```
 Scene Planning:       10-20 seconds
 Product Extraction:   5-10 seconds
@@ -281,8 +372,7 @@ Background Generation: 8-12 minutes (4 scenes × 2-3 min, parallel)
 Compositing:          30-60 seconds per scene
 Text Overlays:        10-20 seconds total
 Music Generation:     60-90 seconds
-Final Rendering:      60-90 seconds
-Multi-Aspect Export:  30-60 seconds
+Final Rendering:      60-90 seconds (TikTok vertical 9:16 only)
 
 Total: ~8-10 minutes
 ```
@@ -463,5 +553,5 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
 

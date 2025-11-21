@@ -54,12 +54,12 @@ class WorkerConfig:
         """Get Redis connection."""
         return self.redis_conn
 
-    def enqueue_job(self, project_id: str) -> Job:
+    def enqueue_job(self, campaign_id: str) -> Job:
         """
         Enqueue a generation job.
         
         Args:
-            project_id: UUID string of project to generate
+            campaign_id: UUID string of campaign to generate
             
         Returns:
             RQ Job object
@@ -67,12 +67,12 @@ class WorkerConfig:
         try:
             job = self.queue.enqueue(
                 generate_video,
-                args=(project_id,),
+                args=(campaign_id,),
                 job_timeout="1h",  # 1 hour timeout per job
                 result_ttl=86400,  # Keep results for 24 hours
                 failure_ttl=604800,  # Keep failures for 7 days
             )
-            logger.info(f"✅ Enqueued job {job.id} for project {project_id}")
+            logger.info(f"✅ Enqueued job {job.id} for campaign {campaign_id}")
             return job
         except Exception as e:
             logger.error(f"❌ Failed to enqueue job: {e}")
