@@ -1,5 +1,5 @@
-import { motion } from 'framer-motion'
-import { Check, Clock, AlertCircle, ChevronDown } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Check, Clock, AlertCircle, ChevronDown, Cloud, Server } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 
 interface ProgressStep {
@@ -11,11 +11,11 @@ interface ProgressStep {
 const defaultSteps: ProgressStep[] = [
   { id: 'EXTRACTING', label: 'Extracting Product', percentage: 10 },
   { id: 'PLANNING', label: 'Planning Scenes', percentage: 15 },
-  { id: 'GENERATING', label: 'Generating Videos', percentage: 45 },
-  { id: 'COMPOSITING', label: 'Compositing Product', percentage: 60 },
-  { id: 'TEXT_OVERLAY', label: 'Adding Text', percentage: 75 },
-  { id: 'AUDIO', label: 'Generating Audio', percentage: 85 },
-  { id: 'RENDERING', label: 'Rendering Output', percentage: 100 },
+  { id: 'GENERATING', label: 'Generating Videos', percentage: 25 },
+  { id: 'COMPOSITING', label: 'Compositing Product', percentage: 40 },
+  { id: 'TEXT_OVERLAY', label: 'Adding Text', percentage: 60 },
+  { id: 'AUDIO', label: 'Generating Audio', percentage: 75 },
+  { id: 'RENDERING', label: 'Rendering Output', percentage: 85 },
 ]
 
 interface ProgressTrackerProps {
@@ -24,6 +24,29 @@ interface ProgressTrackerProps {
   steps?: ProgressStep[]
   onCancel?: () => void
   error?: string
+  // WAN 2.5: Provider tracking
+  provider?: 'replicate' | 'ecs'
+}
+
+// Helper function to get provider configuration
+const getProviderConfig = (provider: 'replicate' | 'ecs') => {
+  const config = {
+    replicate: {
+      label: 'Replicate API',
+      icon: Cloud,
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      cost: '$0.80',
+      description: 'Cloud API',
+    },
+    ecs: {
+      label: 'VPC Endpoint',
+      icon: Server,
+      color: 'bg-green-100 text-green-800 border-green-200',
+      cost: '$0.20',
+      description: 'Self-Hosted GPU',
+    },
+  }
+  return config[provider]
 }
 
 export const ProgressTracker = ({
@@ -32,6 +55,7 @@ export const ProgressTracker = ({
   steps = defaultSteps,
   onCancel,
   error,
+  provider = 'replicate',
 }: ProgressTrackerProps) => {
   const isComplete = status === 'COMPLETED'
   const isFailed = status === 'FAILED'
@@ -47,13 +71,26 @@ export const ProgressTracker = ({
   }
 
   // Calculate current active step
-  const currentStep = steps.find((step, index) => {
+  // First, try to find a step that is currently in progress
+  let currentStep = steps.find((step, index) => {
     const stepStatus = getStepStatus(step.percentage)
     if (stepStatus === 'current') return true
     if (stepStatus === 'pending' && index === 0) return true // First step if nothing started
     if (progress === 100) return step.percentage === 100 // Last step if complete
     return false
-  }) || steps[steps.length - 1]
+  })
+
+  // If no step is "current", find the last completed step or the first pending one
+  if (!currentStep) {
+    // Find the last completed step
+    const completedSteps = steps.filter(step => getStepStatus(step.percentage) === 'completed')
+    if (completedSteps.length > 0) {
+      currentStep = completedSteps[completedSteps.length - 1]
+    } else {
+      // If no completed steps, use the first pending step
+      currentStep = steps.find(step => getStepStatus(step.percentage) === 'pending') || steps[0]
+    }
+  }
 
   const currentStepIndex = steps.findIndex(s => s.id === currentStep.id)
   const currentStepStatus = getStepStatus(currentStep.percentage)
@@ -74,6 +111,10 @@ export const ProgressTracker = ({
     visible: { opacity: 1, x: 0, transition: { duration: 0.4 } },
   }
 
+  // Get provider configuration
+  const providerConfig = getProviderConfig(provider)
+  const ProviderIcon = providerConfig.icon
+
   return (
     <motion.div
       className="space-y-8"
@@ -81,6 +122,35 @@ export const ProgressTracker = ({
       initial="hidden"
       animate="visible"
     >
+      {/* WAN 2.5: Provider Badge */}
+      <motion.div variants={itemVariants}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={provider}
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 p-4 bg-slate-800/30 border border-slate-700/50 rounded-lg"
+          >
+            <div className="flex items-center gap-3">
+              <Badge
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs md:text-sm ${providerConfig.color}`}
+                role="status"
+                aria-label={`Video generation using ${providerConfig.label}`}
+              >
+                <ProviderIcon className="h-3 w-3 md:h-4 md:w-4" aria-hidden="true" />
+                <span className="font-medium">Using: {providerConfig.label}</span>
+              </Badge>
+            </div>
+            <div className="text-xs md:text-sm text-slate-400">
+              Estimated cost:{' '}
+              <span className="font-semibold text-slate-200">~{providerConfig.cost}</span>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+
       {/* Overall Progress */}
       <motion.div variants={itemVariants} className="space-y-4">
         <div className="flex items-center justify-between">

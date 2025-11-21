@@ -11,18 +11,18 @@ This module contains all backend services for video generation:
 8. ReferenceImageStyleExtractor - Extract visual style from reference images
 """
 
-from app.services.scene_planner import ScenePlanner, AdProjectPlan, Scene, StyleSpec, TextOverlay
-from app.services.video_generator import VideoGenerator
-from app.services.audio_engine import AudioEngine
-from app.services.reference_image_extractor import ReferenceImageStyleExtractor, ExtractedStyle
+from .scene_planner import ScenePlanner, AdProjectPlan, Scene, StyleSpec, TextOverlay
+from .video_generator import VideoGenerator
+from .audio_engine import AudioEngine
+from .reference_image_extractor import ReferenceImageStyleExtractor, ExtractedStyle
 
 # Import image processing services only if dependencies are available
 # (these require OpenCV/NumPy which may not be available in API Lambda)
 try:
-    from app.services.product_extractor import ProductExtractor
-    from app.services.compositor import Compositor
-    from app.services.text_overlay import TextOverlayRenderer
-    from app.services.renderer import Renderer
+    from .product_extractor import ProductExtractor
+    from .compositor import Compositor
+    from .text_overlay import TextOverlayRenderer
+    from .renderer import Renderer
     _HAS_IMAGE_PROCESSING = True
 except (ImportError, AttributeError) as e:
     # Missing libGL.so.1 or NumPy compatibility issues

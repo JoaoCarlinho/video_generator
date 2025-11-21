@@ -85,7 +85,7 @@ async def root():
 
 
 # Import and include routers
-from app.api import projects, generation, storage, uploads, local_generation, brands, products, campaigns
+from app.api import projects, generation, storage, uploads, local_generation, brands, products, campaigns, providers
 # Register local_generation BEFORE projects to prevent route conflicts
 # /api/projects/{id}/preview must match before /api/projects/{id}
 app.include_router(local_generation.router, prefix="/api", tags=["local-generation"])
@@ -96,6 +96,7 @@ app.include_router(uploads.router, prefix="/api", tags=["uploads"])
 app.include_router(brands.router, prefix="/api/brands", tags=["brands"])
 app.include_router(products.router, prefix="/api", tags=["products"])
 app.include_router(campaigns.router, prefix="/api", tags=["campaigns"])
+app.include_router(providers.router, tags=["providers"])
 
 
 if __name__ == "__main__":

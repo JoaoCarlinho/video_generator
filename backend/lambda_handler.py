@@ -91,14 +91,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         try:
             # Parse message body
-            body = json.loads(record['body'])
+            try:
+                body = json.loads(record['body'])
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in message body: {e}")
+                raise ValueError(f"Invalid JSON in message body: {e}")
+
             job_id = body.get('job_id')
             project_id = body.get('project_id')
             function = body.get('function', 'unknown')
 
+            # Extract provider with backward-compatible default
+            video_provider = body.get('video_provider', 'replicate')
+
             logger.info(f"Job ID: {job_id}")
             logger.info(f"Project ID: {project_id}")
             logger.info(f"Function: {function}")
+            logger.info(f"Job {project_id}: Using provider {video_provider}")
 
             # Validate message
             if not project_id:
@@ -108,18 +117,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 raise ValueError(f"Unknown function: {function}")
 
             # Process the video generation job
-            logger.info(f"🎬 Starting video generation for project {project_id}")
+            logger.info(f"🎬 Starting video generation for project {project_id} with provider {video_provider}")
 
-            # Call the generation pipeline
-            generate_video(project_id)
+            # Call the generation pipeline with provider parameter
+            generate_video(project_id, video_provider=video_provider)
 
-            logger.info(f"✅ Successfully completed job {job_id}")
+            logger.info(f"✅ Job {project_id} completed with provider: {video_provider}")
             success_count += 1
 
             results.append({
                 'messageId': record_id,
                 'jobId': job_id,
                 'projectId': project_id,
+                'provider': video_provider,
                 'status': 'success'
             })
 
@@ -128,11 +138,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             error_msg = str(e)
             error_trace = traceback.format_exc()
 
-            logger.error(f"❌ Failed to process record {record_id}: {error_msg}")
+            # Include provider in error log if available
+            provider_info = f" with provider {video_provider}" if 'video_provider' in locals() else ""
+            logger.error(f"❌ Job {project_id} failed{provider_info}: {error_msg}")
             logger.error(f"Traceback:\n{error_trace}")
 
             results.append({
                 'messageId': record_id,
+                'jobId': job_id if 'job_id' in locals() else None,
+                'projectId': project_id if 'project_id' in locals() else None,
+                'provider': video_provider if 'video_provider' in locals() else None,
                 'status': 'failed',
                 'error': error_msg
             })
@@ -177,14 +192,52 @@ if __name__ == "__main__":
         def get_remaining_time_in_millis(self):
             return 900000  # 15 minutes
 
-    # Mock SQS event
-    test_event = {
+    # Mock SQS event with ECS provider
+    test_event_ecs = {
         'Records': [{
             'messageId': 'test-message-123',
             'receiptHandle': 'test-receipt-handle',
             'body': json.dumps({
                 'job_id': 'test-job-456',
                 'project_id': '00000000-0000-0000-0000-000000000001',
+                'function': 'generate_video',
+                'video_provider': 'ecs',
+                'enqueued_at': 1234567890
+            }),
+            'attributes': {
+                'ApproximateReceiveCount': '1',
+                'SentTimestamp': '1234567890000'
+            }
+        }]
+    }
+
+    # Mock SQS event with Replicate provider
+    test_event_replicate = {
+        'Records': [{
+            'messageId': 'test-message-124',
+            'receiptHandle': 'test-receipt-handle',
+            'body': json.dumps({
+                'job_id': 'test-job-457',
+                'project_id': '00000000-0000-0000-0000-000000000002',
+                'function': 'generate_video',
+                'video_provider': 'replicate',
+                'enqueued_at': 1234567890
+            }),
+            'attributes': {
+                'ApproximateReceiveCount': '1',
+                'SentTimestamp': '1234567890000'
+            }
+        }]
+    }
+
+    # Mock SQS event without provider (backward compatibility test)
+    test_event_no_provider = {
+        'Records': [{
+            'messageId': 'test-message-125',
+            'receiptHandle': 'test-receipt-handle',
+            'body': json.dumps({
+                'job_id': 'test-job-458',
+                'project_id': '00000000-0000-0000-0000-000000000003',
                 'function': 'generate_video',
                 'enqueued_at': 1234567890
             }),
@@ -198,8 +251,22 @@ if __name__ == "__main__":
     print("Testing Lambda handler locally...")
     print("=" * 60)
 
+    # Test with ECS provider
+    print("\nTest 1: With ECS provider")
+    print("-" * 40)
     try:
-        result = handler(test_event, MockContext())
+        result = handler(test_event_ecs, MockContext())
+        print("\nTest Result:")
+        print(json.dumps(result, indent=2))
+    except Exception as e:
+        print(f"\nTest Failed: {e}")
+        traceback.print_exc()
+
+    # Test without provider (backward compatibility)
+    print("\n\nTest 2: Without provider (should default to 'replicate')")
+    print("-" * 40)
+    try:
+        result = handler(test_event_no_provider, MockContext())
         print("\nTest Result:")
         print(json.dumps(result, indent=2))
     except Exception as e:

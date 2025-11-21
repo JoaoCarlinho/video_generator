@@ -3,7 +3,7 @@
 from sqlalchemy import Column, String, Integer, DateTime, Numeric, Text, JSON, ARRAY, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from datetime import datetime
 import uuid
 
@@ -119,10 +119,25 @@ class Project(Base):
     
     # PHASE 7: Style Selection
     selected_style = Column(String(50), nullable=True)       # 'cinematic', 'dark_premium', 'minimal_studio', 'lifestyle', '2d_animated', or NULL
-    
+
+    # WAN 2.5: Video Provider Tracking
+    video_provider = Column(String(20), nullable=False, default='replicate', server_default='replicate')  # 'replicate' or 'ecs'
+    video_provider_metadata = Column(JSONB, nullable=True)   # Provider-specific metadata (endpoint version, failover events)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    @validates('video_provider')
+    def validate_video_provider(self, key, value):
+        """Validate that video_provider is either 'replicate' or 'ecs'."""
+        valid_providers = ['replicate', 'ecs']
+        if value not in valid_providers:
+            raise ValueError(
+                f"Invalid video provider: '{value}'. "
+                f"Must be one of: {', '.join(valid_providers)}"
+            )
+        return value
+
     def __repr__(self):
-        return f"<Project {self.id} - {self.title}>"
+        return f"<Project {self.id} - {self.title} (provider: {self.video_provider})>"
 

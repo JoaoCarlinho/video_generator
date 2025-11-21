@@ -62,24 +62,70 @@ COST_MUSIC_GENERATION = Decimal("0.10")  # MusicGen per track
 COST_RENDERING = Decimal("0.00")  # Local FFmpeg, free
 
 
+# ============================================================================
+# Provider Metadata Tracking (Story 4.4)
+# ============================================================================
+
+def build_provider_metadata(
+    primary_provider: str,
+    actual_provider: str,
+    endpoint: str,
+    failover_used: bool = False,
+    failover_reason: Optional[str] = None,
+    generation_duration_ms: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build provider metadata dictionary for storage in database.
+
+    This metadata helps debug issues, track failover events, and analyze costs.
+
+    Args:
+        primary_provider: User's selected provider ("replicate" or "ecs")
+        actual_provider: Provider that successfully generated the video
+        endpoint: Actual endpoint URL used for generation
+        failover_used: Whether failover to backup provider occurred
+        failover_reason: Error message that triggered failover (optional)
+        generation_duration_ms: Total generation time in milliseconds (optional)
+
+    Returns:
+        Dictionary with provider metadata in standard format
+    """
+    metadata = {
+        "primary_provider": primary_provider,
+        "actual_provider": actual_provider,
+        "failover_used": failover_used,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "endpoint": endpoint,
+    }
+
+    if failover_reason:
+        metadata["failover_reason"] = failover_reason
+
+    if generation_duration_ms is not None:
+        metadata["generation_duration_ms"] = generation_duration_ms
+
+    return metadata
+
+
 class GenerationPipeline:
     """Main pipeline orchestrator for video generation."""
 
-    def __init__(self, project_id: UUID):
+    def __init__(self, project_id: UUID, video_provider: str = "replicate"):
         """Initialize pipeline for a specific project.
-        
+
         Args:
             project_id: UUID of the project to generate
+            video_provider: Video generation provider ("replicate" or "ecs")
         """
         self.project_id = project_id
+        self.video_provider = video_provider
         init_db()
-        
+
         if db_connection.SessionLocal is None:
             raise RuntimeError(
                 "Database not initialized. "
                 "Check DATABASE_URL environment variable and database connectivity."
             )
-        
+
         self.db = db_connection.SessionLocal()
         self.total_cost = Decimal("0.00")
         self.step_costs: Dict[str, Decimal] = {}
@@ -534,14 +580,38 @@ Incorporate this visual style consistently throughout all scenes."""
         """Generate background videos for all scenes in parallel.
 
         STORY 3 (AC#5): For scenes with custom backgrounds, use uploaded image instead of AI generation.
+        STORY 4.4: Track provider metadata during generation.
         """
+        # Track generation start time for metadata
+        generation_start = datetime.utcnow()
+
         try:
             update_project_status(
                 self.db, self.project_id, "GENERATING_SCENES", progress=progress_start
             )
 
             from app.config import settings
-            generator = VideoGenerator(api_token=settings.replicate_api_token)
+
+            # STORY 4.4: Get provider from project (defaults to "replicate")
+            # Validate provider parameter
+            if self.video_provider not in ["replicate", "ecs"]:
+                logger.warning(f"Invalid provider '{self.video_provider}', defaulting to 'replicate'")
+                self.video_provider = "replicate"
+
+            # Check if ECS selected but not configured
+            if self.video_provider == "ecs" and not settings.ecs_provider_enabled:
+                logger.warning("ECS provider requested but not configured, falling back to Replicate")
+                self.video_provider = "replicate"
+
+            logger.info(f"🎬 Project {self.project_id}: Using video provider: {self.video_provider}")
+            video_provider = self.video_provider
+
+            # Initialize VideoGenerator with provider
+            generator = VideoGenerator(
+                provider=video_provider,
+                api_token=settings.replicate_api_token,
+                ecs_endpoint_url=str(settings.ecs_endpoint_url) if settings.ecs_provider_enabled else None
+            )
 
             # STORY 3: Build scene background mapping for quick lookup
             scene_background_map = {}
@@ -590,11 +660,57 @@ Incorporate this visual style consistently throughout all scenes."""
             # Run all tasks concurrently
             scene_videos = await asyncio.gather(*tasks)
 
-            logger.info(f"✅ Generated {len(scene_videos)} videos ({len(scene_background_map)} custom backgrounds)")
+            # STORY 4.4: Build and store provider metadata after successful generation
+            generation_duration_ms = int((datetime.utcnow() - generation_start).total_seconds() * 1000)
+
+            # For now, no failover (always using primary provider)
+            # Failover will be implemented in Story 1.4
+            provider_metadata = build_provider_metadata(
+                primary_provider=video_provider,
+                actual_provider=video_provider,  # Same as primary (no failover yet)
+                endpoint="https://api.replicate.com/v1/predictions",  # Replicate endpoint
+                failover_used=False,  # No failover yet
+                generation_duration_ms=generation_duration_ms
+            )
+
+            # Store metadata in project record
+            try:
+                project.video_provider_metadata = provider_metadata
+                self.db.commit()
+                logger.info(
+                    f"✅ Generated {len(scene_videos)} videos ({len(scene_background_map)} custom backgrounds). "
+                    f"Provider: {video_provider}, Duration: {generation_duration_ms}ms"
+                )
+            except Exception as metadata_error:
+                # Don't fail generation if metadata storage fails
+                logger.warning(f"⚠️  Failed to store provider metadata: {metadata_error}")
+
             return scene_videos
 
         except Exception as e:
-            logger.error(f"❌ Video generation failed: {e}")
+            # STORY 4.4: Store error metadata even on failure
+            generation_duration_ms = int((datetime.utcnow() - generation_start).total_seconds() * 1000)
+
+            error_metadata = build_provider_metadata(
+                primary_provider=getattr(project, 'video_provider', 'replicate'),
+                actual_provider=None,  # Failed before completion
+                endpoint="",
+                failover_used=False,  # No failover yet
+                generation_duration_ms=generation_duration_ms
+            )
+            error_metadata["error"] = str(e)
+
+            # Try to store error metadata
+            try:
+                project.video_provider_metadata = error_metadata
+                self.db.commit()
+            except:
+                pass  # Don't mask original error
+
+            logger.error(
+                f"❌ Video generation failed after {generation_duration_ms}ms: {e}",
+                extra={"metadata": error_metadata}
+            )
             raise
 
     async def _save_videos_locally(self, video_urls: List[str], project_id: str) -> List[str]:
@@ -935,16 +1051,17 @@ Incorporate this visual style consistently throughout all scenes."""
             raise
 
 
-def generate_video(project_id: str) -> Dict[str, Any]:
+def generate_video(project_id: str, video_provider: str = "replicate") -> Dict[str, Any]:
     """
     RQ job function for video generation.
-    
+
     This is the entry point called by RQ worker.
     Runs in a forked child process on macOS.
-    
+
     Args:
         project_id: String UUID of project to generate
-        
+        video_provider: Video generation provider ("replicate" or "ecs")
+
     Returns:
         Dict with generation results
     """
@@ -952,15 +1069,15 @@ def generate_video(project_id: str) -> Dict[str, Any]:
         # Ensure environment variable is set (should be set by shell script)
         import os
         os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
-        
+
         # Reinitialize database connection in child process
         # This ensures we don't reuse connections from parent
         from app.database.connection import init_db
         init_db()
-        
-        logger.info(f"🚀 Starting generation pipeline for project {project_id}")
+
+        logger.info(f"🚀 Starting generation pipeline for project {project_id} with provider {video_provider}")
         project_uuid = UUID(project_id)
-        pipeline = GenerationPipeline(project_uuid)
+        pipeline = GenerationPipeline(project_uuid, video_provider=video_provider)
         
         # Handle event loop properly for RQ
         try:

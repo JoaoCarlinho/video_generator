@@ -6,8 +6,128 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/u
 import { VideoPlayer } from '@/components/PageComponents'
 import { useProjects } from '@/hooks/useProjects'
 import { api } from '@/services/api'
-import { ArrowLeft, Copy, Check, Trash2, Cloud, Lock } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Trash2, Cloud, Lock, Info, HelpCircle } from 'lucide-react'
 import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
+
+// WAN 2.5: Provider metadata types
+interface ProviderMetadata {
+  primary_provider?: string
+  actual_provider?: string
+  failover_used?: boolean
+  failover_reason?: string
+  timestamp?: string
+  endpoint?: string
+  generation_duration_ms?: number
+}
+
+// Helper function to safely parse provider metadata
+function getProviderMetadata(project: any): ProviderMetadata | null {
+  if (!project?.video_provider_metadata) {
+    return null
+  }
+
+  // Handle case where metadata is JSON string (old format)
+  if (typeof project.video_provider_metadata === 'string') {
+    try {
+      return JSON.parse(project.video_provider_metadata)
+    } catch {
+      console.error('[VideoResults] Failed to parse provider metadata')
+      return null
+    }
+  }
+
+  return project.video_provider_metadata
+}
+
+// Check if failover notification should be displayed
+function shouldShowFailoverNotification(project: any): boolean {
+  const metadata = getProviderMetadata(project)
+  return metadata?.failover_used === true
+}
+
+// Failover Notification Banner Component
+interface FailoverNotificationBannerProps {
+  metadata: ProviderMetadata
+  projectId: string
+}
+
+function FailoverNotificationBanner({ metadata, projectId }: FailoverNotificationBannerProps) {
+  const reason = metadata.failover_reason || 'VPC endpoint was unavailable'
+
+  // Log to analytics when banner is displayed
+  useEffect(() => {
+    // Track analytics event (if analytics is configured)
+    if (typeof window !== 'undefined' && (window as any).analytics) {
+      ;(window as any).analytics.track('Failover Notification Displayed', {
+        project_id: projectId,
+        primary_provider: metadata.primary_provider || 'ecs',
+        fallback_provider: metadata.actual_provider || 'replicate',
+        failover_reason: reason,
+        timestamp: metadata.timestamp || new Date().toISOString(),
+        cost_difference: 0.6, // $0.80 - $0.20
+      })
+    }
+
+    console.log('[VideoResults] Failover notification displayed', {
+      project_id: projectId,
+      reason: reason,
+    })
+  }, [metadata, projectId, reason])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-6"
+    >
+      <div className="flex items-start gap-3">
+        <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-blue-900 font-semibold">
+              Video generated using Replicate API (automatic fallback)
+            </h3>
+            <div className="group relative">
+              <HelpCircle className="w-4 h-4 text-blue-600 cursor-help" />
+              <div className="absolute left-0 top-full mt-2 w-72 p-3 bg-slate-900 text-slate-100 text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                <p className="font-semibold mb-2">Automatic Failover</p>
+                <p className="mb-2">
+                  When the VPC endpoint is unavailable, we automatically use Replicate API to ensure
+                  your video is always generated.
+                </p>
+                <div className="space-y-1 text-xs">
+                  <p className="font-medium text-slate-300">Benefits:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-0.5">
+                    <li>100% reliability</li>
+                    <li>No manual intervention needed</li>
+                    <li>Seamless experience</li>
+                  </ul>
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-700">
+                  <p className="text-xs text-slate-400">
+                    VPC endpoint saves 75% ($0.20 vs $0.80) when available
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1 text-sm text-blue-800">
+            <p>
+              <strong>Reason:</strong> {reason}
+            </p>
+            <p>
+              <strong>Cost:</strong> ~$0.80 (Replicate) instead of ~$0.20 (VPC endpoint)
+            </p>
+            <p className="text-blue-600 mt-2">
+              ✓ Your video was successfully generated despite the VPC endpoint being unavailable.
+            </p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 export const VideoResults = () => {
   const { projectId = '' } = useParams()
@@ -273,6 +393,16 @@ export const VideoResults = () => {
                 ✓ Your video is ready!
               </p>
             </motion.div>
+
+            {/* WAN 2.5: Failover Notification Banner */}
+            {shouldShowFailoverNotification(project) && (
+              <motion.div variants={itemVariants}>
+                <FailoverNotificationBanner
+                  metadata={getProviderMetadata(project)!}
+                  projectId={projectId}
+                />
+              </motion.div>
+            )}
 
             {/* STORY 3 (AC#7): Aspect Ratio Selector */}
             {availableAspects.length > 1 && (

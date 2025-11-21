@@ -16,6 +16,17 @@ export interface Project {
   cost_estimate?: number
   output_videos?: Record<string, string>
   progress?: number
+  // WAN 2.5: Video provider tracking
+  video_provider?: 'replicate' | 'ecs'
+  video_provider_metadata?: {
+    primary_provider?: string
+    actual_provider?: string
+    failover_used?: boolean
+    failover_reason?: string
+    timestamp?: string
+    endpoint?: string
+    generation_duration_ms?: number
+  }
 }
 
 interface CreateProjectInput {
@@ -35,6 +46,8 @@ interface CreateProjectInput {
   brand_description?: string
   target_audience?: string
   target_duration?: number
+  // WAN 2.5: Video provider selection
+  video_provider?: 'replicate' | 'ecs'
 }
 
 export const useProjects = () => {
@@ -72,12 +85,54 @@ export const useProjects = () => {
       setError(null)
 
       try {
-        const response = await apiClient.post('/api/projects/', input)
+        // Ensure video_provider defaults to "replicate" if not provided
+        const payload = {
+          ...input,
+          video_provider: input.video_provider || 'replicate',
+        }
+
+        const response = await apiClient.post('/api/projects/', payload)
         const newProject = response.data
 
         setProjects((prev) => [newProject, ...prev])
+
+        // Log provider selection for analytics
+        console.log('[Project Created]', {
+          projectId: newProject.id,
+          provider: newProject.video_provider || payload.video_provider,
+          timestamp: new Date().toISOString(),
+        })
+
         return newProject
       } catch (err) {
+        // Enhanced error handling for provider-related errors
+        if (err && typeof err === 'object' && 'response' in err) {
+          const axiosError = err as any
+
+          // Handle 400 errors (validation failures)
+          if (axiosError.response?.status === 400) {
+            const errorDetail = axiosError.response.data?.detail || ''
+
+            // Check if error is related to ECS provider unavailability
+            if (
+              errorDetail.toLowerCase().includes('ecs') ||
+              errorDetail.toLowerCase().includes('provider')
+            ) {
+              const providerError = new Error(
+                'VPC endpoint is currently unavailable. Please select Replicate API or try again later.'
+              )
+              providerError.name = 'ProviderUnavailableError'
+              setError(providerError.message)
+              throw providerError
+            }
+
+            // Other validation errors
+            setError(errorDetail)
+            throw new Error(errorDetail)
+          }
+        }
+
+        // Generic error handling
         const message = err instanceof Error ? err.message : 'Failed to create project'
         setError(message)
         throw err

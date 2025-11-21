@@ -1,7 +1,11 @@
 """Configuration management for the AI Ad Video Generator backend."""
 
 from pydantic_settings import BaseSettings
+from pydantic import field_validator, HttpUrl
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -17,6 +21,9 @@ class Settings(BaseSettings):
     # AI APIs
     replicate_api_token: Optional[str] = None
     openai_api_key: Optional[str] = None
+
+    # ECS Provider Configuration
+    ecs_endpoint_url: Optional[HttpUrl] = None
 
     # AWS S3
     aws_access_key_id: Optional[str] = None
@@ -42,6 +49,35 @@ class Settings(BaseSettings):
     # Worker Config
     worker_processes: int = 1
 
+    @property
+    def ecs_provider_enabled(self) -> bool:
+        """Check if ECS provider is enabled via endpoint configuration.
+
+        Returns:
+            bool: True if ECS_ENDPOINT_URL is set and non-empty, False otherwise
+        """
+        return self.ecs_endpoint_url is not None and str(self.ecs_endpoint_url).strip() != ""
+
+    @field_validator('ecs_endpoint_url')
+    @classmethod
+    def validate_ecs_endpoint(cls, v):
+        """Validate ECS endpoint URL format.
+
+        Args:
+            v: ECS endpoint URL value
+
+        Returns:
+            HttpUrl: Validated URL
+
+        Raises:
+            ValueError: If URL format is invalid
+        """
+        if v is not None:
+            url_str = str(v)
+            if not url_str.startswith(('http://', 'https://')):
+                raise ValueError("ECS_ENDPOINT_URL must start with http:// or https://")
+        return v
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -55,4 +91,10 @@ except Exception as e:
     print(f"⚠️  Settings loading warning: {e}")
     print("⚠️  Using development defaults. Create .env file to configure services.")
     settings = Settings()
+
+# Log ECS provider configuration on startup
+if settings.ecs_provider_enabled:
+    logger.info(f"ECS provider enabled: {settings.ecs_endpoint_url}")
+else:
+    logger.info("ECS provider disabled")
 

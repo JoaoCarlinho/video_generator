@@ -32,14 +32,16 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 
 # Copy application code
 COPY app/ ./app/
-COPY run_worker.py .
+COPY lambda_handler.py .
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 
-# Health check (verify Redis connection)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "from app.config import settings; import redis; redis.from_url(settings.redis_url).ping()" || exit 1
+# Install AWS Lambda Runtime Interface Client
+RUN pip install --no-cache-dir awslambdaric
 
-# Run worker with improved startup logging
-CMD ["python", "run_worker.py"]
+# Set entrypoint for Lambda Runtime Interface
+ENTRYPOINT ["/usr/local/bin/python", "-m", "awslambdaric"]
+
+# Set Lambda handler
+CMD ["lambda_handler.handler"]
 

@@ -90,7 +90,17 @@ async def create_new_project(
     try:
         # Initialize database if needed
         init_db()
-        
+
+        # Validate ECS provider availability if selected
+        from app.config import settings
+        if request.video_provider == "ecs":
+            if not settings.ecs_provider_enabled:
+                logger.warning(f"ECS provider requested but not configured")
+                raise HTTPException(
+                    status_code=400,
+                    detail="ECS provider not available. Use 'replicate' or configure ECS endpoint."
+                )
+
         # Get current user from auth
         user_id = get_current_user_id(authorization)
         
@@ -154,6 +164,8 @@ async def create_new_project(
             "product_images": product_images_list,
             "scene_backgrounds": scene_backgrounds_list,
             "output_formats": output_formats_list,
+            # WAN 2.5: Video provider selection
+            "video_provider": request.video_provider,
             # Continue with existing fields
             "selectedStyle": selected_style_config,  # PHASE 7: User-selected or LLM-inferred style
             "style_spec": None,

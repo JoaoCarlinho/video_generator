@@ -56,6 +56,13 @@ class CreateProjectRequest(BaseModel):
         description="User-selected video style (e.g., 'cinematic', 'minimalist', 'energetic'). If None, LLM will infer."
     )
 
+    # WAN 2.5: Video provider selection
+    video_provider: str = Field(
+        default="replicate",
+        description="Video generation provider: 'replicate' (cloud API) or 'ecs' (self-hosted GPU)",
+        example="replicate"
+    )
+
     # LEGACY FIELDS (for backward compatibility)
     aspect_ratio: Optional[str] = Field(
         default="16:9",
@@ -86,6 +93,16 @@ class CreateProjectRequest(BaseModel):
             raise ValueError("Maximum 10 product images allowed")
         return v
 
+    @validator('video_provider')
+    def validate_video_provider(cls, v):
+        """Validate video provider is either 'replicate' or 'ecs'."""
+        valid_providers = ['replicate', 'ecs']
+        if v not in valid_providers:
+            raise ValueError(
+                f"video_provider must be one of: {', '.join(valid_providers)}. Got: '{v}'"
+            )
+        return v
+
 
 # ============================================================================
 # Project Response Schemas
@@ -101,6 +118,15 @@ class ProjectResponse(BaseModel):
     cost: float
     s3_project_folder: Optional[str]
     s3_project_folder_url: Optional[str]
+
+    # WAN 2.5: Video provider tracking
+    video_provider: str = Field(description="Video generation provider used", example="replicate")
+    video_provider_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Provider-specific metadata (failover events, endpoint info)",
+        example={"primary_provider": "ecs", "failover_used": False, "timestamp": "2025-01-21T12:00:00Z"}
+    )
+
     created_at: datetime
     updated_at: datetime
 
@@ -123,6 +149,15 @@ class ProjectDetailResponse(BaseModel):
     aspect_ratio: str
     local_project_path: Optional[str]
     local_video_paths: Optional[Dict[str, str]]
+
+    # WAN 2.5: Video provider tracking
+    video_provider: str = Field(description="Video generation provider used", example="replicate")
+    video_provider_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Provider-specific metadata (failover events, endpoint info)",
+        example={"primary_provider": "ecs", "failover_used": False, "timestamp": "2025-01-21T12:00:00Z"}
+    )
+
     created_at: datetime
     updated_at: datetime
 
@@ -425,3 +460,48 @@ class AdProject(BaseModel):
     audio_settings: AudioSettings
     render_status: Optional[str] = None
     video_metadata: Optional[Dict[str, Any]] = None  # For storing additional metadata like selectedStyle
+
+
+# ============================================================================
+# Provider Health Check Schemas
+# ============================================================================
+
+class ProviderHealthStatus(BaseModel):
+    """Health status for a single video generation provider."""
+    provider: str = Field(..., description="Provider name (replicate or ecs)")
+    healthy: bool = Field(..., description="Whether provider is currently healthy")
+    message: str = Field(..., description="Human-readable status message")
+    endpoint: Optional[str] = Field(None, description="Provider endpoint URL (if applicable)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "provider": "ecs",
+                "healthy": True,
+                "message": "Operational",
+                "endpoint": "http://internal-adgen-ecs-alb-123.us-east-1.elb.amazonaws.com"
+            }
+        }
+
+
+class ProvidersHealthResponse(BaseModel):
+    """Health status response for all video generation providers."""
+    replicate: ProviderHealthStatus
+    ecs: ProviderHealthStatus
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "replicate": {
+                    "provider": "replicate",
+                    "healthy": True,
+                    "message": "Always available"
+                },
+                "ecs": {
+                    "provider": "ecs",
+                    "healthy": True,
+                    "message": "Operational",
+                    "endpoint": "http://internal-adgen-ecs-alb-123.us-east-1.elb.amazonaws.com"
+                }
+            }
+        }

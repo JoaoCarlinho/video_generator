@@ -7,8 +7,10 @@ import { TabWizard, TabPanel, FormNavigation } from '@/components/ui'
 import { BrandInfoTab } from '@/components/forms/BrandInfoTab'
 import { CreativeVisionTab } from '@/components/forms/CreativeVisionTab'
 import { AssetsTab } from '@/components/forms/AssetsTab'
+import { ProviderSelector } from '@/components/forms/ProviderSelector'
 import { useProjects } from '@/hooks/useProjects'
-import { Zap } from 'lucide-react'
+import { useProviderHealth } from '@/hooks/useProviderHealth'
+import { Zap, AlertCircle, Info } from 'lucide-react'
 import type { AspectRatio } from '@/components/ui/AspectRatioSelector'
 
 // Get API base URL from environment
@@ -18,6 +20,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TABS = [
   { id: 'brand-info', label: 'Brand Info' },
   { id: 'creative-vision', label: 'Creative Vision' },
+  { id: 'provider-selection', label: 'Provider Selection' },
   { id: 'assets', label: 'Assets' },
 ]
 
@@ -33,6 +36,9 @@ interface FormData {
   target_duration: number
   aspect_ratios: AspectRatio[]
 
+  // Provider Selection
+  video_provider: string
+
   // Assets
   product_images: File[]
   logo_images: File[]
@@ -47,6 +53,7 @@ const INITIAL_FORM_DATA: FormData = {
   target_audience: '',
   target_duration: 30,
   aspect_ratios: ['16:9'],
+  video_provider: 'replicate',
   product_images: [],
   logo_images: [],
   guidelines_file: null,
@@ -55,6 +62,7 @@ const INITIAL_FORM_DATA: FormData = {
 export const CreateProject = () => {
   const navigate = useNavigate()
   const { createProject, loading, error } = useProjects()
+  const { replicate, ecs, loading: healthLoading, error: healthError, refetch } = useProviderHealth()
 
   const [currentTab, setCurrentTab] = useState(0)
   const [completedTabs, setCompletedTabs] = useState<number[]>([])
@@ -81,6 +89,15 @@ export const CreateProject = () => {
     localStorage.setItem('draft-project', JSON.stringify(formData))
   }, [formData])
 
+  // Handle ECS health status changes - force switch to Replicate if ECS becomes unhealthy
+  useEffect(() => {
+    if (!ecs.healthy && formData.video_provider === 'ecs') {
+      setFormData((prev) => ({ ...prev, video_provider: 'replicate' }))
+      // Could add toast notification here
+      console.warn('ECS provider became unavailable, switching to Replicate')
+    }
+  }, [ecs.healthy, formData.video_provider])
+
   // Validation functions
   const isTab1Valid = () => {
     return formData.title.trim().length >= 3 && formData.brand_name.trim().length >= 2
@@ -90,10 +107,16 @@ export const CreateProject = () => {
     return formData.creative_prompt.trim().length >= 20 && formData.aspect_ratios.length > 0
   }
 
+  const isTab3Valid = () => {
+    // Provider selection is always valid - default is "replicate" and ECS is disabled if unhealthy
+    return true
+  }
+
   const canProceedToNext = () => {
     if (currentTab === 0) return isTab1Valid()
     if (currentTab === 1) return isTab2Valid()
-    return true // Tab 3 has no required fields
+    if (currentTab === 2) return isTab3Valid()
+    return true // Tab 4 (Assets) has no required fields
   }
 
   // Navigation handlers
@@ -155,8 +178,8 @@ export const CreateProject = () => {
         throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
       }
 
-      const { file_path } = await uploadResponse.json()
-      return file_path
+      const { file_url } = await uploadResponse.json()
+      return file_url
     } catch (error) {
       console.error(`❌ Failed to upload ${assetType}:`, error)
       return null
@@ -168,12 +191,14 @@ export const CreateProject = () => {
     setShowConfirmation(false)
     setSubmitError(null)
 
+    // Declare upload variables outside try block for catch block access
+    let uploadedProductUrls: string[] = []
+    let uploadedLogoUrls: string[] = []
+    let uploadedGuidelinesUrl: string | null = null
+
     try {
       // Upload assets in parallel
       const uploadPromises: Promise<any>[] = []
-      let uploadedProductUrls: string[] = []
-      let uploadedLogoUrls: string[] = []
-      let uploadedGuidelinesUrl: string | null = null
 
       // Upload product images
       if (formData.product_images.length > 0) {
@@ -209,7 +234,7 @@ export const CreateProject = () => {
       // Wait for all uploads
       await Promise.all(uploadPromises)
 
-      // Create project
+      // Create project with video provider
       const newProject = await createProject({
         title: formData.title,
         creative_prompt: formData.creative_prompt,
@@ -219,6 +244,7 @@ export const CreateProject = () => {
         target_duration: formData.target_duration,
         aspect_ratio: formData.aspect_ratios[0], // Primary aspect ratio
         outputFormats: formData.aspect_ratios,
+        video_provider: formData.video_provider, // WAN 2.5: Provider selection
         product_image_url: uploadedProductUrls[0] || undefined,
         productImages: uploadedProductUrls.length > 0 ? uploadedProductUrls : undefined,
         logo_url: uploadedLogoUrls[0] || undefined,
@@ -236,6 +262,53 @@ export const CreateProject = () => {
       }
     } catch (err) {
       console.error('❌ Error creating project:', err)
+
+      // Handle ECS unavailability - retry with Replicate
+      if (
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as any).response?.status === 400 &&
+        formData.video_provider === 'ecs'
+      ) {
+        console.warn('ECS provider rejected by backend, retrying with Replicate')
+        try {
+          const newProject = await createProject({
+            title: formData.title,
+            creative_prompt: formData.creative_prompt,
+            brand_name: formData.brand_name,
+            brand_description: formData.brand_description || undefined,
+            target_audience: formData.target_audience || undefined,
+            target_duration: formData.target_duration,
+            aspect_ratio: formData.aspect_ratios[0],
+            outputFormats: formData.aspect_ratios,
+            video_provider: 'replicate', // Fallback to Replicate
+            product_image_url: uploadedProductUrls[0] || undefined,
+            productImages: uploadedProductUrls.length > 0 ? uploadedProductUrls : undefined,
+            logo_url: uploadedLogoUrls[0] || undefined,
+            guidelines_url: uploadedGuidelinesUrl || undefined,
+          } as any)
+
+          // Clear draft
+          localStorage.removeItem('draft-project')
+
+          // Navigate
+          if (autoGenerate) {
+            navigate(`/projects/${newProject.id}/progress`)
+          } else {
+            navigate('/dashboard')
+          }
+          return
+        } catch (retryErr) {
+          console.error('❌ Retry with Replicate also failed:', retryErr)
+          const retryMessage = retryErr instanceof Error ? retryErr.message : 'Failed to create project with fallback provider'
+          setSubmitError(`ECS unavailable. Fallback to Replicate failed: ${retryMessage}`)
+          setShowConfirmation(true)
+          return
+        }
+      }
+
+      // Handle other errors
       const message = err instanceof Error ? err.message : 'Failed to create project'
       setSubmitError(message)
       setShowConfirmation(true)
@@ -318,7 +391,88 @@ export const CreateProject = () => {
                       />
                     </TabPanel>
 
-                    <TabPanel isActive={currentTab === 2} tabId="assets">
+                    <TabPanel isActive={currentTab === 2} tabId="provider-selection">
+                      <div className="space-y-6">
+                        {/* Section Header */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            Choose Generation Provider
+                          </h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Select how you want to generate your video based on cost and performance
+                          </p>
+                        </div>
+
+                        {/* Health Status Error */}
+                        {healthError && (
+                          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div className="flex items-start gap-3">
+                              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-yellow-900">
+                                  Unable to check provider status
+                                </p>
+                                <p className="text-sm text-yellow-700 mt-1">
+                                  Using Replicate API as fallback. You can retry the health check below.
+                                </p>
+                                <button
+                                  onClick={refetch}
+                                  className="text-sm text-yellow-700 underline hover:text-yellow-900 mt-2"
+                                >
+                                  Retry health check
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cost Comparison */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h4 className="font-semibold text-blue-900 mb-3">Cost Comparison</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white p-3 rounded border border-blue-100">
+                              <div className="font-medium text-gray-900">Replicate Cloud API</div>
+                              <div className="text-2xl font-bold text-gray-900 mt-1">~$0.80</div>
+                              <div className="text-sm text-gray-600">per video</div>
+                              <div className="text-blue-600 text-sm mt-2">✓ Fast & reliable</div>
+                              <div className="text-blue-600 text-sm">✓ Always available</div>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-blue-100">
+                              <div className="font-medium text-gray-900">Self-Hosted GPU</div>
+                              <div className="text-2xl font-bold text-gray-900 mt-1">~$0.20</div>
+                              <div className="text-sm text-gray-600">per video</div>
+                              <div className="text-green-600 font-semibold text-sm mt-2">
+                                ✓ 75% savings
+                              </div>
+                              <div className="text-gray-600 text-sm">
+                                {ecs.healthy ? '✓ Currently available' : '⚠ Currently unavailable'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Provider Selector */}
+                        <ProviderSelector
+                          value={formData.video_provider}
+                          onChange={(provider) =>
+                            setFormData((prev) => ({ ...prev, video_provider: provider }))
+                          }
+                          ecsAvailable={ecs.healthy}
+                        />
+
+                        {/* Info Tooltip for Cold Start */}
+                        <div className="flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                          <Info className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+                          <div className="text-sm text-gray-600">
+                            <strong>Note:</strong> Self-hosted GPU may have slower cold start during
+                            off-hours (outside 12 PM - 11 PM window). The service scales down
+                            automatically to optimize costs.
+                          </div>
+                        </div>
+                      </div>
+                    </TabPanel>
+
+                    <TabPanel isActive={currentTab === 3} tabId="assets">
                       <AssetsTab
                         data={{
                           product_images: formData.product_images,
@@ -416,6 +570,14 @@ export const CreateProject = () => {
                     .join(', ')}
                 </p>
               </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase">
+                  Video Provider
+                </label>
+                <p className="text-gray-900 mt-1 text-sm">
+                  {formData.video_provider === 'ecs' ? '🖥️ Self-Hosted GPU' : '☁️ Replicate Cloud'}
+                </p>
+              </div>
             </div>
 
             {/* Assets */}
@@ -456,8 +618,14 @@ export const CreateProject = () => {
                 Estimated Cost
               </span>
             </div>
-            <p className="text-2xl font-bold text-success-600">$0.19 - $0.43</p>
-            <p className="text-xs text-success-700 mt-1">Final cost may vary based on complexity</p>
+            <p className="text-2xl font-bold text-success-600">
+              {formData.video_provider === 'ecs' ? '~$0.20' : '~$0.80'}
+            </p>
+            <p className="text-xs text-success-700 mt-1">
+              {formData.video_provider === 'ecs'
+                ? 'Self-hosted GPU - 75% cost savings'
+                : 'Replicate Cloud API - Fast & reliable'}
+            </p>
           </div>
 
           {/* Auto-Generate Toggle */}

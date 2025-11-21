@@ -343,8 +343,7 @@ pytestdebug.log
 # Railway
 deploy_scripts/
 .railway/
-deploy_scripts/
-backend/scripts/
+infrastructure/scripts
 
 
 # Vercel
