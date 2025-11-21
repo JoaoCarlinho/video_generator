@@ -9,6 +9,8 @@ interface SceneSidebarProps {
   variationIndex?: number;
   onVideoUpdate: () => void;
   onEditStart?: () => void;
+  onEditError?: () => void;
+  className?: string;
 }
 
 export const SceneSidebar: React.FC<SceneSidebarProps> = ({
@@ -16,7 +18,8 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
   variationIndex = 0,
   onVideoUpdate,
   onEditStart,
-  onEditError
+  onEditError,
+  className
 }) => {
   const {
     scenes,
@@ -66,7 +69,7 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
   
   if (isLoading && scenes.length === 0) {
     return (
-      <div className="scene-sidebar w-full lg:w-1/3 bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-lg p-6">
+      <div className={`scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-lg p-6 ${className}`}>
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-6 h-6 text-gold animate-spin" />
@@ -79,7 +82,7 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
   
   if (error && scenes.length === 0) {
     return (
-      <div className="scene-sidebar w-full lg:w-1/3 bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-lg p-6">
+      <div className={`scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-lg p-6 ${className}`}>
         <div className="text-red-400 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
           <p className="font-medium mb-1">Error loading scenes</p>
           <p className="text-sm">{error}</p>
@@ -90,16 +93,16 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
   
   return (
     <>
-      <div className="scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 space-y-4 shadow-gold-lg">
+      <div className={`scene-sidebar w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 flex flex-col shadow-gold-lg max-h-[calc(100vh-120px)] ${className}`}>
         {/* Header */}
-        <div className="flex justify-between items-center pb-3 border-b border-charcoal-800/70">
+        <div className="flex justify-between items-center pb-4 border-b border-charcoal-800/70 mb-4 flex-shrink-0">
           <h3 className="text-lg font-semibold text-white">
             Scenes ({scenes.length})
           </h3>
         </div>
         
         {/* Scene List */}
-        <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+        <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
           {scenes.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <p>No scenes available</p>

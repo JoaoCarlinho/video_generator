@@ -665,213 +665,210 @@ export const VideoResults = () => {
       <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
         <div className="max-w-7xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
-            <button
-              onClick={handleBackToDashboard}
-              className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-muted-gray" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-gold rounded-lg shadow-gold">
-                <Sparkles className="h-5 w-5 text-gold-foreground" />
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleBackToDashboard}
+                className="p-2 hover:bg-charcoal-800/60 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-muted-gray" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-gold rounded-lg shadow-gold">
+                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                </div>
+                <span className="text-xl font-bold text-gradient-gold hidden sm:inline">GenAds</span>
               </div>
-              <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+            </div>
+
+            {/* Top Actions */}
+            <div className="flex items-center gap-3">
+              {isCampaign && project?.perfume_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                  className="hidden sm:flex gap-2 border-olive-600 text-muted-gray hover:text-gold hover:border-gold"
+                >
+                  <Play className="w-3 h-3" />
+                  Back to Campaign Dashboard
+                </Button>
+              )}
+              {!isCampaign && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/create')}
+                  className="hidden sm:flex gap-2 border-olive-600 text-muted-gray hover:text-gold hover:border-gold"
+                >
+                  <Play className="w-3 h-3" />
+                  Create New
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              >
+                {deleting ? (
+                  <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </Button>
             </div>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-4 py-6">
-        <div className="space-y-6">
-          {/* Video and Sidebar Row */}
-          <div className={`flex ${isCampaign ? 'flex-col lg:flex-row' : 'flex-col'} gap-6 items-start`}>
-            {/* LEFT: Video Player (70% for campaigns, 100% for projects) */}
-            <div className={`${isCampaign ? 'flex-1 lg:w-2/3' : 'w-full'}`}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
-          >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gold/10 rounded-lg border border-gold/20">
-                    <CheckCircle2 className="w-5 h-5 text-gold" />
+      <main className="relative z-10 flex-1 w-full max-w-[1600px] mx-auto px-4 py-8">
+        <div className={`grid grid-cols-1 ${isCampaign ? 'lg:grid-cols-12' : 'max-w-4xl mx-auto'} gap-8 items-start`}>
+          
+          {/* LEFT COLUMN: Video Player & Details */}
+          <div className={`${isCampaign ? 'lg:col-span-8' : 'w-full'}`}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl overflow-hidden shadow-gold-lg flex flex-col"
+            >
+              {/* Card Header */}
+              <div className="p-6 border-b border-charcoal-800/70 flex items-center justify-between bg-charcoal-950/30">
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-gold/10 rounded-xl border border-gold/20">
+                    <CheckCircle2 className="w-6 h-6 text-gold" />
                   </div>
                   <div>
-                    <h2 className="text-lg sm:text-xl font-bold text-off-white">
+                    <h2 className="text-xl font-bold text-off-white tracking-tight">
                       {isCampaign ? project.campaign_name : project.title}
                     </h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-charcoal-800 text-muted-gray border border-charcoal-700">
+                        {aspect === '9:16' ? 'Vertical Story' : aspect === '16:9' ? 'Cinematic Wide' : 'Square Post'}
+                      </span>
+                      {isFinalized && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Finalized
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Video Player */}
-              <div className="mb-4 relative">
-                {videoUrl ? 
-                  <>
-                  <VideoPlayer
-                      key={videoKey}
-                    videoUrl={videoUrl}
-                    title={isCampaign ? project.campaign_name : project.title}
-                    aspect={aspect}
-                    onDownload={() => handleDownload(aspect)}
-                    isLoading={isVideoFetching}
-                    size="standard"
-                  />
-                    
-                    {/* Loading Overlay During Edit */}
-                    {isEditingScene && (
-                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-lg z-10">
-                        <Loader2 className="w-12 h-12 text-gold animate-spin mb-4" />
-                        <h3 className="text-xl font-semibold text-white mb-2">
-                          Editing Scene...
-                        </h3>
-                        <p className="text-gray-400 text-center">
-                          Modifying prompt and regenerating
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          This will take ~3 minutes
-                        </p>
-                      </div>
-                    )}
-                  </>
-                 : (
-                  <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
-                    <p className="text-muted-gray">No video available</p>
-                    {error && (
-                      <p className="text-red-400 mt-2 text-sm">{error}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons Row */}
-              <div className="flex items-center gap-3 pt-4 border-t border-charcoal-800/70">
-                <Button
-                  variant="hero"
-                  onClick={() => handleDownload(aspect)}
-                  disabled={!!downloadingAspect}
-                  className="gap-2 transition-transform duration-200 hover:scale-105"
-                >
-                  {downloadingAspect === aspect ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-gold-foreground/30 border-t-gold-foreground rounded-full animate-spin" />
-                      Downloading...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      Download
-                    </>
-                  )}
-                </Button>
                 
-                {!isCampaign && storageUsage > 0 && !isFinalized && (
+                {/* Primary Actions - Right side of header */}
+                <div className="flex items-center gap-3">
+                  {!isCampaign && storageUsage > 0 && !isFinalized && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleFinalizeVideo}
+                      disabled={isFinalizing}
+                      className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold"
+                    >
+                      {isFinalizing ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                          Finalizing...
+                        </>
+                      ) : (
+                        <>
+                          <Cloud className="w-3 h-3 mr-2" />
+                          Finalize
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  
                   <Button
-                    variant="outline"
-                    onClick={handleFinalizeVideo}
-                    disabled={isFinalizing}
-                    className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold transition-transform duration-200 hover:scale-105"
+                    variant="hero"
+                    onClick={() => handleDownload(aspect)}
+                    disabled={!!downloadingAspect}
+                    className="gap-2 min-w-[120px]"
                   >
-                    {isFinalizing ? (
+                    {downloadingAspect === aspect ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full animate-spin mr-2" />
-                        Finalizing...
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
                       </>
                     ) : (
                       <>
-                        <Cloud className="w-4 h-4 mr-2" />
-                        Finalize
+                        <Download className="w-4 h-4" />
+                        Download
                       </>
                     )}
                   </Button>
-                )}
-                {isCampaign && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 rounded text-xs text-emerald-400 border border-emerald-500/30">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Finalized
-                  </div>
-                )}
-              </div>
-
-              {isFinalized && (
-                <div className="pt-4 border-t border-charcoal-800/70">
-                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                    <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Video finalized and uploaded to S3
-                    </p>
-                  </div>
                 </div>
-              )}
-          </motion.div>
-            </div>
-
-            {/* RIGHT: Scene Sidebar (30% for campaigns only) */}
-            {isCampaign && (
-              <div className="w-full lg:w-1/3 flex-shrink-0">
-              <SceneSidebar
-                campaignId={id}
-                variationIndex={selectedVariationIndex}
-                onVideoUpdate={handleVideoUpdate}
-                onEditStart={handleEditStart}
-                onEditError={handleEditError}
-              />
               </div>
-            )}
+
+              {/* Video Player Container */}
+              <div className="p-8 bg-black/20 min-h-[400px] flex items-center justify-center relative">
+                {videoUrl ? (
+                  <>
+                    <div className="w-full max-w-3xl mx-auto shadow-2xl rounded-xl overflow-hidden border border-charcoal-800">
+                      <VideoPlayer
+                        key={videoKey}
+                        videoUrl={videoUrl}
+                        title={isCampaign ? project.campaign_name : project.title}
+                        aspect={aspect}
+                        onDownload={() => handleDownload(aspect)}
+                        isLoading={isVideoFetching}
+                        size="standard"
+                      />
+                    </div>
+                    
+                    {/* Loading Overlay During Edit */}
+                    {isEditingScene && (
+                      <div className="absolute inset-0 bg-charcoal-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                        <div className="bg-charcoal-900 border border-gold/30 p-8 rounded-2xl shadow-2xl text-center max-w-md mx-4">
+                          <Loader2 className="w-12 h-12 text-gold animate-spin mb-4 mx-auto" />
+                          <h3 className="text-xl font-semibold text-white mb-2">
+                            Refining Scene...
+                          </h3>
+                          <p className="text-gray-400 mb-4">
+                            AI is regenerating this scene with your new instructions.
+                          </p>
+                          <div className="w-full bg-charcoal-800 rounded-full h-1.5 mb-2 overflow-hidden">
+                            <div className="h-full bg-gold animate-pulse w-2/3 rounded-full"></div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Estimated time: ~2-3 minutes
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-charcoal-700 rounded-xl w-full max-w-lg">
+                    <div className="p-4 bg-charcoal-800 rounded-full mb-4">
+                      <Play className="w-8 h-8 text-muted-gray" />
+                    </div>
+                    <p className="text-off-white font-medium text-lg mb-1">No video available</p>
+                    <p className="text-muted-gray text-sm mb-4">The video could not be loaded.</p>
+                    {error && (
+                      <p className="text-red-400 text-sm bg-red-500/10 px-3 py-1 rounded-lg border border-red-500/20">{error}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
           </div>
 
-          {/* Action Buttons - Below main content */}
-          <div className={`flex items-center gap-3 flex-wrap ${isCampaign ? 'justify-start' : 'justify-center'}`}>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/dashboard')}
-              className="border-olive-600 text-muted-gray hover:text-gold hover:border-gold transition-transform duration-200 hover:scale-105"
-            >
-              Back to {isCampaign ? 'Dashboard' : 'Projects'}
-            </Button>
-            {isCampaign && project?.perfume_id && (
-              <Button
-                variant="hero"
-                onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
-                className="gap-2 transition-transform duration-200 hover:scale-105"
-              >
-                <Play className="w-4 h-4" />
-                Back to Perfume
-              </Button>
-            )}
-            {!isCampaign && (
-              <Button
-                variant="hero"
-                onClick={() => navigate('/create')}
-                className="gap-2 transition-transform duration-200 hover:scale-105"
-              >
-                <Play className="w-4 h-4" />
-                Create Another
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleDeleteProject}
-              disabled={deleting}
-              className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 transition-transform duration-200 hover:scale-105"
-            >
-              {deleting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </>
-              )}
-            </Button>
-          </div>
+          {/* RIGHT COLUMN: Scene Sidebar */}
+          {isCampaign && (
+            <div className="lg:col-span-4 flex flex-col h-full">
+              <div className="sticky top-24">
+                <SceneSidebar
+                  campaignId={id}
+                  variationIndex={selectedVariationIndex}
+                  onVideoUpdate={handleVideoUpdate}
+                  onEditStart={handleEditStart}
+                  onEditError={handleEditError}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

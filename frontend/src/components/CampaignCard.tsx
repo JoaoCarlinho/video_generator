@@ -147,12 +147,6 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
             </span>
           </div>
 
-          {/* Cost */}
-          <div className="flex items-center gap-2 text-muted-gray">
-            <DollarSign className="w-4 h-4" />
-            <span>{formatCost(campaign.cost)}</span>
-          </div>
-
           {/* Created Date */}
           <div className="flex items-center gap-2 text-muted-gray">
             <Calendar className="w-4 h-4" />
