@@ -9,7 +9,7 @@ import type { ToastProps } from '@/components/ui/Toast'
 import { useProjects } from '@/hooks/useProjects'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { api } from '@/services/api'
-import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play, Loader2 } from 'lucide-react'
+import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play, Loader2, Shuffle } from 'lucide-react'
 import {
   getVideoURL,
   getVideo,
@@ -749,81 +749,99 @@ export const VideoResults = () => {
               className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl overflow-hidden shadow-gold-lg flex flex-col h-full"
             >
               {/* Card Header */}
-              <div className="p-6 border-b border-charcoal-800/70 flex items-center justify-between bg-charcoal-950/30">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 bg-gold/10 rounded-xl border border-gold/20">
-                    <CheckCircle2 className="w-6 h-6 text-gold" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-off-white tracking-tight">
-                      {isCampaign ? project.campaign_name : project.title}
-                    </h2>
-                    <div className="flex items-center gap-2 mt-1">
-                      {isFinalized && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Finalized
-                        </span>
-                      )}
+              <div className="p-6 border-b border-charcoal-800/70 bg-charcoal-950/30">
+                <div className="flex items-center justify-between">
+                  {/* Left: Title */}
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-gold/10 rounded-xl border border-gold/20">
+                      <CheckCircle2 className="w-6 h-6 text-gold" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-off-white tracking-tight">
+                        {isCampaign ? project.campaign_name : project.title}
+                      </h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        {isFinalized && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Finalized
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                {/* Primary Actions - Right side of header */}
-                <div className="flex items-center gap-3">
-                  {!isCampaign && storageUsage > 0 && !isFinalized && (
+                  
+                  {/* Center: Select Different Variation Button - Only show for campaigns with multiple variations */}
+                  <div className="flex-1 flex justify-center">
+                    {isCampaign && project?.num_variations && project.num_variations > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/campaigns/${id}/select`)}
+                        className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold gap-2"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                        <span className="hidden sm:inline">Switch Variation</span>
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Right: Primary Actions */}
+                  <div className="flex items-center gap-3">
+                    {!isCampaign && storageUsage > 0 && !isFinalized && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFinalizeVideo}
+                        disabled={isFinalizing}
+                        className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold"
+                      >
+                        {isFinalizing ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <Cloud className="w-3 h-3 mr-2" />
+                            Finalize
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
                     <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleFinalizeVideo}
-                      disabled={isFinalizing}
-                      className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold"
+                      variant="hero"
+                      onClick={() => handleDownload(aspect)}
+                      disabled={!!downloadingAspect}
+                      className="gap-2 min-w-[120px] transition-all duration-200 hover:scale-105 hover:shadow-gold-lg"
                     >
-                      {isFinalizing ? (
+                      {downloadingAspect === aspect ? (
                         <>
-                          <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                          Finalizing...
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
                         </>
                       ) : (
                         <>
-                          <Cloud className="w-3 h-3 mr-2" />
-                          Finalize
+                          <Download className="w-4 h-4" />
+                          Download
                         </>
                       )}
                     </Button>
-                  )}
-                  
-                  <Button
-                    variant="hero"
-                    onClick={() => handleDownload(aspect)}
-                    disabled={!!downloadingAspect}
-                    className="gap-2 min-w-[120px] transition-all duration-200 hover:scale-105 hover:shadow-gold-lg"
-                  >
-                    {downloadingAspect === aspect ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        Download
-                      </>
-                    )}
-                  </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDeleteProject}
-                    disabled={deleting}
-                    className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                  >
-                    {deleting ? (
-                      <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteProject}
+                      disabled={deleting}
+                      className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      {deleting ? (
+                        <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
