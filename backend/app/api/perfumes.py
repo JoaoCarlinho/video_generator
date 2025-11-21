@@ -4,16 +4,20 @@ Handles perfume CRUD operations.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
 from typing import Optional, List
+import boto3
+from urllib.parse import urlparse
 
 from app.database.connection import get_db
 from app.database import crud
 from app.api.auth import get_current_brand_id, get_current_user_id, verify_perfume_ownership
 from app.models.schemas import PerfumeDetail, PerfumeCreate, PaginatedPerfumes, PerfumeGender
-from app.utils.s3_utils import upload_perfume_image
+from app.utils.s3_utils import upload_perfume_image, get_s3_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +330,133 @@ async def get_perfume(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve perfume"
+        )
+
+
+@router.get(
+    "/{perfume_id}/image/{angle}",
+    summary="Stream perfume image",
+    description="Stream a perfume image from S3 through the backend (with CORS support)."
+)
+async def stream_perfume_image(
+    perfume_id: UUID,
+    angle: str,
+    _: bool = Depends(verify_perfume_ownership),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream a perfume image file for display in the browser (with CORS support).
+    
+    This endpoint streams the image file from S3 through the backend,
+    adding proper CORS headers to allow frontend to access it.
+    
+    **Path Parameters:**
+    - perfume_id: UUID of the perfume
+    - angle: Image angle ('front', 'back', 'top', 'left', 'right')
+    
+    **Response:** 
+    - Content-Type: image/png, image/jpeg, or image/webp
+    - Image file as binary stream with CORS headers
+    
+    **Errors:**
+    - 404: Perfume not found or image not available
+    - 403: Not authorized
+    - 400: Invalid angle
+    """
+    try:
+        # Validate angle
+        valid_angles = ['front', 'back', 'top', 'left', 'right']
+        if angle not in valid_angles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid angle: {angle}. Must be one of: {', '.join(valid_angles)}"
+            )
+        
+        # Get perfume and verify ownership (done via dependency)
+        perfume = crud.get_perfume_by_id(db, perfume_id)
+        if not perfume:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfume not found"
+            )
+        
+        # Get image URL based on angle
+        image_url = None
+        if angle == 'front':
+            image_url = perfume.front_image_url
+        elif angle == 'back':
+            image_url = perfume.back_image_url
+        elif angle == 'top':
+            image_url = perfume.top_image_url
+        elif angle == 'left':
+            image_url = perfume.left_image_url
+        elif angle == 'right':
+            image_url = perfume.right_image_url
+        
+        if not image_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Image not available for angle: {angle}"
+            )
+        
+        # Extract S3 key from URL
+        # URL format: https://bucket.s3.region.amazonaws.com/key
+        parsed_url = urlparse(image_url)
+        s3_key = parsed_url.path.lstrip('/')
+        
+        # Remove bucket name from key if present
+        if s3_key.startswith(settings.s3_bucket_name + '/'):
+            s3_key = s3_key[len(settings.s3_bucket_name) + 1:]
+        
+        logger.info(f"🖼️ Streaming perfume image from S3: {s3_key}")
+        
+        # Get S3 client
+        s3_client = get_s3_client()
+        
+        try:
+            # Download from S3
+            response = s3_client.get_object(
+                Bucket=settings.s3_bucket_name,
+                Key=s3_key
+            )
+            
+            image_data = response['Body'].read()
+            content_type = response.get('ContentType', 'image/png')
+            
+            logger.info(f"✅ Streamed image from S3: {s3_key} ({len(image_data)} bytes)")
+            
+            # Stream the image file to client with CORS headers
+            return StreamingResponse(
+                iter([image_data]),
+                media_type=content_type,
+                headers={
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET',
+                    'Access-Control-Allow-Headers': '*',
+                    'Cache-Control': 'public, max-age=3600'
+                }
+            )
+            
+        except s3_client.exceptions.NoSuchKey:
+            logger.error(f"❌ Image not found in S3: {s3_key}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found in storage"
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to stream image from S3: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to stream image from S3"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to stream image: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to stream image: {str(e)}"
         )
 
 

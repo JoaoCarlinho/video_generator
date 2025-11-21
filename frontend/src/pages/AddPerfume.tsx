@@ -271,13 +271,13 @@ export const AddPerfume = () => {
                 )}
               </div>
 
-              {/* Optional Images */}
+              {/* Optional Images 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-3">
                   Additional Images <span className="text-xs text-muted-gray">(Optional)</span>
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {/* Back Image */}
+                  {/* Back Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Back</label>
                     {backPreview ? (
@@ -310,7 +310,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Top Image */}
+                  {/* Top Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Top</label>
                     {topPreview ? (
@@ -343,7 +343,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Left Image */}
+                  {/* Left Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Left</label>
                     {leftPreview ? (
@@ -376,7 +376,7 @@ export const AddPerfume = () => {
                     )}
                   </div>
 
-                  {/* Right Image */}
+                  {/* Right Image 
                   <div>
                     <label className="block text-xs text-muted-gray mb-2">Right</label>
                     {rightPreview ? (
@@ -412,7 +412,7 @@ export const AddPerfume = () => {
                 <p className="text-xs text-muted-gray mt-2">
                   Upload additional angles to improve video generation quality (optional)
                 </p>
-              </div>
+              </div>*/}
 
               {/* Error Message */}
               {(error || submitError) && (

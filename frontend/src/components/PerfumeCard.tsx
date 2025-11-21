@@ -1,13 +1,15 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ImageIcon, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui'
+import { api } from '@/services/api'
 
 export interface PerfumeCardProps {
   perfume: {
     perfume_id: string
     perfume_name: string
     perfume_gender: 'masculine' | 'feminine' | 'unisex'
-    front_image_url: string
+    front_image_url: string | null | undefined
     campaigns_count?: number
   }
   onClick: () => void
@@ -26,6 +28,75 @@ const genderLabels = {
 }
 
 export const PerfumeCard = ({ perfume, onClick }: PerfumeCardProps) => {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoading, setImageLoading] = useState(true)
+  const [imageBlobUrl, setImageBlobUrl] = useState<string | null>(null)
+
+  // Check if URL is valid (non-empty string)
+  const hasValidImageUrl = perfume.front_image_url && 
+    typeof perfume.front_image_url === 'string' && 
+    perfume.front_image_url.trim() !== ''
+
+  // Fetch image as blob with auth headers to avoid CORS issues
+  useEffect(() => {
+    if (!hasValidImageUrl || !perfume.perfume_id) {
+      setImageLoading(false)
+      return
+    }
+
+    let currentBlobUrl: string | null = null
+
+    const fetchImage = async () => {
+      try {
+        setImageLoading(true)
+        setImageError(false)
+        
+        // Fetch image through proxy endpoint with auth headers
+        const response = await api.get(
+          `/api/perfumes/${perfume.perfume_id}/image/front`,
+          { responseType: 'blob' }
+        )
+        
+        // Create blob URL
+        const blob = new Blob([response.data], { type: response.headers['content-type'] || 'image/png' })
+        const blobUrl = URL.createObjectURL(blob)
+        currentBlobUrl = blobUrl
+        setImageBlobUrl(blobUrl)
+        setImageLoading(false)
+      } catch (err) {
+        console.warn('Failed to load perfume image:', err)
+        setImageError(true)
+        setImageLoading(false)
+      }
+    }
+
+    fetchImage()
+
+    // Cleanup blob URL on unmount or when dependencies change
+    return () => {
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl)
+      }
+      // Also cleanup any existing blob URL
+      setImageBlobUrl((prev) => {
+        if (prev) {
+          URL.revokeObjectURL(prev)
+        }
+        return null
+      })
+    }
+  }, [perfume.perfume_id, perfume.front_image_url, hasValidImageUrl])
+
+  const handleImageError = () => {
+    console.warn('Failed to display perfume image blob')
+    setImageError(true)
+    setImageLoading(false)
+  }
+
+  const handleImageLoad = () => {
+    setImageLoading(false)
+  }
+
   return (
     <motion.div
       className="group relative aspect-square bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-xl overflow-hidden cursor-pointer hover:border-gold transition-all duration-300 hover:shadow-gold"
@@ -35,15 +106,28 @@ export const PerfumeCard = ({ perfume, onClick }: PerfumeCardProps) => {
     >
       {/* Image */}
       <div className="relative w-full h-3/4 bg-charcoal-900 overflow-hidden">
-        {perfume.front_image_url ? (
-          <img
-            src={perfume.front_image_url}
-            alt={perfume.perfume_name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-          />
+        {hasValidImageUrl && imageBlobUrl && !imageError ? (
+          <>
+            {imageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-charcoal-900 z-10">
+                <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+              </div>
+            )}
+            <img
+              src={imageBlobUrl}
+              alt={perfume.perfume_name}
+              className={`w-full h-full object-contain group-hover:scale-110 transition-transform duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
+              onError={handleImageError}
+              onLoad={handleImageLoad}
+            />
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon className="w-16 h-16 text-muted-gray" />
+            {imageLoading ? (
+              <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+            ) : (
+              <ImageIcon className="w-16 h-16 text-muted-gray" />
+            )}
           </div>
         )}
         {/* Gold ring on hover */}

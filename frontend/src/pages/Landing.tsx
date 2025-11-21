@@ -16,11 +16,18 @@ const Landing = () => {
               GenAds
             </span>
           </div>
-          <Link to="/signup">
-            <Button variant={"hero" as ButtonVariant} size="lg" className="transition-transform duration-200 hover:scale-105">
-              Get Started
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/login">
+              <Button variant="outline" size="lg" className="transition-transform duration-200 hover:scale-105">
+                Login
+              </Button>
+            </Link>
+            <Link to="/signup">
+              <Button variant={"hero" as ButtonVariant} size="lg" className="transition-transform duration-200 hover:scale-105">
+                Get Started
+              </Button>
+            </Link>
+          </div>
         </div>
       </nav>
 

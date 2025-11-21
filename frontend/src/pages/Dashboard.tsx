@@ -56,13 +56,6 @@ export const Dashboard = () => {
       gradient: 'from-gold-silky/20 to-gold/10',
       iconBg: 'bg-gold-silky/20',
     },
-    {
-      label: 'Total Spent',
-      value: `$${(stats?.total_cost || 0).toFixed(2)}`,
-      icon: TrendingUp,
-      gradient: 'from-gold/20 to-gold-silky/20',
-      iconBg: 'bg-gold/20',
-    },
   ]
 
   const containerVariants = {
@@ -148,7 +141,7 @@ export const Dashboard = () => {
             {/* Stats Grid */}
             <motion.div
               variants={itemVariants}
-              className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6"
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6"
             >
               {dashboardStats.map((stat, index) => {
                 const Icon = stat.icon
