@@ -272,12 +272,6 @@ export const VideoResults = () => {
     try {
       setIsVideoFetching(true)
       
-      // Revoke old blob URL to prevent memory leaks
-      if (campaignBlobUrl) {
-        URL.revokeObjectURL(campaignBlobUrl)
-        setCampaignBlobUrl('')
-      }
-      
       // Add cache-busting parameter if forcing reload
       const params: any = { variation_index: variationIndex }
       if (forceReload) {
