@@ -114,6 +114,8 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = ({
                 scene={scene}
                 isEditing={editingSceneIndex === scene.scene_index}
                 onEditClick={() => setPopupSceneIndex(scene.scene_index)}
+                campaignId={campaignId}
+                variationIndex={variationIndex}
               />
             ))
           )}

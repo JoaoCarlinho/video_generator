@@ -1,15 +1,22 @@
 """API endpoints for campaign editing."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
+import logging
+import boto3
+from io import BytesIO
 
 from app.database.connection import get_db
 from app.database.crud import get_campaign_by_id
 from app.api.auth import verify_campaign_ownership
 from app.jobs.worker import create_worker
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/campaigns", tags=["editing"])
 
@@ -191,4 +198,167 @@ async def get_edit_history(
     edits = edit_history.get('edits', [])
     
     return [EditHistoryRecord(**edit) for edit in edits]
+
+
+@router.get("/{campaign_id}/scenes/{scene_index}/stream")
+async def stream_scene_video(
+    campaign_id: UUID,
+    scene_index: int,
+    variation_index: int = Query(0, description="Variation index (0, 1, 2)"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_campaign_ownership)
+):
+    """
+    Stream a scene video file for playback in the browser (with CORS support).
+    
+    This endpoint streams the scene video file from S3 through the backend,
+    adding proper CORS headers to allow frontend video players to access it.
+    
+    **Path Parameters:**
+    - campaign_id: UUID of the campaign
+    - scene_index: Scene index (0-based)
+    
+    **Query Parameters:**
+    - variation_index: Variation index (0, 1, 2). Defaults to 0.
+    
+    **Headers:**
+    - Authorization: Bearer {token} (optional in development)
+    - Range: Optional byte range for video seeking (e.g., "bytes=0-1023")
+    
+    **Response:** 
+    - Content-Type: video/mp4
+    - Video file as binary stream with CORS headers
+    
+    **Errors:**
+    - 404: Campaign not found or video not available
+    - 403: Not authorized
+    - 401: Missing or invalid authorization
+    - 400: Invalid scene index
+    """
+    try:
+        # Get campaign and verify ownership (done via dependency)
+        campaign = get_campaign_by_id(db, campaign_id)
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Validate scene index
+        campaign_json = campaign.campaign_json
+        if isinstance(campaign_json, str):
+            import json
+            campaign_json = json.loads(campaign_json)
+        
+        scenes = campaign_json.get('scenes', [])
+        if scene_index < 0 or scene_index >= len(scenes):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid scene index: {scene_index}. Must be between 0 and {len(scenes) - 1}"
+            )
+        
+        # Validate variation index
+        if variation_index < 0:
+            raise HTTPException(status_code=400, detail="Invalid variation index")
+        
+        # Construct S3 key for scene video
+        # Format: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{i}/draft/scene_{scene_index+1}_bg.mp4
+        s3_key = (
+            f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/"
+            f"variation_{variation_index}/draft/scene_{scene_index+1}_bg.mp4"
+        )
+        
+        logger.info(f"🎬 Streaming scene video from S3: {s3_key} (scene {scene_index}, variation {variation_index})")
+        
+        if not settings.s3_bucket_name:
+            raise HTTPException(status_code=500, detail="S3 bucket not configured")
+        
+        bucket_name = settings.s3_bucket_name
+        
+        # Download from S3 using configured credentials
+        from app.utils.s3_utils import get_s3_client
+        s3_client = get_s3_client()
+        
+        try:
+            # Get object metadata first
+            head_response = s3_client.head_object(Bucket=bucket_name, Key=s3_key)
+            content_length = head_response['ContentLength']
+            content_type = head_response.get('ContentType', 'video/mp4')
+            etag = head_response.get('ETag', '').strip('"')
+            
+            # Handle range requests for video seeking
+            range_header = None
+            if request:
+                range_header = request.headers.get('range')
+            
+            if range_header:
+                # Parse range header (e.g., "bytes=0-1023")
+                range_match = range_header.replace('bytes=', '').split('-')
+                start = int(range_match[0]) if range_match[0] else 0
+                end = int(range_match[1]) if range_match[1] else content_length - 1
+                
+                # Validate range
+                if start < 0 or end >= content_length or start > end:
+                    raise HTTPException(status_code=416, detail="Range Not Satisfiable")
+                
+                # Get partial content
+                response = s3_client.get_object(
+                    Bucket=bucket_name,
+                    Key=s3_key,
+                    Range=f'bytes={start}-{end}'
+                )
+                video_data = response['Body'].read()
+                actual_length = end - start + 1
+                
+                return StreamingResponse(
+                    iter([video_data]),
+                    status_code=206,  # Partial Content
+                    media_type=content_type,
+                    headers={
+                        'Content-Range': f'bytes {start}-{end}/{content_length}',
+                        'Accept-Ranges': 'bytes',
+                        'Content-Length': str(actual_length),
+                        'ETag': etag,
+                        'Cache-Control': 'public, max-age=31536000',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
+                    }
+                )
+            else:
+                # Get full content
+                response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+                video_data = response['Body'].read()
+                
+                return StreamingResponse(
+                    iter([video_data]),
+                    media_type=content_type,
+                    headers={
+                        'Content-Length': str(content_length),
+                        'Accept-Ranges': 'bytes',
+                        'ETag': etag,
+                        'Cache-Control': 'public, max-age=31536000',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
+                    }
+                )
+                
+        except s3_client.exceptions.NoSuchKey:
+            logger.error(f"❌ Scene video not found in S3: {s3_key}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Scene video not found (scene {scene_index}, variation {variation_index})"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error streaming scene video from S3: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to stream scene video: {str(e)}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in stream_scene_video: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
