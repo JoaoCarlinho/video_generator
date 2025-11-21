@@ -856,5 +856,143 @@ async def upload_final_video(brand_id, perfume_id, campaign_id, variation_index,
 
 ---
 
-**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
+## Scene Editing Patterns (Phase 3 - January 20, 2025)
+
+### Edit Pipeline Pattern
+
+**Pattern:** Single-scene editing with full video re-render
+
+```python
+# User edits Scene 2
+1. Load scene data from campaign_json
+2. Modify prompt via EditService (LLM)
+3. Regenerate Scene 2 video only
+4. Replace Scene 2 in S3 (overwrites old)
+5. Download ALL scenes from S3
+6. Re-render final video (all scenes + audio)
+7. Upload new final video (replaces old)
+8. Update campaign_json + edit_history
+```
+
+**Why This Works:**
+- Only edited scene regenerated (cost-efficient)
+- Final video always consistent (re-rendered from all scenes)
+- Edit history lightweight (JSONB, no versioning table)
+- S3-first architecture (scenes stored, downloaded temporarily)
+
+### Edit History Pattern
+
+**Pattern:** Lightweight audit trail in JSONB
+
+```python
+# Edit history stored in campaign_json.edit_history
+{
+  "edits": [
+    {
+      "edit_id": "uuid",
+      "timestamp": "ISO8601",
+      "scene_index": 1,
+      "edit_prompt": "Make brighter",
+      "original_prompt": "...",
+      "modified_prompt": "...",
+      "changes_summary": "...",
+      "cost": 0.21,
+      "duration_seconds": 187
+    }
+  ],
+  "total_edit_cost": 0.63,
+  "edit_count": 3
+}
+```
+
+**Benefits:**
+- No separate versioning table (simpler schema)
+- Queryable via JSONB GIN index
+- Full audit trail (who, what, when, cost)
+- Easy to extend (add fields without migration)
+
+### Prompt Modification Pattern
+
+**Pattern:** LLM modifies prompts while maintaining consistency
+
+```python
+# EditService.modify_scene_prompt()
+- Takes: original_prompt, edit_instruction, style_spec, scene_role, perfume_name
+- Uses: GPT-4o-mini with specialized system prompt
+- Returns: { modified_prompt, changes_summary }
+- Maintains: Scene structure, brand consistency, perfume grammar
+```
+
+**Key Principles:**
+- User's edit instruction = PRIMARY (honor user vision)
+- Perfume grammar = SECONDARY (how to show it)
+- Style consistency = MAINTAINED (same style spec)
+- Scene structure = PRESERVED (duration, role, transitions)
+
+### S3 Scene Management Pattern
+
+**Pattern:** Scenes stored in S3, downloaded for re-rendering
+
+```python
+# Scene storage structure
+brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/
+  variation_{variation_index}/
+    draft/
+      scene_1_bg.mp4  ← Edited scene replaces old
+      scene_2_bg.mp4
+      scene_3_bg.mp4
+      scene_4_bg.mp4
+      music.mp3
+    final_video.mp4  ← Re-rendered after edit
+```
+
+**Edit Flow:**
+1. Regenerate Scene 2 → Upload to S3 (overwrites old scene_2_bg.mp4)
+2. Download all 4 scenes from S3 to /tmp
+3. Re-render final video locally
+4. Upload new final_video.mp4 (overwrites old)
+5. Cleanup /tmp files
+
+**Why:**
+- S3 is source of truth (scenes persist)
+- Local processing temporary (downloaded, processed, deleted)
+- No versioning overhead (just replace old files)
+- Cost-efficient (only edited scene regenerated)
+
+### Job Polling Pattern
+
+**Pattern:** Frontend polls job status until complete
+
+```typescript
+// Frontend polling logic
+const pollEditJob = async (jobId: string) => {
+  const maxAttempts = 120; // 4 minutes max (2s intervals)
+  let attempts = 0;
+  
+  while (attempts < maxAttempts) {
+    const response = await api.get(`/api/generation/jobs/${jobId}/status`);
+    
+    if (response.data.status === 'completed') {
+      return; // Success
+    } else if (response.data.status === 'failed') {
+      throw new Error('Edit failed');
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s
+    attempts++;
+  }
+  
+  throw new Error('Edit timeout');
+};
+```
+
+**Why Polling:**
+- Simpler than WebSockets (no infrastructure needed)
+- 2s intervals sufficient (edit takes ~3-4 minutes)
+- Easy to implement (standard HTTP requests)
+- Can upgrade to WebSockets later if needed
+
+---
+
+**Last Updated:** January 20, 2025 (Phase 3 Editing Feature - Backend Complete)
 

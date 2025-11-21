@@ -57,3 +57,19 @@ export const api = apiClient
 
 export default apiClient
 
+// PHASE 3: Editing API endpoints
+export const editing = {
+  getScenes: (campaignId: string, variationIndex: number = 0) =>
+    api.get(`/api/campaigns/${campaignId}/scenes`, {
+      params: { variation_index: variationIndex }
+    }),
+  
+  editScene: (campaignId: string, sceneIndex: number, editPrompt: string) =>
+    api.post(`/api/campaigns/${campaignId}/scenes/${sceneIndex}/edit`, {
+      edit_prompt: editPrompt
+    }),
+  
+  getEditHistory: (campaignId: string) =>
+    api.get(`/api/campaigns/${campaignId}/edit-history`)
+}
+

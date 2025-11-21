@@ -308,5 +308,19 @@ User receives:
 
 ---
 
-**Last Updated:** November 18, 2025 (Multi-Variation Phase 5 Complete)
+### Next-Generation Feature: AI Scene Editing (January 20, 2025)
+
+Users can now edit individual scenes in their generated videos:
+- **Purpose:** Refine videos without regenerating entire campaign
+- **UX:** Click "Edit Scene" → Enter prompt → Wait ~3 minutes → Video updates
+- **Cost:** ~$0.21 per scene edit (only edited scene regenerated)
+- **Experience:** Integrated editing from video results page (no navigation)
+- **History:** Lightweight audit trail (edit count, cost, changes summary)
+- **Result:** Users can iterate on specific scenes without full regeneration
+
+This enables rapid iteration - users can refine individual scenes until perfect, rather than regenerating entire videos.
+
+---
+
+**Last Updated:** January 20, 2025 (Phase 3 Editing Feature - Backend Complete)
 

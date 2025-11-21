@@ -69,21 +69,32 @@ class Renderer:
                     await self._download_file(url, path)
                     scene_paths.append(path)
 
-                # Download audio
-                audio_path = Path(tmpdir) / "audio.mp3"
-                await self._download_file(audio_url, audio_path)
+                # Download audio (skip if URL is empty or invalid)
+                audio_path = None
+                if audio_url and audio_url.strip():
+                    try:
+                        audio_path = Path(tmpdir) / "audio.mp3"
+                        await self._download_file(audio_url, audio_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to download audio, proceeding without audio: {e}")
+                        audio_path = None
 
                 # Concatenate scene videos
                 concat_path = Path(tmpdir) / "concatenated.mp4"
                 await self._concatenate_videos(scene_paths, concat_path)
 
-                # Mix with audio
-                mixed_path = Path(tmpdir) / "with_audio.mp4"
-                await self._mix_audio(concat_path, audio_path, mixed_path)
+                # Mix with audio (if available)
+                if audio_path and audio_path.exists():
+                    mixed_path = Path(tmpdir) / "with_audio.mp4"
+                    await self._mix_audio(concat_path, audio_path, mixed_path)
+                    video_to_render = mixed_path
+                else:
+                    logger.info("No audio available, using concatenated video without audio")
+                    video_to_render = concat_path
 
                 # Render TikTok vertical (9:16, 1080x1920)
                 output_path = Path(tmpdir) / "final.mp4"
-                await self._apply_aspect_ratio(mixed_path, output_path, "9:16")
+                await self._apply_aspect_ratio(video_to_render, output_path, "9:16")
 
                 # Save to local storage
                 from app.utils.local_storage import LocalStorageManager

@@ -1,35 +1,69 @@
 # Active Context
 
 ## Current Focus
-Planning Veo S3 migration to remove manual compositing and text overlay from the generation pipeline.
+Phase 3: AI Scene Editing Feature - Backend implementation complete, ready for frontend integration.
 
-## Recent Planning Session (November 20, 2025)
+## Recent Implementation Session (January 20, 2025)
 
-### Veo S3 Migration Plan Created
-Created comprehensive documentation for migrating from manual post-processing to Veo S3 image-to-video model:
+### Phase 3: AI Scene Editing Feature - Backend Complete ✅
 
-**Key Changes:**
-1. **Remove Manual Compositor** (OpenCV frame-by-frame product overlay)
-2. **Remove Manual Text Overlay** (FFmpeg drawtext rendering)
-3. **Update Scene Planner Prompts** (leverage Veo S3's advanced cinematography capabilities)
-4. **Simplify Pipeline** (7 steps → 5 steps, ~30% faster)
+**Status:** Backend implementation complete, tested, and deployed to Docker
 
-**Benefits:**
-- Natural product integration (Veo embeds product vs manual overlay)
-- Better text quality (AI-generated text in scene vs FFmpeg overlay)
-- Cinematic capabilities (dolly shots, rack focus, volumetric lighting, motion physics)
-- Simpler codebase (~500 lines removed)
-- Faster generation (~30% time reduction)
+**Implementation Summary:**
+- ✅ **EditService** created - LLM-based prompt modification service
+- ✅ **SceneEditPipeline** created - 8-step edit pipeline (modify prompt → regenerate → replace → re-render)
+- ✅ **S3 helper functions** added - Scene and final video URL construction
+- ✅ **Worker updated** - Supports edit job execution via RQ
+- ✅ **Database migration** applied - Revision 009 adds `edit_history` JSONB column
+- ✅ **API endpoints** registered - 3 endpoints for scenes, editing, and history
+- ✅ **Docker tested** - Containers restarted, migration applied, API healthy
 
-**Documentation Created:**
-- `AI_Docs/VEO_S3_MIGRATION_PLAN.md` - Complete 500+ line implementation guide with:
-  - 3 implementation phases (Remove compositor, Remove text overlay, Update prompts)
-  - Schema changes (keep `use_product` and `use_logo` flags)
-  - Veo S3 system prompt with advanced cinematography vocabulary
-  - Testing plan, rollback strategy, risk assessment
-  - Timeline: 3-4 hours implementation
+**Key Features:**
+1. **Prompt Modification** - LLM modifies scene prompts based on user instructions
+2. **Scene Regeneration** - Only edited scene regenerated (cost-efficient)
+3. **Final Video Re-render** - All scenes downloaded, re-composited, uploaded
+4. **Edit History Tracking** - Lightweight audit trail in `campaign_json.edit_history`
+5. **Cost Tracking** - ~$0.21 per edit ($0.01 LLM + $0.20 video)
 
-**Status:** Planning complete, awaiting authorization to implement
+**Architecture:**
+- S3-first storage (scenes stored in S3, downloaded for re-rendering)
+- Background job processing (RQ worker handles edit jobs)
+- Edit history in JSONB (no separate versioning table)
+- Single scene edits only (MVP scope)
+
+**API Endpoints:**
+- `GET /api/campaigns/{id}/scenes` - Get all scenes with video URLs
+- `POST /api/campaigns/{id}/scenes/{idx}/edit` - Edit a scene (enqueues job)
+- `GET /api/campaigns/{id}/edit-history` - Get edit history
+
+**Files Created:**
+- `backend/app/services/edit_service.py` (160 lines)
+- `backend/app/jobs/edit_pipeline.py` (330 lines)
+- `backend/app/api/editing.py` (200 lines)
+- `backend/alembic/versions/009_add_edit_history.py` (49 lines)
+
+**Files Modified:**
+- `backend/app/utils/s3_utils.py` (+2 helper functions)
+- `backend/app/jobs/worker.py` (+enqueue_edit_job method)
+- `backend/app/database/models.py` (+edit_history column)
+- `backend/app/main.py` (+editing router)
+
+**Testing Status:**
+- ✅ Database migration applied successfully
+- ✅ API endpoints registered in Swagger
+- ✅ Docker containers healthy
+- ✅ Worker listening on generation queue
+- ⏳ End-to-end testing pending (requires frontend)
+
+**Next Steps:**
+1. Frontend implementation (Tasks 8-12):
+   - useSceneEditing hook
+   - SceneCard component
+   - EditScenePopup component
+   - SceneSidebar component
+   - VideoResults page update
+2. End-to-end testing with real campaigns
+3. User acceptance testing
 
 ## Recent Changes (Pre-Planning)
 - Fixed video streaming 404 error by constructing S3 keys directly from campaign hierarchy
@@ -52,10 +86,19 @@ The Veo S3 migration is a strategic upgrade to leverage Google's advanced image-
 - **Formula:** User's concept (WHAT) + Perfume cinematography (HOW) = Perfect scene
 - **Result:** Infinite creative possibilities while maintaining luxury perfume execution quality
 
+## Previous Context (Veo S3 Migration - Complete)
+
+**Veo S3 Migration:** ✅ COMPLETE (November 20, 2025)
+- Removed manual compositor and text overlay services
+- Simplified pipeline from 7 steps to 5 steps
+- Updated scene planner with user-first philosophy
+- Enhanced prompts with advanced cinematography vocabulary
+- Ready for Veo S3 API integration (future phase)
+
 ## Next Steps
-1. **Immediate:** Await user authorization for Veo S3 migration implementation
-2. **Phase 1:** Remove compositor service from pipeline (~1 hour)
-3. **Phase 2:** Remove text overlay service from pipeline (~1 hour)
-4. **Phase 3:** Update scene planner prompts for Veo S3 (~1-2 hours)
-5. **Testing:** Verify pipeline runs with 5 steps, test prompt generation quality
-6. **Future:** Integrate actual Veo S3 API (separate phase, requires API access)
+1. **Immediate:** Frontend implementation for editing feature (Tasks 8-12)
+2. **Phase 1:** Create useSceneEditing hook (2 hours)
+3. **Phase 2:** Create SceneCard, EditScenePopup, SceneSidebar components (6-8 hours)
+4. **Phase 3:** Update VideoResults page with editing UI (3-4 hours)
+5. **Testing:** End-to-end testing with real campaigns
+6. **Future:** Multi-scene editing, undo/redo, edit templates

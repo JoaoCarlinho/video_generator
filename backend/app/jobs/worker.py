@@ -20,6 +20,7 @@ from rq.job import Job, JobStatus
 
 from app.config import settings
 from app.jobs.generation_pipeline import generate_video
+from app.jobs.edit_pipeline import edit_scene_job
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,32 @@ class WorkerConfig:
             return job
         except Exception as e:
             logger.error(f"❌ Failed to enqueue job: {e}")
+            raise
+    
+    def enqueue_edit_job(self, campaign_id: str, scene_index: int, edit_instruction: str) -> Job:
+        """
+        Enqueue an edit scene job.
+        
+        Args:
+            campaign_id: UUID string of campaign
+            scene_index: Scene index to edit (0-based)
+            edit_instruction: User's edit instruction/prompt
+            
+        Returns:
+            RQ Job object
+        """
+        try:
+            job = self.queue.enqueue(
+                edit_scene_job,
+                args=(campaign_id, scene_index, edit_instruction),
+                job_timeout="15m",  # 15 minutes timeout for edit jobs
+                result_ttl=86400,  # Keep results for 24 hours
+                failure_ttl=604800,  # Keep failures for 7 days
+            )
+            logger.info(f"✅ Enqueued edit job {job.id} for campaign {campaign_id}, scene {scene_index}")
+            return job
+        except Exception as e:
+            logger.error(f"❌ Failed to enqueue edit job: {e}")
             raise
 
     def get_job_status(self, job_id: str) -> dict:

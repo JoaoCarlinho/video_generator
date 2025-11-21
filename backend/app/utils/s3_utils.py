@@ -1125,3 +1125,97 @@ async def get_project_folder_stats(project_id: str) -> dict:
         logger.error(f"❌ Failed to get folder stats: {e}")
         return {"error": str(e)}
 
+
+# ============================================================================
+# Phase 3: Scene Editing S3 Helper Functions
+# ============================================================================
+
+def get_scene_s3_url(
+    brand_id: str,
+    perfume_id: str,
+    campaign_id: str,
+    variation_index: int,
+    scene_index: int  # 0-based
+) -> str:
+    """
+    Construct S3 URL for a scene video.
+    
+    **Arguments:**
+    - brand_id: Brand UUID string
+    - perfume_id: Perfume UUID string
+    - campaign_id: Campaign UUID string
+    - variation_index: Variation index (0, 1, 2)
+    - scene_index: Scene index (0-based)
+    
+    **Returns:**
+    - Full S3 URL string
+    """
+    if not settings.s3_bucket_name:
+        raise RuntimeError("S3_BUCKET_NAME not configured in .env")
+    
+    s3_key = (
+        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"variation_{variation_index}/draft/scene_{scene_index+1}_bg.mp4"
+    )
+    
+    return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
+
+
+def get_final_video_s3_url(
+    brand_id: str,
+    perfume_id: str,
+    campaign_id: str,
+    variation_index: int
+) -> str:
+    """
+    Construct S3 URL for final video.
+    
+    **Arguments:**
+    - brand_id: Brand UUID string
+    - perfume_id: Perfume UUID string
+    - campaign_id: Campaign UUID string
+    - variation_index: Variation index (0, 1, 2)
+    
+    **Returns:**
+    - Full S3 URL string
+    """
+    if not settings.s3_bucket_name:
+        raise RuntimeError("S3_BUCKET_NAME not configured in .env")
+    
+    s3_key = (
+        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"variation_{variation_index}/final/final_video.mp4"
+    )
+    
+    return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
+
+
+def get_audio_s3_url(
+    brand_id: str,
+    perfume_id: str,
+    campaign_id: str,
+    variation_index: int
+) -> str:
+    """
+    Construct S3 URL for audio/music file.
+    
+    **Arguments:**
+    - brand_id: Brand UUID string
+    - perfume_id: Perfume UUID string
+    - campaign_id: Campaign UUID string
+    - variation_index: Variation index (0, 1, 2)
+    
+    **Returns:**
+    - Full S3 URL string
+    """
+    if not settings.s3_bucket_name:
+        raise RuntimeError("S3_BUCKET_NAME not configured in .env")
+    
+    s3_key = (
+        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"variation_{variation_index}/draft/music.mp3"
+    )
+    
+    return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
+
+

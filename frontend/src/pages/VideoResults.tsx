@@ -3,10 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { VideoPlayer } from '@/components/PageComponents'
+import { SceneSidebar } from '@/components/SceneSidebar'
+import { ToastContainer } from '@/components/ui/Toast'
+import type { ToastProps } from '@/components/ui/Toast'
 import { useProjects } from '@/hooks/useProjects'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { api } from '@/services/api'
-import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play } from 'lucide-react'
+import { ArrowLeft, Download, Sparkles, Trash2, Cloud, HardDrive, CheckCircle2, Play, Loader2 } from 'lucide-react'
 import {
   getVideoURL,
   getVideo,
@@ -44,8 +47,76 @@ export const VideoResults = () => {
   const [isFinalized, setIsFinalized] = useState(false)
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [useLocalStorage, setUseLocalStorage] = useState(true)
+  const [isEditingScene, setIsEditingScene] = useState(false)
+  const [videoKey, setVideoKey] = useState(0) // Force video reload
+  const [toasts, setToasts] = useState<ToastProps[]>([])
 
   const handleBackToDashboard = () => navigate('/dashboard', { replace: true })
+
+  const addToast = (toast: Omit<ToastProps, 'id'>) => {
+    const id = Math.random().toString(36).substring(7)
+    setToasts((prev) => [...prev, { ...toast, id }])
+  }
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  const handleVideoUpdate = async () => {
+    // Called after successful edit
+    setIsEditingScene(false)
+    
+    // Reload campaign/project data
+    try {
+      let data: any
+      if (isCampaign) {
+        data = await getCampaign(id)
+      } else {
+        data = await getProject(id)
+      }
+      setProject(data)
+      
+      // Force video reload
+      setVideoKey(prev => prev + 1)
+      
+      // Reload video
+      const aspectRatio = isCampaign ? '9:16' : (data.aspect_ratio || '9:16')
+      const { url: displayVideoPath, selectedIndex } = getDisplayVideo(
+        data,
+        aspectRatio as '9:16' | '1:1' | '16:9'
+      )
+      setSelectedVariationIndex(selectedIndex)
+      
+      if (isCampaign && displayVideoPath) {
+        await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex)
+      }
+      
+      // Show success toast
+      addToast({
+        type: 'success',
+        title: 'Scene edited successfully!',
+        message: 'The video has been updated with your changes.',
+        duration: 5000
+      })
+    } catch (err) {
+      console.error('Failed to reload video after edit:', err)
+      addToast({
+        type: 'error',
+        title: 'Failed to reload video',
+        message: 'Please refresh the page to see your changes.',
+        duration: 5000
+      })
+    }
+  }
+
+  const handleEditStart = () => {
+    setIsEditingScene(true)
+  }
+
+  const handleEditError = () => {
+    // Clear loading state on error
+    setIsEditingScene(false)
+  }
 
   /**
    * Helper function to extract the display video path from project/campaign data.
@@ -565,7 +636,7 @@ export const VideoResults = () => {
 
       {/* Navigation Header */}
       <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
-        <div className="max-w-5xl mx-auto w-full px-4 py-4">
+        <div className="max-w-7xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <button
               onClick={handleBackToDashboard}
@@ -584,15 +655,18 @@ export const VideoResults = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 w-full max-w-5xl mx-auto px-4 py-6">
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] gap-6">
-          {/* Main Video Card */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
-          >
+      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-4 py-6">
+        <div className="space-y-6">
+          {/* Video and Sidebar Row */}
+          <div className={`flex ${isCampaign ? 'flex-col lg:flex-row' : 'flex-col'} gap-6 items-start`}>
+            {/* LEFT: Video Player (70% for campaigns, 100% for projects) */}
+            <div className={`${isCampaign ? 'flex-1 lg:w-2/3' : 'w-full'}`}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
+            >
               {/* Header */}
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
@@ -608,16 +682,35 @@ export const VideoResults = () => {
               </div>
 
               {/* Video Player */}
-              <div className="mb-4">
+              <div className="mb-4 relative">
                 {videoUrl ? 
-                  <VideoPlayer
-                    videoUrl={videoUrl}
-                    title={isCampaign ? project.campaign_name : project.title}
-                    aspect={aspect}
-                    onDownload={() => handleDownload(aspect)}
-                    isLoading={isVideoFetching}
-                    size="standard"
-                  />
+                  <>
+                    <VideoPlayer
+                      key={videoKey}
+                      videoUrl={videoUrl}
+                      title={isCampaign ? project.campaign_name : project.title}
+                      aspect={aspect}
+                      onDownload={() => handleDownload(aspect)}
+                      isLoading={isVideoFetching}
+                      size="standard"
+                    />
+                    
+                    {/* Loading Overlay During Edit */}
+                    {isEditingScene && (
+                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-lg z-10">
+                        <Loader2 className="w-12 h-12 text-gold animate-spin mb-4" />
+                        <h3 className="text-xl font-semibold text-white mb-2">
+                          Editing Scene...
+                        </h3>
+                        <p className="text-gray-400 text-center">
+                          Modifying prompt and regenerating
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          This will take ~3 minutes
+                        </p>
+                      </div>
+                    )}
+                  </>
                  : (
                   <div className="bg-olive-700/30 border border-olive-600 rounded-xl p-12 text-center">
                     <p className="text-muted-gray">No video available</p>
@@ -687,10 +780,25 @@ export const VideoResults = () => {
                   </div>
                 </div>
               )}
-          </motion.div>
+            </motion.div>
+            </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3 flex-wrap justify-center">
+            {/* RIGHT: Scene Sidebar (30% for campaigns only) */}
+            {isCampaign && (
+              <div className="w-full lg:w-1/3 flex-shrink-0">
+              <SceneSidebar
+                campaignId={id}
+                variationIndex={selectedVariationIndex}
+                onVideoUpdate={handleVideoUpdate}
+                onEditStart={handleEditStart}
+                onEditError={handleEditError}
+              />
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons - Below main content */}
+          <div className={`flex items-center gap-3 flex-wrap ${isCampaign ? 'justify-start' : 'justify-center'}`}>
             <Button
               variant="outline"
               onClick={() => navigate('/dashboard')}
@@ -739,6 +847,9 @@ export const VideoResults = () => {
           </div>
         </div>
       </main>
+
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
 }

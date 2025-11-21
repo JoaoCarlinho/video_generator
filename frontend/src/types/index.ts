@@ -158,3 +158,37 @@ export interface CreateProjectInputWithStyle extends CreateProjectInput {
   selected_style?: VideoStyleType | null
 }
 
+// PHASE 3: Scene Editing Types
+export interface SceneInfo {
+  scene_index: number
+  scene_id: number
+  role: string
+  duration: number
+  background_prompt: string
+  video_url: string
+  thumbnail_url?: string
+  edit_count: number
+  last_edited_at?: string
+}
+
+export interface EditSceneRequest {
+  edit_prompt: string
+}
+
+export interface EditSceneResponse {
+  job_id: string
+  estimated_cost: number
+  estimated_duration_seconds: number
+  message: string
+}
+
+export interface EditHistoryRecord {
+  edit_id: string
+  timestamp: string
+  scene_index: number
+  edit_prompt: string
+  changes_summary?: string
+  cost: number
+  duration_seconds: number
+}
+

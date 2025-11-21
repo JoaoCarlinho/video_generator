@@ -556,5 +556,34 @@ Multiple Workers (when needed):
 
 ---
 
-**Last Updated:** November 18, 2025 (Phase 2 B2B SaaS - Phase 2 S3 Storage Refactor Complete)
+## Phase 3: Editing Feature (January 20, 2025)
+
+### Editing Service
+- **EditService** (`app/services/edit_service.py`)
+  - LLM-based prompt modification
+  - Model: GPT-4o-mini
+  - Cost: ~$0.01 per edit
+  - Maintains scene structure and brand consistency
+
+### Editing Pipeline
+- **SceneEditPipeline** (`app/jobs/edit_pipeline.py`)
+  - 8-step edit pipeline
+  - Regenerates single scene
+  - Re-renders final video
+  - Updates edit history
+  - Cost: ~$0.21 per edit
+
+### Editing API Endpoints
+- `GET /api/campaigns/{id}/scenes` - Get all scenes
+- `POST /api/campaigns/{id}/scenes/{idx}/edit` - Edit a scene
+- `GET /api/campaigns/{id}/edit-history` - Get edit history
+
+### Database Schema
+- `campaigns.edit_history` (JSONB) - Edit history tracking
+- GIN index for efficient JSONB queries
+- Migration: `009_add_edit_history.py`
+
+---
+
+**Last Updated:** January 20, 2025 (Phase 3 Editing Feature - Backend Complete)
 
