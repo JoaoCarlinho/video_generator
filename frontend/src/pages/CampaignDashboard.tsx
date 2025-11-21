@@ -97,7 +97,7 @@ export const CampaignDashboard = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+      <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
         <div className="max-w-6xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

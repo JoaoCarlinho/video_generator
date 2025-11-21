@@ -8,7 +8,7 @@ const Landing = () => {
   return (
     <div className="min-h-screen bg-olive-950 bg-gradient-hero">
       {/* Navigation */}
-      <nav className="border-b border-olive-600/50 backdrop-blur-md bg-olive-950/50 sticky top-0 z-50">
+      <nav className="relative z-50 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/30 sticky top-0">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-gold" />

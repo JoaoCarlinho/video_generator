@@ -627,7 +627,7 @@ export const VideoResults = () => {
   if (error || !project) {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
-        <nav className="border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+        <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
           <div className="max-w-5xl mx-auto w-full px-4 py-4">
             <div className="flex items-center gap-3">
               <button
@@ -662,7 +662,7 @@ export const VideoResults = () => {
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-10 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/70 sticky top-0">
+      <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
         <div className="max-w-7xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
