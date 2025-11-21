@@ -219,6 +219,24 @@ class SceneEditPipeline:
             scenes[self.scene_index]['edit_count'] = scenes[self.scene_index].get('edit_count', 0) + 1
             scenes[self.scene_index]['last_edited_at'] = datetime.utcnow().isoformat() + "Z"
             
+            # Update variationPaths with new final video URL
+            # This ensures frontend gets the updated video URL
+            variation_index = self.campaign.selected_variation_index or 0
+            new_final_video_url = final_result['url']  # New presigned URL
+            
+            if 'variationPaths' not in campaign_json:
+                campaign_json['variationPaths'] = {}
+            
+            if f'variation_{variation_index}' not in campaign_json['variationPaths']:
+                campaign_json['variationPaths'][f'variation_{variation_index}'] = {
+                    'aspectExports': {}
+                }
+            
+            # Update the 9:16 aspect export with new URL
+            campaign_json['variationPaths'][f'variation_{variation_index}']['aspectExports']['9:16'] = new_final_video_url
+            
+            logger.info(f"✅ Updated variationPaths with new final video URL for variation_{variation_index}")
+            
             # Add to edit history
             if 'edit_history' not in campaign_json:
                 campaign_json['edit_history'] = {

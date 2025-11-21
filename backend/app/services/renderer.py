@@ -84,13 +84,13 @@ class Renderer:
                 await self._concatenate_videos(scene_paths, concat_path)
 
                 # Mix with audio (if available)
+                video_to_render = concat_path  # Default to concatenated video
                 if audio_path and audio_path.exists():
                     mixed_path = Path(tmpdir) / "with_audio.mp4"
                     await self._mix_audio(concat_path, audio_path, mixed_path)
                     video_to_render = mixed_path
                 else:
                     logger.info("No audio available, using concatenated video without audio")
-                    video_to_render = concat_path
 
                 # Render TikTok vertical (9:16, 1080x1920)
                 output_path = Path(tmpdir) / "final.mp4"

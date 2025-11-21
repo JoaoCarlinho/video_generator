@@ -66,18 +66,29 @@ export const VideoResults = () => {
     // Called after successful edit
     setIsEditingScene(false)
     
+    // Small delay to ensure database update is committed
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
     // Reload campaign/project data
     try {
       let data: any
       if (isCampaign) {
+        // Force reload by adding cache-busting parameter
+        data = await getCampaign(id)
+        // Reload again to ensure we get fresh data
+        await new Promise(resolve => setTimeout(resolve, 300))
         data = await getCampaign(id)
       } else {
         data = await getProject(id)
       }
       setProject(data)
       
-      // Force video reload
-      setVideoKey(prev => prev + 1)
+      // Clear old video URL first
+      if (campaignBlobUrl) {
+        URL.revokeObjectURL(campaignBlobUrl)
+        setCampaignBlobUrl('')
+      }
+      setVideoUrl('')
       
       // Reload video
       const aspectRatio = isCampaign ? '9:16' : (data.aspect_ratio || '9:16')
@@ -88,7 +99,13 @@ export const VideoResults = () => {
       setSelectedVariationIndex(selectedIndex)
       
       if (isCampaign && displayVideoPath) {
-        await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex)
+        // Force reload with cache-busting after edit
+        await fetchCampaignVideoBlob(data, aspectRatio as '9:16' | '1:1' | '16:9', selectedIndex, true)
+        // Force video player reload by updating key AFTER blob is loaded
+        setVideoKey(prev => prev + 1)
+      } else {
+        // For non-campaigns, just update the key
+        setVideoKey(prev => prev + 1)
       }
       
       // Show success toast
@@ -245,7 +262,8 @@ export const VideoResults = () => {
   const fetchCampaignVideoBlob = async (
     campaignData: any,
     aspectRatio: '9:16' | '1:1' | '16:9',
-    variationIndex: number
+    variationIndex: number,
+    forceReload: boolean = false
   ) => {
     if (!campaignData?.campaign_id) {
       setError('Invalid campaign data')
@@ -253,16 +271,31 @@ export const VideoResults = () => {
     }
     try {
       setIsVideoFetching(true)
+      
+      // Revoke old blob URL to prevent memory leaks
+      if (campaignBlobUrl) {
+        URL.revokeObjectURL(campaignBlobUrl)
+        setCampaignBlobUrl('')
+      }
+      
+      // Add cache-busting parameter if forcing reload
+      const params: any = { variation_index: variationIndex }
+      if (forceReload) {
+        params._t = Date.now() // Cache-busting timestamp
+      }
+      
       const response = await api.get(
         `/api/generation/campaigns/${campaignData.campaign_id}/stream/${aspectRatio}`,
         {
           responseType: 'blob',
-          params: { variation_index: variationIndex },
+          params,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         }
       )
-      if (campaignBlobUrl) {
-        URL.revokeObjectURL(campaignBlobUrl)
-      }
+      
       const blobUrl = URL.createObjectURL(response.data)
       setCampaignBlobUrl(blobUrl)
       setVideoUrl(blobUrl)
@@ -661,12 +694,12 @@ export const VideoResults = () => {
           <div className={`flex ${isCampaign ? 'flex-col lg:flex-row' : 'flex-col'} gap-6 items-start`}>
             {/* LEFT: Video Player (70% for campaigns, 100% for projects) */}
             <div className={`${isCampaign ? 'flex-1 lg:w-2/3' : 'w-full'}`}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-              className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
-            >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="w-full bg-charcoal-900/70 backdrop-blur-sm border border-charcoal-800/70 rounded-2xl p-4 sm:p-6 shadow-gold-lg"
+          >
               {/* Header */}
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
@@ -685,15 +718,15 @@ export const VideoResults = () => {
               <div className="mb-4 relative">
                 {videoUrl ? 
                   <>
-                    <VideoPlayer
+                  <VideoPlayer
                       key={videoKey}
-                      videoUrl={videoUrl}
-                      title={isCampaign ? project.campaign_name : project.title}
-                      aspect={aspect}
-                      onDownload={() => handleDownload(aspect)}
-                      isLoading={isVideoFetching}
-                      size="standard"
-                    />
+                    videoUrl={videoUrl}
+                    title={isCampaign ? project.campaign_name : project.title}
+                    aspect={aspect}
+                    onDownload={() => handleDownload(aspect)}
+                    isLoading={isVideoFetching}
+                    size="standard"
+                  />
                     
                     {/* Loading Overlay During Edit */}
                     {isEditingScene && (
@@ -780,7 +813,7 @@ export const VideoResults = () => {
                   </div>
                 </div>
               )}
-            </motion.div>
+          </motion.div>
             </div>
 
             {/* RIGHT: Scene Sidebar (30% for campaigns only) */}
