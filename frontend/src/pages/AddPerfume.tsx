@@ -215,19 +215,19 @@ export const AddPerfume = () => {
                   {(['masculine', 'feminine', 'unisex'] as PerfumeGender[]).map((gender) => {
                     const isSelected = perfumeGender === gender
                     return (
-                      <button
-                        key={gender}
-                        type="button"
-                        onClick={() => setPerfumeGender(gender)}
+                    <button
+                      key={gender}
+                      type="button"
+                      onClick={() => setPerfumeGender(gender)}
                         className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
                           isSelected
                             ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
                             : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
-                        }`}
-                      >
+                      }`}
+                    >
                         {isSelected && <Check className="w-4 h-4" />}
                         <span className="capitalize">{gender}</span>
-                      </button>
+                    </button>
                     )
                   })}
                 </div>

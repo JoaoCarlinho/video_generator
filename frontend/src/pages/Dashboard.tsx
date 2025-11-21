@@ -94,9 +94,6 @@ export const Dashboard = () => {
                 </div>
                 <span className="text-xl font-bold text-gradient-gold">GenAds</span>
               </Link>
-              <div className="hidden md:block ml-6 pl-6 border-l border-olive-600/50">
-                <h1 className="text-sm font-semibold text-off-white">Dashboard</h1>
-              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-2 text-sm text-muted-gray">
