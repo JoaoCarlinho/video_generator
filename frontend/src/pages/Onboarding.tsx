@@ -228,7 +228,6 @@ export const Onboarding = () => {
                   onChange={(e) => setBrandName(e.target.value)}
                   placeholder="e.g., Chanel, Dior, Tom Ford"
                   required
-                  helpText="This will be used across all your campaigns"
                   className="bg-slate-800 border-slate-700 text-off-white"
                 />
               </div>
@@ -299,13 +298,15 @@ export const Onboarding = () => {
                     </button>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold transition-colors bg-slate-800/50">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <UploadCloud className="w-8 h-8 mb-2 text-muted-gray group-hover:text-gold transition-colors" />
-                      <p className="mb-2 text-sm text-muted-gray">
-                        <span className="font-semibold">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-muted-gray">PDF or DOCX (MAX. 10MB)</p>
+                  <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-olive-600 rounded-lg cursor-pointer hover:border-gold transition-colors bg-slate-800/50">
+                    <div className="flex items-center gap-3">
+                      <UploadCloud className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-muted-gray">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-muted-gray">PDF or DOCX (MAX. 10MB)</p>
+                      </div>
                     </div>
                     <input
                       type="file"
