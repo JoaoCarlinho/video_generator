@@ -50,7 +50,7 @@ interface CreateProjectInput {
   target_duration?: number
   // WAN 2.5: Video provider selection
   video_provider?: 'replicate' | 'ecs'
-  // Phase 9: Perfume-specific fields
+  // Phase 9: Product-specific fields
   perfume_name: string
   perfume_gender: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { CampaignCard } from '@/components/CampaignCard'
 import { useAuth } from '@/hooks/useAuth'
-import { usePerfumes } from '@/hooks/usePerfumes'
+import { useProducts } from '@/hooks/useProducts'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { Plus, ArrowLeft, Sparkles, LogOut, Package, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -13,15 +13,15 @@ export const CampaignDashboard = () => {
   const { perfumeId } = useParams<{ perfumeId: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { getPerfume } = usePerfumes()
+  const { getProduct } = useProducts()
   const { campaigns, loading, error, fetchCampaigns, deleteCampaign } = useCampaigns()
-  const [perfume, setPerfume] = useState<any>(null)
+  const [perfume, setProduct] = useState<any>(null)
 
   useEffect(() => {
     if (perfumeId) {
       // Fetch perfume details
-      getPerfume(perfumeId)
-        .then(setPerfume)
+      getProduct(perfumeId)
+        .then(setProduct)
         .catch((err) => {
           console.error('Error fetching perfume:', err)
         })
@@ -29,7 +29,7 @@ export const CampaignDashboard = () => {
       // Fetch campaigns for this perfume
       fetchCampaigns(perfumeId)
     }
-  }, [perfumeId, getPerfume, fetchCampaigns])
+  }, [perfumeId, getProduct, fetchCampaigns])
 
   const handleCreateCampaign = () => {
     if (perfumeId) {
@@ -106,7 +106,7 @@ export const CampaignDashboard = () => {
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
               >
                 <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />
-                <span className="text-muted-gray group-hover:text-gold transition-colors duration-200">Back to Perfumes</span>
+                <span className="text-muted-gray group-hover:text-gold transition-colors duration-200">Back to Products</span>
               </button>
             </div>
             

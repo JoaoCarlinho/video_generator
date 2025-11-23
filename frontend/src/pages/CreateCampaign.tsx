@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui'
 import { useCampaigns, type VideoStyle } from '@/hooks/useCampaigns'
-import { usePerfumes } from '@/hooks/usePerfumes'
+import { useProducts } from '@/hooks/useProducts'
 import { useAuth } from '@/hooks/useAuth'
 import { ArrowLeft, Sparkles, LogOut, CheckCircle, Clock, Sparkles as SparklesIcon, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -14,10 +14,10 @@ export const CreateCampaign = () => {
   const { perfumeId } = useParams<{ perfumeId: string }>()
   const navigate = useNavigate()
   const { createCampaign, loading, error } = useCampaigns()
-  const { getPerfume } = usePerfumes()
+  const { getProduct } = useProducts()
   const { logout } = useAuth()
 
-  const [perfume, setPerfume] = useState<any>(null)
+  const [perfume, setProduct] = useState<any>(null)
   const [campaignName, setCampaignName] = useState('')
   const [creativePrompt, setCreativePrompt] = useState('')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('gold_luxe')
@@ -28,13 +28,13 @@ export const CreateCampaign = () => {
 
   useEffect(() => {
     if (perfumeId) {
-      getPerfume(perfumeId)
-        .then(setPerfume)
+      getProduct(perfumeId)
+        .then(setProduct)
         .catch((err) => {
           console.error('Error fetching perfume:', err)
         })
     }
-  }, [perfumeId, getPerfume])
+  }, [perfumeId, getProduct])
 
   const handleSignOut = async () => {
     try {
@@ -58,7 +58,7 @@ export const CreateCampaign = () => {
     }
 
     if (!perfumeId) {
-      setSubmitError('Perfume ID is missing')
+      setSubmitError('Product ID is missing')
       return false
     }
 
@@ -75,7 +75,7 @@ export const CreateCampaign = () => {
     }
 
     if (!perfumeId) {
-      setSubmitError('Perfume ID is missing')
+      setSubmitError('Product ID is missing')
       return
     }
 

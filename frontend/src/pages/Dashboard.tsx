@@ -24,18 +24,18 @@ export const Dashboard = () => {
     navigate('/products/add')
   }
 
-  const handleViewPerfume = (productId: string) => {
+  const handleViewProduct = (productId: string) => {
     navigate(`/products/${productId}`)
   }
 
-  const handleDeletePerfume = async (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (
       confirm(
         'Are you sure you want to delete this product? All campaigns for this perfume will also be deleted. This cannot be undone.'
       )
     ) {
       try {
-        await deletePerfume(perfumeId)
+        await deleteProduct(perfumeId)
       } catch (err) {
         console.error('Failed to delete perfume:', err)
       }
@@ -183,7 +183,7 @@ export const Dashboard = () => {
               })}
             </motion.div>
 
-            {/* Perfumes Section */}
+            {/* Products Section */}
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -243,7 +243,7 @@ export const Dashboard = () => {
                     className="gap-2 transition-transform duration-200 hover:scale-105"
                   >
                     <Plus className="w-5 h-5" />
-                    Add Your First Perfume
+                    Add Your First Product
                   </Button>
                 </motion.div>
               ) : (
@@ -255,9 +255,9 @@ export const Dashboard = () => {
                 >
                   {perfumes.map((perfume) => (
                     <motion.div key={perfume.perfume_id} variants={itemVariants}>
-                      <PerfumeCard
+                      <ProductCard
                         perfume={perfume}
-                        onClick={() => handleViewPerfume(perfume.perfume_id)}
+                        onClick={() => handleViewProduct(perfume.perfume_id)}
                       />
                     </motion.div>
                   ))}
