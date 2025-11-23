@@ -425,3 +425,4 @@ bmad/
 .claude/
 frontend/.env.production
 product_images/
+*.bak*
