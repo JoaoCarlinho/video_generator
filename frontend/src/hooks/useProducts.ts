@@ -52,16 +52,16 @@ export const useProducts = () => {
       setError(null)
 
       try {
-        // Backend uses /api/perfumes endpoint
-        const response = await apiClient.get<any>('/api/perfumes', {
+        // Backend uses /api/products endpoint
+        const response = await apiClient.get<any>('/api/products', {
           params: { page, limit },
         })
-        // Map perfume_id to product_id and perfume_name to product_name for frontend
-        const mappedProducts = (response.data.perfumes || []).map((item: any) => ({
-          product_id: item.perfume_id,
+        // Map product_id to product_id and product_name to product_name for frontend
+        const mappedProducts = (response.data.products || []).map((item: any) => ({
+          product_id: item.product_id,
           brand_id: item.brand_id,
-          product_name: item.perfume_name,
-          product_gender: item.perfume_gender,
+          product_name: item.product_name,
+          product_gender: item.product_gender,
           front_image_url: item.front_image_url,
           back_image_url: item.back_image_url,
           top_image_url: item.top_image_url,
@@ -95,14 +95,14 @@ export const useProducts = () => {
   const getProduct = useCallback(async (productId: string) => {
     if (!productId) throw new Error('Product ID is required')
     try {
-      // Backend uses /api/perfumes endpoint
-      const response = await apiClient.get<any>(`/api/perfumes/${productId}`)
-      // Map perfume fields to product fields
+      // Backend uses /api/products endpoint
+      const response = await apiClient.get<any>(`/api/products/${productId}`)
+      // Map product fields to product fields
       const mappedProduct: Product = {
-        product_id: response.data.perfume_id,
+        product_id: response.data.product_id,
         brand_id: response.data.brand_id,
-        product_name: response.data.perfume_name,
-        product_gender: response.data.perfume_gender,
+        product_name: response.data.product_name,
+        product_gender: response.data.product_gender,
         front_image_url: response.data.front_image_url,
         back_image_url: response.data.back_image_url,
         top_image_url: response.data.top_image_url,
@@ -130,9 +130,9 @@ export const useProducts = () => {
 
       try {
         const formData = new FormData()
-        // Backend expects perfume_name and perfume_gender
-        formData.append('perfume_name', input.product_name)
-        formData.append('perfume_gender', input.product_gender)
+        // Backend expects product_name and product_gender
+        formData.append('product_name', input.product_name)
+        formData.append('product_gender', input.product_gender)
         formData.append('front_image', input.front_image)
 
         if (input.back_image) formData.append('back_image', input.back_image)
@@ -140,19 +140,19 @@ export const useProducts = () => {
         if (input.left_image) formData.append('left_image', input.left_image)
         if (input.right_image) formData.append('right_image', input.right_image)
 
-        // Backend uses /api/perfumes endpoint
-        const response = await apiClient.post<any>('/api/perfumes', formData, {
+        // Backend uses /api/products endpoint
+        const response = await apiClient.post<any>('/api/products', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         })
 
-        // Map response from perfume fields to product fields
+        // Map response from product fields to product fields
         const mappedProduct: Product = {
-          product_id: response.data.perfume_id,
+          product_id: response.data.product_id,
           brand_id: response.data.brand_id,
-          product_name: response.data.perfume_name,
-          product_gender: response.data.perfume_gender,
+          product_name: response.data.product_name,
+          product_gender: response.data.product_gender,
           front_image_url: response.data.front_image_url,
           back_image_url: response.data.back_image_url,
           top_image_url: response.data.top_image_url,
@@ -183,8 +183,8 @@ export const useProducts = () => {
     setError(null)
 
     try {
-      // Backend uses /api/perfumes endpoint
-      await apiClient.delete(`/api/perfumes/${productId}`)
+      // Backend uses /api/products endpoint
+      await apiClient.delete(`/api/products/${productId}`)
       setProducts((prev) => prev.filter((p) => p.product_id !== productId))
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Failed to delete product'

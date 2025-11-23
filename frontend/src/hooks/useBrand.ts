@@ -15,7 +15,7 @@ export interface Brand {
 }
 
 export interface BrandStats {
-  total_perfumes: number
+  total_products: number
   total_campaigns: number
   total_cost: number
 }

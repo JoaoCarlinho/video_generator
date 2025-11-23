@@ -10,30 +10,30 @@ import { Plus, ArrowLeft, Sparkles, LogOut, Package, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const CampaignDashboard = () => {
-  const { perfumeId } = useParams<{ perfumeId: string }>()
+  const { productId } = useParams<{ productId: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { getProduct } = useProducts()
   const { campaigns, loading, error, fetchCampaigns, deleteCampaign } = useCampaigns()
-  const [perfume, setProduct] = useState<any>(null)
+  const [product, setProduct] = useState<any>(null)
 
   useEffect(() => {
-    if (perfumeId) {
-      // Fetch perfume details
-      getProduct(perfumeId)
+    if (productId) {
+      // Fetch product details
+      getProduct(productId)
         .then(setProduct)
         .catch((err) => {
-          console.error('Error fetching perfume:', err)
+          console.error('Error fetching product:', err)
         })
 
-      // Fetch campaigns for this perfume
-      fetchCampaigns(perfumeId)
+      // Fetch campaigns for this product
+      fetchCampaigns(productId)
     }
-  }, [perfumeId, getProduct, fetchCampaigns])
+  }, [productId, getProduct, fetchCampaigns])
 
   const handleCreateCampaign = () => {
-    if (perfumeId) {
-      navigate(`/perfumes/${perfumeId}/campaigns/create`)
+    if (productId) {
+      navigate(`/products/${productId}/campaigns/create`)
     }
   }
 
@@ -148,7 +148,7 @@ export const CampaignDashboard = () => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <h2 className="text-2xl sm:text-3xl font-bold text-off-white mb-2">
-                    {perfume ? perfume.perfume_name : 'Campaigns'}
+                    {product ? product.product_name : 'Campaigns'}
                   </h2>
                   <p className="text-muted-gray text-sm">
                     {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
@@ -158,7 +158,7 @@ export const CampaignDashboard = () => {
                   variant="hero"
                   onClick={handleCreateCampaign}
                   className="gap-2 transition-transform duration-200 hover:scale-105"
-                  disabled={!perfumeId}
+                  disabled={!productId}
                 >
                   <Plus className="w-5 h-5" />
                   Create Campaign
@@ -178,7 +178,7 @@ export const CampaignDashboard = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => perfumeId && fetchCampaigns(perfumeId)}
+                    onClick={() => productId && fetchCampaigns(productId)}
                     className="gap-2"
                   >
                     Try Again
@@ -198,13 +198,13 @@ export const CampaignDashboard = () => {
                     No campaigns yet
                   </h3>
                   <p className="text-muted-gray mb-8 max-w-md mx-auto">
-                    Create your first campaign to generate ad videos for this perfume
+                    Create your first campaign to generate ad videos for this product
                   </p>
                   <Button
                     variant="hero"
                     onClick={handleCreateCampaign}
                     className="gap-2 transition-transform duration-200 hover:scale-105"
-                    disabled={!perfumeId}
+                    disabled={!productId}
                   >
                     <Plus className="w-5 h-5" />
                     Create Your First Campaign

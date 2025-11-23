@@ -865,11 +865,11 @@ export const VideoResults = () => {
       <div className="min-h-screen bg-gradient-hero flex flex-col">
         <nav className="relative z-50 border-b border-charcoal-800/60 backdrop-blur-md bg-charcoal-900/40 sticky top-0">
           <div className="max-w-5xl mx-auto w-full px-4 py-4">
-              {project?.perfume_id && (
+              {project?.product_id && (
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                    onClick={() => navigate(`/products/${project.product_id}`)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
                   >
                     <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />
@@ -906,11 +906,11 @@ export const VideoResults = () => {
         <div className="max-w-7xl mx-auto w-full px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Left: Back Button */}
-            {project?.perfume_id && (
+            {project?.product_id && (
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => navigate(`/perfumes/${project.perfume_id}`)}
+                    onClick={() => navigate(`/products/${project.product_id}`)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:text-gold group"
                   >
                     <ArrowLeft className="w-5 h-5 text-muted-gray group-hover:text-gold transition-colors duration-200" />

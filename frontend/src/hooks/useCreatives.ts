@@ -54,8 +54,8 @@ interface CreateCreativeInput {
   // WAN 2.5: Video provider selection
   video_provider?: 'replicate' | 'ecs'
   // Phase 9: Product-specific fields (optional, for backward compatibility)
-  perfume_name?: string
-  perfume_gender?: 'masculine' | 'feminine' | 'unisex'
+  product_name?: string
+  product_gender?: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support
   num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }

@@ -11,13 +11,13 @@ import { Link } from 'react-router-dom'
 import { Slider } from '@/components/ui/slider'
 
 export const CreateCampaign = () => {
-  const { perfumeId } = useParams<{ perfumeId: string }>()
+  const { productId } = useParams<{ productId: string }>()
   const navigate = useNavigate()
   const { createCampaign, loading, error } = useCampaigns()
   const { getProduct } = useProducts()
   const { logout } = useAuth()
 
-  const [perfume, setProduct] = useState<any>(null)
+  const [product, setProduct] = useState<any>(null)
   const [campaignName, setCampaignName] = useState('')
   const [creativePrompt, setCreativePrompt] = useState('')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('gold_luxe')
@@ -27,14 +27,14 @@ export const CreateCampaign = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (perfumeId) {
-      getProduct(perfumeId)
+    if (productId) {
+      getProduct(productId)
         .then(setProduct)
         .catch((err) => {
-          console.error('Error fetching perfume:', err)
+          console.error('Error fetching product:', err)
         })
     }
-  }, [perfumeId, getProduct])
+  }, [productId, getProduct])
 
   const handleSignOut = async () => {
     try {
@@ -57,7 +57,7 @@ export const CreateCampaign = () => {
       return false
     }
 
-    if (!perfumeId) {
+    if (!productId) {
       setSubmitError('Product ID is missing')
       return false
     }
@@ -74,7 +74,7 @@ export const CreateCampaign = () => {
       return
     }
 
-    if (!perfumeId) {
+    if (!productId) {
       setSubmitError('Product ID is missing')
       return
     }
@@ -83,7 +83,7 @@ export const CreateCampaign = () => {
 
     try {
       const campaign = await createCampaign({
-        perfume_id: perfumeId,
+        product_id: productId,
         campaign_name: campaignName,
         creative_prompt: creativePrompt,
         selected_style: selectedStyle,
@@ -132,12 +132,12 @@ export const CreateCampaign = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link
-              to={perfumeId ? `/perfumes/${perfumeId}` : '/dashboard'}
+              to={productId ? `/products/${productId}` : '/dashboard'}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="w-5 h-5 text-muted-gray hover:text-gold transition-colors" />
               <span className="text-muted-gray hover:text-gold transition-colors">
-                {perfume ? `Back to ${perfume.perfume_name}` : 'Back'}
+                {product ? `Back to ${product.product_name}` : 'Back'}
               </span>
             </Link>
             <div className="flex items-center gap-4">
@@ -318,7 +318,7 @@ export const CreateCampaign = () => {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => navigate(perfumeId ? `/perfumes/${perfumeId}` : '/dashboard')}
+                  onClick={() => navigate(productId ? `/products/${productId}` : '/dashboard')}
                   className="flex-1"
                 >
                   Cancel

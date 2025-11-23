@@ -7,7 +7,7 @@ export type VideoStyle = 'gold_luxe' | 'dark_elegance' | 'romantic_floral'
 
 export interface Campaign {
   campaign_id: string
-  perfume_id: string
+  product_id: string
   brand_id: string
   campaign_name: string
   creative_prompt: string
@@ -25,7 +25,7 @@ export interface Campaign {
 }
 
 export interface CreateCampaignInput {
-  perfume_id: string
+  product_id: string
   campaign_name: string
   creative_prompt: string
   selected_style: VideoStyle
@@ -47,17 +47,17 @@ export const useCampaigns = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch campaigns for a perfume
+  // Fetch campaigns for a product
   const fetchCampaigns = useCallback(
-    async (perfumeId: string, page: number = 1, limit: number = 20) => {
-      if (!user || !perfumeId) return
+    async (productId: string, page: number = 1, limit: number = 20) => {
+      if (!user || !productId) return
 
       setLoading(true)
       setError(null)
 
       try {
         const response = await apiClient.get<PaginatedCampaigns>('/api/campaigns', {
-          params: { perfume_id: perfumeId, page, limit },
+          params: { product_id: productId, page, limit },
         })
         setCampaigns(response.data.campaigns || [])
         return response.data
@@ -96,7 +96,7 @@ export const useCampaigns = () => {
 
       try {
         const response = await apiClient.post<Campaign>('/api/campaigns', {
-          perfume_id: input.perfume_id,
+          product_id: input.product_id,
           campaign_name: input.campaign_name,
           creative_prompt: input.creative_prompt,
           selected_style: input.selected_style,

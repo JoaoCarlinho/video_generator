@@ -50,7 +50,7 @@ function App() {
           
           {/* Product Routes */}
           <Route
-            path="/perfumes/add"
+            path="/products/add"
             element={
               <ProtectedRoute>
                 <AddProduct />
@@ -58,7 +58,7 @@ function App() {
             }
           />
           <Route
-            path="/perfumes/:perfumeId"
+            path="/products/:productId"
             element={
               <ProtectedRoute>
                 <CampaignDashboard />
@@ -66,7 +66,7 @@ function App() {
             }
           />
           <Route
-            path="/perfumes/:perfumeId/campaigns/create"
+            path="/products/:productId/campaigns/create"
             element={
               <ProtectedRoute>
                 <CreateCampaign />

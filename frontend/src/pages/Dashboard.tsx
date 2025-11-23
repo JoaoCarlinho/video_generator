@@ -31,13 +31,13 @@ export const Dashboard = () => {
   const handleDeleteProduct = async (productId: string) => {
     if (
       confirm(
-        'Are you sure you want to delete this product? All campaigns for this perfume will also be deleted. This cannot be undone.'
+        'Are you sure you want to delete this product? All campaigns for this product will also be deleted. This cannot be undone.'
       )
     ) {
       try {
-        await deleteProduct(perfumeId)
+        await deleteProduct(productId)
       } catch (err) {
-        console.error('Failed to delete perfume:', err)
+        console.error('Failed to delete product:', err)
       }
     }
   }
@@ -45,7 +45,7 @@ export const Dashboard = () => {
   const dashboardStats = [
     {
       label: 'Total Products',
-      value: perfumes.length,
+      value: products.length,
       icon: Package,
       gradient: 'from-gold/20 to-gold-silky/10',
       iconBg: 'bg-gold/20',
@@ -143,9 +143,9 @@ export const Dashboard = () => {
               </h1>
               <p className="text-lg sm:text-xl text-muted-gray max-w-2xl">
                 {brand?.brand_name ? (
-                  <>Manage your perfume collection for <span className="text-gold font-semibold">{brand.brand_name}</span></>
+                  <>Manage your product collection for <span className="text-gold font-semibold">{brand.brand_name}</span></>
                 ) : (
-                  'Create, manage, and track your perfume collection'
+                  'Create, manage, and track your product collection'
                 )}
               </p>
             </motion.div>
@@ -221,7 +221,7 @@ export const Dashboard = () => {
                     Try Again
                   </Button>
                 </div>
-              ) : perfumes.length === 0 ? (
+              ) : products.length === 0 ? (
                 <motion.div 
                   className="text-center py-20 px-4"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -232,10 +232,10 @@ export const Dashboard = () => {
                     <Package className="w-10 h-10 text-gold" />
                   </div>
                   <h3 className="text-2xl font-bold text-off-white mb-3">
-                    No perfumes yet
+                    No products yet
                   </h3>
                   <p className="text-muted-gray mb-8 max-w-md mx-auto">
-                    Add your first perfume to start creating ad campaigns
+                    Add your first product to start creating ad campaigns
                   </p>
                   <Button
                     variant="hero"
@@ -253,11 +253,11 @@ export const Dashboard = () => {
                   initial="hidden"
                   animate="visible"
                 >
-                  {perfumes.map((perfume) => (
-                    <motion.div key={perfume.perfume_id} variants={itemVariants}>
+                  {products.map((product) => (
+                    <motion.div key={product.product_id} variants={itemVariants}>
                       <ProductCard
-                        perfume={perfume}
-                        onClick={() => handleViewProduct(perfume.perfume_id)}
+                        product={product}
+                        onClick={() => handleViewProduct(product.product_id)}
                       />
                     </motion.div>
                   ))}

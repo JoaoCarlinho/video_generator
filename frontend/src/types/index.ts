@@ -149,8 +149,8 @@ export interface CreateProjectInput {
   target_audience?: string
   target_duration?: number
   // Phase 9: Perfume-specific fields
-  perfume_name: string
-  perfume_gender: 'masculine' | 'feminine' | 'unisex'
+  product_name: string
+  product_gender: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support
   num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }
@@ -198,7 +198,7 @@ export interface SignupFormData {
   agreeToTerms: boolean
 }
 
-// PHASE 9: Video Style Types (Updated to 3 perfume styles only)
+// PHASE 9: Video Style Types (Updated to 3 product styles only)
 export type VideoStyleType = 'gold_luxe' | 'dark_elegance' | 'romantic_floral'
 
 export interface VideoStyle {
