@@ -215,7 +215,7 @@ async def get_my_brand(
 @router.get(
     "/me/stats",
     summary="Get brand statistics",
-    description="Get statistics for the authenticated user's brand (perfumes count, campaigns count, total cost)."
+    description="Get statistics for the authenticated user's brand (products count, campaigns count, total cost)."
 )
 async def get_brand_stats(
     brand_id: UUID = Depends(get_current_brand_id),
@@ -223,7 +223,7 @@ async def get_brand_stats(
 ) -> Dict[str, Any]:
     """
     Get brand statistics including:
-    - Total perfumes
+    - Total products
     - Total campaigns
     - Total cost
     
