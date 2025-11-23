@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 import aiohttp
 
-from backend.app.services.providers.base import BaseVideoProvider
+from app.services.providers.base import BaseVideoProvider
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,7 @@ from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 from app.services.style_manager import StyleManager
 
-from backend.app.services.providers import ReplicateVideoProvider
+from app.services.providers import ReplicateVideoProvider
 
 logger = logging.getLogger(__name__)
 

@@ -15,8 +15,8 @@ import requests
 import asyncio
 from typing import Optional, Dict, Any
 
-from backend.app.services.providers.base import BaseVideoProvider
-from backend.app.services.style_manager import StyleManager
+from app.services.providers.base import BaseVideoProvider
+from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
 

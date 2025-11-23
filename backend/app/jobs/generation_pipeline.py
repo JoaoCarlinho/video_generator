@@ -405,7 +405,7 @@ class GenerationPipeline:
                 "timing_seconds": total_elapsed,
                 "step_timings": self.step_timings,
             }
--
+
     # REMOVED: _extractproduct - now using ProductExtractor.extract_product_for_campaign directly
 
     async def _upload_scene_videos_to_s3(

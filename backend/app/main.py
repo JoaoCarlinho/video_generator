@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.config import settings
-from app.database.connection import test_connection
+from app.database.connection import test_connection, init_db
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,7 +80,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def startup_event():
     """Run on application startup."""
     logger.info("🚀 Starting up AI Ad Video Generator...")
-    logger.info("✅ Server started - database connection will be tested on first request")
+
+    # Initialize database connection
+    init_db()
+
+    # Test database connection
+    db_connected = test_connection()
+    if db_connected:
+        logger.info("✅ Database connection established and tested")
+    else:
+        logger.warning("⚠️ Database connection could not be established - running in degraded mode")
+
+    logger.info("✅ Server startup complete")
 
 
 @app.get("/health")

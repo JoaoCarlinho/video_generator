@@ -220,7 +220,7 @@ async def create_new_project(
             product_images=product_images_list,
             scene_backgrounds=scene_backgrounds_list,
             output_formats=output_formats_list,
-            selected_style=request.selected_style  # PHASE 7: Store selected style
+            selected_style=request.selected_style,  # PHASE 7: Store selected style
             product_name=request.product_name,  # Phase 9: Store product name
             product_gender=request.product_gender,  # Phase 9: Store product gender
             num_variations=request.num_variations  # MULTI-VARIATION: Store variation count

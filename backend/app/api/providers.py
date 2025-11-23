@@ -4,9 +4,9 @@ from fastapi import APIRouter
 from cachetools import TTLCache
 import logging
 
-from backend.app.config import settings
-from backend.app.services.providers.ecs import ECSVideoProvider
-from backend.app.models.schemas import ProviderHealthStatus, ProvidersHealthResponse
+from app.config import settings
+from app.services.providers.ecs import ECSVideoProvider
+from app.models.schemas import ProviderHealthStatus, ProvidersHealthResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

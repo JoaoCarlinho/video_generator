@@ -100,7 +100,7 @@ async def trigger_generation(
             campaign_id,
             status=CampaignStatus.PROCESSING.value,
             progress=0
-        )s
+        )
         
         logger.info(f"✅ Enqueued generation for campaign {campaign_id}, job_id={job.id}")
         

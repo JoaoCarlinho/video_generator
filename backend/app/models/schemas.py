@@ -5,6 +5,19 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
+
+
+# ============================================================================
+# Campaign Status Enum
+# ============================================================================
+
+class CampaignStatus(str, Enum):
+    """Campaign status values."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 # ============================================================================

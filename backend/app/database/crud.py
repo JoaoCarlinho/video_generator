@@ -798,6 +798,37 @@ def get_brand(
         return None
 
 
+def get_brand_by_id(
+    db: Session,
+    brand_id: UUID
+) -> Optional[Brand]:
+    """
+    Get a brand by ID without ownership verification.
+
+    This function is used when brand_id comes from JWT token or background jobs.
+    Use get_brand() in API endpoints that need explicit ownership verification.
+
+    Args:
+        db: Database session
+        brand_id: ID of the brand
+
+    Returns:
+        Brand: Brand object if found, None otherwise
+    """
+    try:
+        brand = db.query(Brand).filter(Brand.id == brand_id).first()
+
+        if brand:
+            logger.debug(f"✅ Found brand {brand_id}")
+        else:
+            logger.warning(f"⚠️ Brand {brand_id} not found")
+
+        return brand
+    except Exception as e:
+        logger.error(f"❌ Failed to get brand {brand_id}: {e}")
+        return None
+
+
 def update_brand(
     db: Session,
     brand_id: UUID,
@@ -1043,6 +1074,37 @@ def get_product(
             logger.debug(f"✅ User {user_id} owns product {product_id} via brand")
         else:
             logger.warning(f"⚠️ Product {product_id} not found or brand not owned by user {user_id}")
+
+        return product
+    except Exception as e:
+        logger.error(f"❌ Failed to get product {product_id}: {e}")
+        return None
+
+
+def get_product_by_id(
+    db: Session,
+    product_id: UUID
+) -> Optional[Product]:
+    """
+    Get a product by ID without ownership verification.
+
+    This function is used in background jobs where user context is not available.
+    Use get_product() in API endpoints for ownership verification.
+
+    Args:
+        db: Database session
+        product_id: ID of the product
+
+    Returns:
+        Product: Product object if found, None otherwise
+    """
+    try:
+        product = db.query(Product).filter(Product.id == product_id).first()
+
+        if product:
+            logger.debug(f"✅ Found product {product_id}")
+        else:
+            logger.warning(f"⚠️ Product {product_id} not found")
 
         return product
     except Exception as e:
@@ -1303,6 +1365,37 @@ def get_campaign(
             logger.debug(f"✅ User {user_id} owns campaign {campaign_id}")
         else:
             logger.warning(f"⚠️ Campaign {campaign_id} not found or not owned by user {user_id}")
+
+        return campaign
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaign {campaign_id}: {e}")
+        return None
+
+
+def get_campaign_by_id(
+    db: Session,
+    campaign_id: UUID
+) -> Optional[Campaign]:
+    """
+    Get a campaign by ID without ownership verification.
+
+    This function is used in background jobs where user context is not available.
+    Use get_campaign() in API endpoints for ownership verification.
+
+    Args:
+        db: Database session
+        campaign_id: ID of the campaign
+
+    Returns:
+        Campaign: Campaign object if found, None otherwise
+    """
+    try:
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+
+        if campaign:
+            logger.debug(f"✅ Found campaign {campaign_id}")
+        else:
+            logger.warning(f"⚠️ Campaign {campaign_id} not found")
 
         return campaign
     except Exception as e:

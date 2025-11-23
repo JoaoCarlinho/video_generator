@@ -520,16 +520,7 @@ class TextOverlayRenderer:
 
         return drawtext_filter
 
-<<<<<<< HEAD
-        # Simplified filter for better compatibility
-        filter_complex = drawtext_filter
-
-        return filter_complex
-
-    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0) -> str:
-=======
     async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
->>>>>>> upstream/main
         """Save video to local filesystem."""
         try:
             import shutil
@@ -537,17 +528,12 @@ class TextOverlayRenderer:
             # Create directory structure: /tmp/genads/{project_id}/draft/text_overlays/
             save_dir = Path(f"/tmp/genads/{project_id}/draft/text_overlays")
             save_dir.mkdir(parents=True, exist_ok=True)
-            
-<<<<<<< HEAD
-            # Copy to permanent location with descriptive name
-            local_path = save_dir / f"scene_{scene_index:02d}_text.mp4"
-=======
+
             # Copy to permanent location with descriptive name (include variation index if provided)
             if variation_index is not None:
                 local_path = save_dir / f"scene_{variation_index}_{scene_index:02d}_text.mp4"
             else:
                 local_path = save_dir / f"scene_{scene_index:02d}_text.mp4"
->>>>>>> upstream/main
             shutil.copy2(video_path, local_path)
             
             logger.info(f"✅ Saved locally: {local_path}")

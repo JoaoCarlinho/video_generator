@@ -23,255 +23,255 @@ class VideoStyle(Enum):
 
 
 # Complete style configurations for all 3 perfume styles
-    STYLE_CONFIGS = {
-        VideoStyle.GOLD_LUXE: {
-            'display_name': 'Gold Luxe',
-            'description': 'Warm golden lighting, rich textures, opulent feel',
-            'short_description': 'Luxurious, warm',
-            'scene_keywords': 'golden hour lighting, warm champagne tones, luxury gold accents, soft glow, premium aesthetic',
-            'lighting': 'warm golden rim lighting, soft glow, backlit elegance',
-            'camera_style': 'slow zoom, cinematic movements, macro details',
-            'mood': 'luxurious, warm, sophisticated, opulent',
-            'color_palette': ['#D4AF37', '#8B4513', '#FFD700', '#FFF8DC'],
-            'texture': 'gold leaf, silk, smooth glass, rich textures',
-            'grade': 'warm golden grade, lifted midtones, subtle vignette',
-            'examples': ['Chanel', 'Dior', 'Tom Ford'],
-            'keywords': ['luxury', 'gold', 'warm', 'opulent'],
-            'music_mood': 'luxurious',
-            'best_for': ['High-end perfumes', 'Premium fragrances', 'Luxury brands'],
-            'priority_weight': 1.0  # User selection weight
-        },
-        
-        VideoStyle.DARK_ELEGANCE: {
-            'display_name': 'Dark Elegance',
-            'description': 'Black background, dramatic rim lighting, mysterious',
-            'short_description': 'Mysterious, sophisticated',
-            'scene_keywords': 'dark black background, rim lighting, high contrast, dramatic shadows, mysterious elegance',
-            'lighting': 'rim lighting on bottle edges, dark background, strategic highlights',
-            'camera_style': 'static or slow rotation, floating effect, dramatic angles',
-            'mood': 'mysterious, sophisticated, exclusive, dramatic',
-            'color_palette': ['#000000', '#1A1A1A', '#C0C0C0', '#FFD700'],
-            'texture': 'smooth glass, metallic accents, deep blacks, glossy finish',
-            'grade': 'high contrast, deep blacks, lifted highlights, moody',
-            'examples': ['Yves Saint Laurent', 'Versace', 'Armani'],
-            'keywords': ['dark', 'elegant', 'mysterious', 'dramatic'],
-            'music_mood': 'dramatic',
-            'best_for': ['Masculine fragrances', 'Exclusive perfumes', 'Evening scents'],
-            'priority_weight': 1.0
-        },
-        
-        VideoStyle.ROMANTIC_FLORAL: {
-            'display_name': 'Romantic Floral',
-            'description': 'Soft pastels, floral elements, feminine aesthetic',
-            'short_description': 'Romantic, delicate',
-            'scene_keywords': 'soft pink tones, floral elements, rose petals, delicate lighting, feminine elegance',
-            'lighting': 'soft diffused lighting, natural glow, gentle highlights',
-            'camera_style': 'gentle movements, soft focus, dreamy aesthetic',
-            'mood': 'romantic, feminine, delicate, dreamy',
-            'color_palette': ['#FFB6C1', '#FFC0CB', '#FADADD', '#E6E6FA'],
-            'texture': 'soft petals, silk, delicate materials, smooth glass',
-            'grade': 'soft pastels, lifted shadows, gentle desaturation',
-            'examples': ['Marc Jacobs', 'Viktor & Rolf', 'Valentino'],
-            'keywords': ['romantic', 'floral', 'feminine', 'delicate'],
-            'music_mood': 'calm',
-            'best_for': ['Feminine fragrances', 'Floral perfumes', 'Spring/Summer scents'],
-            'priority_weight': 1.0
-        },
+STYLE_CONFIGS = {
+    VideoStyle.GOLD_LUXE: {
+        'display_name': 'Gold Luxe',
+        'description': 'Warm golden lighting, rich textures, opulent feel',
+        'short_description': 'Luxurious, warm',
+        'scene_keywords': 'golden hour lighting, warm champagne tones, luxury gold accents, soft glow, premium aesthetic',
+        'lighting': 'warm golden rim lighting, soft glow, backlit elegance',
+        'camera_style': 'slow zoom, cinematic movements, macro details',
+        'mood': 'luxurious, warm, sophisticated, opulent',
+        'color_palette': ['#D4AF37', '#8B4513', '#FFD700', '#FFF8DC'],
+        'texture': 'gold leaf, silk, smooth glass, rich textures',
+        'grade': 'warm golden grade, lifted midtones, subtle vignette',
+        'examples': ['Chanel', 'Dior', 'Tom Ford'],
+        'keywords': ['luxury', 'gold', 'warm', 'opulent'],
+        'music_mood': 'luxurious',
+        'best_for': ['High-end perfumes', 'Premium fragrances', 'Luxury brands'],
+        'priority_weight': 1.0  # User selection weight
+    },
+    
+    VideoStyle.DARK_ELEGANCE: {
+        'display_name': 'Dark Elegance',
+        'description': 'Black background, dramatic rim lighting, mysterious',
+        'short_description': 'Mysterious, sophisticated',
+        'scene_keywords': 'dark black background, rim lighting, high contrast, dramatic shadows, mysterious elegance',
+        'lighting': 'rim lighting on bottle edges, dark background, strategic highlights',
+        'camera_style': 'static or slow rotation, floating effect, dramatic angles',
+        'mood': 'mysterious, sophisticated, exclusive, dramatic',
+        'color_palette': ['#000000', '#1A1A1A', '#C0C0C0', '#FFD700'],
+        'texture': 'smooth glass, metallic accents, deep blacks, glossy finish',
+        'grade': 'high contrast, deep blacks, lifted highlights, moody',
+        'examples': ['Yves Saint Laurent', 'Versace', 'Armani'],
+        'keywords': ['dark', 'elegant', 'mysterious', 'dramatic'],
+        'music_mood': 'dramatic',
+        'best_for': ['Masculine fragrances', 'Exclusive perfumes', 'Evening scents'],
+        'priority_weight': 1.0
+    },
+    
+    VideoStyle.ROMANTIC_FLORAL: {
+        'display_name': 'Romantic Floral',
+        'description': 'Soft pastels, floral elements, feminine aesthetic',
+        'short_description': 'Romantic, delicate',
+        'scene_keywords': 'soft pink tones, floral elements, rose petals, delicate lighting, feminine elegance',
+        'lighting': 'soft diffused lighting, natural glow, gentle highlights',
+        'camera_style': 'gentle movements, soft focus, dreamy aesthetic',
+        'mood': 'romantic, feminine, delicate, dreamy',
+        'color_palette': ['#FFB6C1', '#FFC0CB', '#FADADD', '#E6E6FA'],
+        'texture': 'soft petals, silk, delicate materials, smooth glass',
+        'grade': 'soft pastels, lifted shadows, gentle desaturation',
+        'examples': ['Marc Jacobs', 'Viktor & Rolf', 'Valentino'],
+        'keywords': ['romantic', 'floral', 'feminine', 'delicate'],
+        'music_mood': 'calm',
+        'best_for': ['Feminine fragrances', 'Floral perfumes', 'Spring/Summer scents'],
+        'priority_weight': 1.0
+    },
 
-        VideoStyle.CINEMATIC: {
-            'display_name': 'Cinematic',
-            'description': (
-                'High-quality camera feel, dramatic lighting, depth of '
-                'field, modern ad look'
-            ),
-            'short_description': 'Professional, dramatic',
-            'scene_keywords': (
-                'cinematic camera work, dramatic lighting, shallow depth '
-                'of field, professional color grading, modern premium '
-                'aesthetic'
-            ),
-            'lighting': (
-                'dramatic directional lighting with shadows, strategic '
-                'highlights'
-            ),
-            'camera_style': (
-                'cinematic camera movements, slow pans, subtle zooms, '
-                'professional framing'
-            ),
-            'mood': 'sophisticated, premium, cinematic, dramatic',
-            'color_palette': ['#2C1810', '#D4AF37', '#1A1A1A', '#C4B5A0'],
-            'texture': 'cinema-grade cinematography, film-like quality',
-            'grade': 'cinematic color grade, high contrast, warm tones',
-            'examples': ['Nike', 'Apple', 'Samsung'],
-            'keywords': ['professional', 'dramatic', 'premium'],
-            'music_mood': 'dramatic',
-            'best_for': [
-                'Luxury brands',
-                'Premium products',
-                'High-end services'
-            ]
-        },
+    VideoStyle.CINEMATIC: {
+        'display_name': 'Cinematic',
+        'description': (
+            'High-quality camera feel, dramatic lighting, depth of '
+            'field, modern ad look'
+        ),
+        'short_description': 'Professional, dramatic',
+        'scene_keywords': (
+            'cinematic camera work, dramatic lighting, shallow depth '
+            'of field, professional color grading, modern premium '
+            'aesthetic'
+        ),
+        'lighting': (
+            'dramatic directional lighting with shadows, strategic '
+            'highlights'
+        ),
+        'camera_style': (
+            'cinematic camera movements, slow pans, subtle zooms, '
+            'professional framing'
+        ),
+        'mood': 'sophisticated, premium, cinematic, dramatic',
+        'color_palette': ['#2C1810', '#D4AF37', '#1A1A1A', '#C4B5A0'],
+        'texture': 'cinema-grade cinematography, film-like quality',
+        'grade': 'cinematic color grade, high contrast, warm tones',
+        'examples': ['Nike', 'Apple', 'Samsung'],
+        'keywords': ['professional', 'dramatic', 'premium'],
+        'music_mood': 'dramatic',
+        'best_for': [
+            'Luxury brands',
+            'Premium products',
+            'High-end services'
+        ]
+    },
 
-        VideoStyle.DARK_PREMIUM: {
-            'display_name': 'Dark Premium',
-            'description': (
-                'Black background, rim lighting, contrast-heavy, product '
-                'floating or rotating'
-            ),
-            'short_description': 'Luxury, exclusive',
-            'scene_keywords': (
-                'dark black background, rim lighting, high contrast, '
-                'product isolated and floating, luxury aesthetic, '
-                'product rotating on axis'
-            ),
-            'lighting': (
-                'rim lighting on product edges, dark background, strategic '
-                'accent lighting, backlight emphasis'
-            ),
-            'camera_style': (
-                'static or slow product rotation, floating effect, '
-                '360-degree showcase'
-            ),
-            'mood': 'luxurious, sophisticated, exclusive, premium, elegant',
-            'color_palette': ['#000000', '#FF6B9D', '#C44569', '#F39C12'],
-            'texture': (
-                'smooth luxurious surfaces, glossy finish, metallic hints'
-            ),
-            'grade': 'high contrast, deep blacks, vibrant accents, moody',
-            'examples': ['Sony', 'Nike', 'Luxury brands'],
-            'keywords': ['luxury', 'dark', 'premium', 'exclusive'],
-            'music_mood': 'luxurious',
-            'best_for': [
-                'Luxury goods',
-                'High-end electronics',
-                'Premium beauty'
-            ]
-        },
+    VideoStyle.DARK_PREMIUM: {
+        'display_name': 'Dark Premium',
+        'description': (
+            'Black background, rim lighting, contrast-heavy, product '
+            'floating or rotating'
+        ),
+        'short_description': 'Luxury, exclusive',
+        'scene_keywords': (
+            'dark black background, rim lighting, high contrast, '
+            'product isolated and floating, luxury aesthetic, '
+            'product rotating on axis'
+        ),
+        'lighting': (
+            'rim lighting on product edges, dark background, strategic '
+            'accent lighting, backlight emphasis'
+        ),
+        'camera_style': (
+            'static or slow product rotation, floating effect, '
+            '360-degree showcase'
+        ),
+        'mood': 'luxurious, sophisticated, exclusive, premium, elegant',
+        'color_palette': ['#000000', '#FF6B9D', '#C44569', '#F39C12'],
+        'texture': (
+            'smooth luxurious surfaces, glossy finish, metallic hints'
+        ),
+        'grade': 'high contrast, deep blacks, vibrant accents, moody',
+        'examples': ['Sony', 'Nike', 'Luxury brands'],
+        'keywords': ['luxury', 'dark', 'premium', 'exclusive'],
+        'music_mood': 'luxurious',
+        'best_for': [
+            'Luxury goods',
+            'High-end electronics',
+            'Premium beauty'
+        ]
+    },
 
-        VideoStyle.MINIMAL_STUDIO: {
-            'display_name': 'Minimal Studio',
-            'description': (
-                'Minimal, bright, Apple-style aesthetic with clean '
-                'compositions'
-            ),
-            'short_description': 'Clean, modern',
-            'scene_keywords': (
-                'minimalist studio style, clean bright background, simple '
-                'composition, Apple aesthetic, premium simplicity, '
-                'product-centric'
-            ),
-            'lighting': (
-                'even soft lighting, bright clean environment, minimal '
-                'shadows'
-            ),
-            'camera_style': (
-                'static or subtle movements, product-centric, simple '
-                'framing'
-            ),
-            'mood': 'clean, minimal, premium, modern, simple, refined',
-            'color_palette': ['#FFFFFF', '#F5F5F5', '#333333', '#0071E3'],
-            'texture': (
-                'clean minimal surfaces, smooth finishes, professional'
-            ),
-            'grade': 'bright, clean, minimal color grading, neutral tones',
-            'examples': ['Apple', 'Tech brands', 'Wellness', 'Ecommerce'],
-            'keywords': ['minimal', 'clean', 'bright', 'simple'],
-            'music_mood': 'calm',
-            'best_for': [
-                'Tech products',
-                'SaaS',
-                'Wellness brands',
-                'Clean beauty'
-            ]
-        },
+    VideoStyle.MINIMAL_STUDIO: {
+        'display_name': 'Minimal Studio',
+        'description': (
+            'Minimal, bright, Apple-style aesthetic with clean '
+            'compositions'
+        ),
+        'short_description': 'Clean, modern',
+        'scene_keywords': (
+            'minimalist studio style, clean bright background, simple '
+            'composition, Apple aesthetic, premium simplicity, '
+            'product-centric'
+        ),
+        'lighting': (
+            'even soft lighting, bright clean environment, minimal '
+            'shadows'
+        ),
+        'camera_style': (
+            'static or subtle movements, product-centric, simple '
+            'framing'
+        ),
+        'mood': 'clean, minimal, premium, modern, simple, refined',
+        'color_palette': ['#FFFFFF', '#F5F5F5', '#333333', '#0071E3'],
+        'texture': (
+            'clean minimal surfaces, smooth finishes, professional'
+        ),
+        'grade': 'bright, clean, minimal color grading, neutral tones',
+        'examples': ['Apple', 'Tech brands', 'Wellness', 'Ecommerce'],
+        'keywords': ['minimal', 'clean', 'bright', 'simple'],
+        'music_mood': 'calm',
+        'best_for': [
+            'Tech products',
+            'SaaS',
+            'Wellness brands',
+            'Clean beauty'
+        ]
+    },
 
-        VideoStyle.LIFESTYLE: {
-            'display_name': 'Lifestyle',
-            'description': (
-                'Product used in everyday scenarios — running, cooking, '
-                'working out, fashion'
-            ),
-            'short_description': 'Authentic, relatable',
-            'scene_keywords': (
-                'lifestyle photography, product in active use, everyday '
-                'scenario, authentic moment, relatable context, real-world '
-                'usage, genuine emotion'
-            ),
-            'lighting': 'natural or warm lighting, realistic, candid',
-            'camera_style': (
-                'documentary-style, natural movements, handheld feel, '
-                'motion-focused'
-            ),
-            'mood': 'authentic, relatable, real-world, genuine, warm, human',
-            'color_palette': ['#E8D4B8', '#C89968', '#556B2F', '#8B4513'],
-            'texture': (
-                'natural real-world textures, organic materials, authentic '
-                'surfaces'
-            ),
-            'grade': (
-                'warm, natural, authentic color grading, slightly '
-                'desaturated'
-            ),
-            'examples': [
-                'Social ads',
-                'Relatable brands',
-                'Lifestyle companies'
-            ],
-            'keywords': ['authentic', 'real-world', 'relatable', 'genuine'],
-            'music_mood': 'uplifting',
-            'best_for': [
-                'Everyday products',
-                'Sports brands',
-                'Fashion',
-                'Social media'
-            ]
-        },
+    VideoStyle.LIFESTYLE: {
+        'display_name': 'Lifestyle',
+        'description': (
+            'Product used in everyday scenarios — running, cooking, '
+            'working out, fashion'
+        ),
+        'short_description': 'Authentic, relatable',
+        'scene_keywords': (
+            'lifestyle photography, product in active use, everyday '
+            'scenario, authentic moment, relatable context, real-world '
+            'usage, genuine emotion'
+        ),
+        'lighting': 'natural or warm lighting, realistic, candid',
+        'camera_style': (
+            'documentary-style, natural movements, handheld feel, '
+            'motion-focused'
+        ),
+        'mood': 'authentic, relatable, real-world, genuine, warm, human',
+        'color_palette': ['#E8D4B8', '#C89968', '#556B2F', '#8B4513'],
+        'texture': (
+            'natural real-world textures, organic materials, authentic '
+            'surfaces'
+        ),
+        'grade': (
+            'warm, natural, authentic color grading, slightly '
+            'desaturated'
+        ),
+        'examples': [
+            'Social ads',
+            'Relatable brands',
+            'Lifestyle companies'
+        ],
+        'keywords': ['authentic', 'real-world', 'relatable', 'genuine'],
+        'music_mood': 'uplifting',
+        'best_for': [
+            'Everyday products',
+            'Sports brands',
+            'Fashion',
+            'Social media'
+        ]
+    },
 
-        VideoStyle.ANIMATED_2D: {
-            'display_name': '2D Animated',
-            'description': (
-                'Modern vector-style animation for explainers or '
-                'playful ads'
-            ),
-            'short_description': 'Playful, modern',
-            'scene_keywords': (
-                '2D animation, vector style, motion graphics, modern '
-                'animated explainer, playful transitions, illustrated '
-                'style, dynamic movement'
-            ),
-            'lighting': (
-                'stylized animated lighting, flat or gradient backgrounds'
-            ),
-            'camera_style': (
-                'animated transitions, playful movements, parallax effects,'
-                ' dynamic motion'
-            ),
-            'mood': 'playful, modern, innovative, fun, engaging, youthful',
-            'color_palette': ['#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3'],
-            'texture': (
-                'smooth vector illustration style, clean lines, graphic '
-                'design'
-            ),
-            'grade': 'vibrant, saturated, stylized colors, bold',
-            'examples': ['Fintech', 'SaaS', 'Apps', 'Startups'],
-            'keywords': ['animated', 'playful', 'modern', 'fun'],
-            'music_mood': 'playful',
-            'best_for': [
-                'Tech startups',
-                'SaaS platforms',
-                'Mobile apps',
-                'Fintech'
-            ]
-        }
+    VideoStyle.ANIMATED_2D: {
+        'display_name': '2D Animated',
+        'description': (
+            'Modern vector-style animation for explainers or '
+            'playful ads'
+        ),
+        'short_description': 'Playful, modern',
+        'scene_keywords': (
+            '2D animation, vector style, motion graphics, modern '
+            'animated explainer, playful transitions, illustrated '
+            'style, dynamic movement'
+        ),
+        'lighting': (
+            'stylized animated lighting, flat or gradient backgrounds'
+        ),
+        'camera_style': (
+            'animated transitions, playful movements, parallax effects,'
+            ' dynamic motion'
+        ),
+        'mood': 'playful, modern, innovative, fun, engaging, youthful',
+        'color_palette': ['#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3'],
+        'texture': (
+            'smooth vector illustration style, clean lines, graphic '
+            'design'
+        ),
+        'grade': 'vibrant, saturated, stylized colors, bold',
+        'examples': ['Fintech', 'SaaS', 'Apps', 'Startups'],
+        'keywords': ['animated', 'playful', 'modern', 'fun'],
+        'music_mood': 'playful',
+        'best_for': [
+            'Tech startups',
+            'SaaS platforms',
+            'Mobile apps',
+            'Fintech'
+        ]
+    }
     }
 
-    # Priority weights for style cascading
-    # Used by StyleCascadingManager to merge multiple style sources
-    STYLE_PRIORITY_WEIGHTS = {
-        'brand_guidelines': 1.0,      # HIGHEST - always followed
-        'user_selected_style': 0.7,   # MORE WEIGHT - user choice
-        'creative_prompt': 0.7,       # MORE WEIGHT - user instructions
-        'reference_image': 0.2        # SOME WEIGHT - subtle influence
+# Priority weights for style cascading
+# Used by StyleCascadingManager to merge multiple style sources
+STYLE_PRIORITY_WEIGHTS = {
+    'brand_guidelines': 1.0,      # HIGHEST - always followed
+    'user_selected_style': 0.7,   # MORE WEIGHT - user choice
+    'creative_prompt': 0.7,       # MORE WEIGHT - user instructions
+    'reference_image': 0.2        # SOME WEIGHT - subtle influence
     }
 
 
