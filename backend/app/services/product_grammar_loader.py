@@ -1,4 +1,4 @@
-"""Perfume Shot Grammar Loader.
+"""Product Shot Grammar Loader.
 
 Loads and validates perfume-specific scene grammar constraints for TikTok vertical videos.
 Ensures LLM-generated scenes follow luxury perfume visual language.
@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-class PerfumeGrammarLoader:
+class ProductGrammarLoader:
     """Loads perfume shot grammar rules and constraints.
     
     Manages the perfume_shot_grammar.json file which defines:
@@ -315,7 +315,7 @@ class PerfumeGrammarLoader:
 # Example usage
 if __name__ == "__main__":
     # Test the loader
-    loader = PerfumeGrammarLoader()
+    loader = ProductGrammarLoader()
 
     # Get allowed shot types
     shot_types = loader.get_allowed_shot_types()

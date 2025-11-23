@@ -18,7 +18,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from app.services.style_manager import StyleManager
-from app.services.perfume_grammar_loader import PerfumeGrammarLoader
+from app.services.perfume_grammar_loader import ProductGrammarLoader
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class ScenePlanner:
         """Initialize with OpenAI API key and perfume grammar constraints."""
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-5.1"
-        self.grammar_loader = PerfumeGrammarLoader()
+        self.grammar_loader = ProductGrammarLoader()
         logger.info("✅ ScenePlanner initialized with perfume shot grammar constraints")
 
     async def plan_scenes(
@@ -120,18 +120,18 @@ class ScenePlanner:
             has_logo: Whether logo is available
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
             extracted_style: Optional extracted style from reference image
-            perfume_name: Perfume product name (e.g., "Noir Élégance")
-            perfume_gender: Perfume gender ('masculine', 'feminine', or 'unisex')
+            perfume_name: Product product name (e.g., "Noir Élégance")
+            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex')
 
         Returns:
             Dictionary with scenes, style_spec, chosenStyle, styleSource
         """
         # Use perfume_name if provided, otherwise fallback to brand_name
         actual_perfume_name = perfume_name or brand_name
-        logger.info(f"Planning video for '{brand_name}' / Perfume: '{actual_perfume_name}' (target: {target_duration}s)")
+        logger.info(f"Planning video for '{brand_name}' / Product: '{actual_perfume_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
         if perfume_gender:
-            logger.info(f"Perfume gender: {perfume_gender}")
+            logger.info(f"Product gender: {perfume_gender}")
         
         # STEP 1: Derive tone from target audience (Task 2)
         tone = await self._derive_tone_from_audience(
@@ -651,14 +651,14 @@ Plan the scene now!"""
         Args:
             creative_prompt: User's creative vision
             brand_name: Brand name
-            perfume_name: Perfume product name
+            perfume_name: Product product name
             brand_description: Brand story
             brand_colors: Brand colors
             brand_guidelines: Brand guidelines
             target_audience: Target audience
             target_duration: Target duration
-            chosen_style: Perfume style (gold_luxe, dark_elegance, romantic_floral)
-            perfume_gender: Perfume gender ('masculine', 'feminine', or 'unisex')
+            chosen_style: Product style (gold_luxe, dark_elegance, romantic_floral)
+            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex')
             retry_count: Current retry attempt (0-3)
             
         Returns:
@@ -757,7 +757,7 @@ Use it to inform HOW you shoot scenes, not WHAT scenes to create.
 {creative_prompt}
 
 Brand: {brand_name}
-Perfume: {perfume_name}
+Product: {perfume_name}
 {f"Brand Description: {brand_description}" if brand_description else ""}
 {f"Brand Guidelines: {str(brand_guidelines)[:300]}" if brand_guidelines else ""}
 {gender_guidance}
@@ -780,7 +780,7 @@ LIGHTING TECHNIQUES (Advanced):
 
 MOTION & PHYSICS:
 - Silk flowing in wind, fabric billowing, draping, rippling
-- Perfume spray mist, water droplets, pouring liquid, surface tension
+- Product spray mist, water droplets, pouring liquid, surface tension
 - Dust motes in light, glitter falling, smoke wisps, petal shower
 - Hair movement, breath visible in cold air, steam rising
 
@@ -830,7 +830,7 @@ STEP 3: Apply perfume cinematography → Make it luxurious with advanced techniq
 STEP 4: Use Veo S3 tools → Achieve cinematic quality
 
 THE FORMULA:
-User's Concept (WHAT to show) + Perfume Cinematography (HOW to show it) = Perfect Scene
+User's Concept (WHAT to show) + Product Cinematography (HOW to show it) = Perfect Scene
 
 EXAMPLES:
 ✓ User: "Midnight garden with fireflies" → Create midnight garden + cinematic execution
@@ -888,7 +888,7 @@ Return ONLY valid JSON array with {scene_count} scene objects:
 
 VEO S3 USER-FIRST PHILOSOPHY:
 1. User's creative prompt = PRIMARY (honor their vision and concept)
-2. Perfume visual language = SECONDARY (inform HOW to execute, not WHAT to create)
+2. Product visual language = SECONDARY (inform HOW to execute, not WHAT to create)
 3. Grammar provides cinematography techniques, not content restrictions
 
 CRITICAL TECHNICAL RULES:
@@ -1099,7 +1099,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                     "shot_variation": "spray_mist_macro",
                     "role": "hook",
                     "duration": 5,
-                    "background_prompt": f"Perfume spray mist in macro, golden particles, {style} lighting, cinematic premium",
+                    "background_prompt": f"Product spray mist in macro, golden particles, {style} lighting, cinematic premium",
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.5,
@@ -1144,7 +1144,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                     "shot_variation": "bottle_with_tagline",
                     "role": "cta",
                     "duration": 7,
-                    "background_prompt": f"Perfume bottle hero shot with elegant background, {style} premium aesthetic",
+                    "background_prompt": f"Product bottle hero shot with elegant background, {style} premium aesthetic",
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.5,
@@ -1451,8 +1451,8 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             has_logo: Whether logo is available
             selected_style: Selected style name
             extracted_style: Optional extracted style from reference image
-            perfume_name: Perfume product name
-            perfume_gender: Perfume gender
+            perfume_name: Product product name
+            perfume_gender: Product gender
             
         Returns:
             List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]

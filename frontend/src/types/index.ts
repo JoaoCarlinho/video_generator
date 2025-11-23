@@ -148,7 +148,7 @@ export interface CreateProjectInput {
   brand_description?: string
   target_audience?: string
   target_duration?: number
-  // Phase 9: Perfume-specific fields
+  // Phase 9: Product-specific fields
   product_name: string
   product_gender: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support
