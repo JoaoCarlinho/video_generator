@@ -537,7 +537,3 @@ ProductCreate = CreateProductRequest
 # Campaign aliases
 CampaignDetail = CampaignResponse
 CampaignCreate = CreateCampaignRequest
-
-# Perfume aliases (perfumes were renamed to products)
-PerfumeDetail = ProductResponse
-PerfumeCreate = CreateProductRequest
