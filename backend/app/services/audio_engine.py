@@ -62,7 +62,7 @@ class AudioEngine:
         Args:
             duration: Music duration in seconds
             project_id: Project UUID for local storage
-            gender: Perfume gender ('masculine', 'feminine', 'unisex')
+            gender: Product gender ('masculine', 'feminine', 'unisex')
 
         Returns:
             Local file path to music file (in /tmp/genads/{project_id}/drafts/)
@@ -132,7 +132,7 @@ class AudioEngine:
         
         Args:
             duration: Music duration in seconds
-            gender: Perfume gender ('masculine', 'feminine', 'unisex')
+            gender: Product gender ('masculine', 'feminine', 'unisex')
             
         Returns:
             Formatted prompt string for MusicGen
@@ -155,7 +155,7 @@ class AudioEngine:
             f"High-quality cinematic production suitable for luxury brand advertising."
         )
         
-        logger.debug(f"Perfume music prompt: {prompt}")
+        logger.debug(f"Product music prompt: {prompt}")
         return prompt
 
     def _create_music_prompt(self, mood: str, duration: float, tempo: str) -> str:

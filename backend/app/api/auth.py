@@ -264,7 +264,7 @@ def verify_perfume_ownership(
     Verify that perfume belongs to current user's brand.
     
     **Arguments:**
-    - perfume_id: Perfume ID to verify
+    - perfume_id: Product ID to verify
     
     **Returns:**
     - bool: True if perfume belongs to brand
@@ -279,13 +279,13 @@ def verify_perfume_ownership(
     if not perfume:
         raise HTTPException(
             status_code=404,
-            detail="Perfume not found"
+            detail="Product not found"
         )
     
     if perfume.brand_id != brand_id:
         raise HTTPException(
             status_code=404,
-            detail="Perfume not found"  # Return 404 to avoid info leak
+            detail="Product not found"  # Return 404 to avoid info leak
         )
     
     return True

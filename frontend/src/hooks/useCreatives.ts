@@ -53,7 +53,7 @@ interface CreateCreativeInput {
   selected_style?: string
   // WAN 2.5: Video provider selection
   video_provider?: 'replicate' | 'ecs'
-  // Phase 9: Perfume-specific fields (optional, for backward compatibility)
+  // Phase 9: Product-specific fields (optional, for backward compatibility)
   perfume_name?: string
   perfume_gender?: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support

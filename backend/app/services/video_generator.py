@@ -122,7 +122,7 @@ class VideoGenerator:
         This method receives enhanced prompts from ScenePlanner with:
         - User-first creative concepts
         - Advanced cinematography vocabulary
-        - Perfume visual language applied to user's vision
+        - Product visual language applied to user's vision
 
         Args:
             prompt: Enhanced scene description prompt (from ScenePlanner with Veo S3 optimizations)

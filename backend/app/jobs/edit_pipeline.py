@@ -82,7 +82,7 @@ class SceneEditPipeline:
             scene_duration = scene.get('duration', 4)
             
             style_spec = campaign_json.get('style_spec', {})
-            perfume_name = campaign_json.get('perfume_name', 'Perfume')
+            perfume_name = campaign_json.get('perfume_name', 'Product')
             
             logger.info(f"Scene {self.scene_index}: role={scene_role}, duration={scene_duration}s")
             

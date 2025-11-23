@@ -62,12 +62,12 @@ async def create_new_project(
     - brand_name: Brand name (max 100 chars)
     - brand_description: (optional) Brand story, values, personality
     - target_audience: (optional) Target audience description
-    - perfume_name: Perfume product name (required, e.g., "Noir Élégance")
-    - perfume_gender: Perfume gender - 'masculine', 'feminine', or 'unisex' (default: 'unisex')
+    - perfume_name: Product product name (required, e.g., "Noir Élégance")
+    - perfume_gender: Product gender - 'masculine', 'feminine', or 'unisex' (default: 'unisex')
     - logo_url: (optional) S3 URL of uploaded brand logo
     - product_image_url: (optional) S3 URL of uploaded perfume bottle image
     - guidelines_url: (optional) S3 URL of uploaded brand guidelines
-    - selected_style: (optional) Perfume video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
+    - selected_style: (optional) Product video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
     - num_variations: (optional) Number of video variations to generate (1-3, default: 1)
     
     **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all perfume ads.
@@ -186,8 +186,8 @@ async def create_new_project(
             # WAN 2.5: Video provider selection
             "video_provider": request.video_provider,
             # Continue with existing fields
-            "product_name": request.product_name,  # Phase 9: Perfume product name
-            "product_gender": request.product_gender,  # Phase 9: Perfume gender\
+            "product_name": request.product_name,  # Phase 9: Product product name
+            "product_gender": request.product_gender,  # Phase 9: Product gender\
             "selectedStyle": selected_style_config,  # PHASE 7: User-selected or LLM-inferred style
             "style_spec": None,
             "scenes": [],

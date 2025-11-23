@@ -355,7 +355,7 @@ def get_perfume_s3_path(brand_id: str, perfume_id: str) -> str:
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     
     **Returns:**
     - str: S3 path prefix (e.g., "brands/{brand_id}/perfumes/{perfume_id}/")
@@ -369,7 +369,7 @@ def get_campaign_s3_path(brand_id: str, perfume_id: str, campaign_id: str) -> st
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     
     **Returns:**
@@ -548,7 +548,7 @@ async def upload_perfume_image(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     - angle: Image angle ("front", "back", "top", "left", "right")
     - file_content: File bytes to upload
     - filename: Original filename (used to determine extension)
@@ -628,7 +628,7 @@ async def upload_draft_video(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - scene_index: Scene index (1-4)
@@ -710,7 +710,7 @@ async def upload_draft_music(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - file_path: Local file path to upload
@@ -787,7 +787,7 @@ async def upload_final_video(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Perfume UUID (as string)
+    - perfume_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - file_path: Local file path to upload
@@ -1223,7 +1223,7 @@ def get_scene_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Perfume UUID string
+    - perfume_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     - scene_index: Scene index (0-based)
@@ -1253,7 +1253,7 @@ def get_final_video_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Perfume UUID string
+    - perfume_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     
@@ -1282,7 +1282,7 @@ def get_audio_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Perfume UUID string
+    - perfume_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     

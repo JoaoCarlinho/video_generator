@@ -35,7 +35,7 @@ async def create_campaign(
     Create a new campaign for a perfume.
     
     **Request Body:**
-    - `perfume_id`: Perfume UUID (required)
+    - `perfume_id`: Product UUID (required)
     - `campaign_name`: Campaign name (2-200 chars, unique within perfume)
     - `creative_prompt`: Creative prompt (10-2000 chars)
     - `selected_style`: Video style ('gold_luxe', 'dark_elegance', 'romantic_floral')
@@ -47,7 +47,7 @@ async def create_campaign(
     
     **Raises:**
     - HTTPException 400: Invalid input data
-    - HTTPException 404: Perfume not found or doesn't belong to brand
+    - HTTPException 404: Product not found or doesn't belong to brand
     - HTTPException 409: Campaign name already exists for this perfume
     """
     try:
@@ -68,12 +68,12 @@ async def create_campaign(
         if not perfume:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Perfume not found"
+                detail="Product not found"
             )
         if perfume.brand_id != brand_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Perfume does not belong to authenticated brand"
+                detail="Product does not belong to authenticated brand"
             )
         logger.info(f"🔍 Verified perfume {perfume.perfume_id} belongs to brand {brand_id}")
         
@@ -123,7 +123,7 @@ async def create_campaign(
     description="Get paginated list of campaigns for a perfume. Verifies perfume ownership."
 )
 async def list_campaigns(
-    perfume_id: UUID = Query(..., description="Perfume ID"),
+    perfume_id: UUID = Query(..., description="Product ID"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page (1-100)"),
     brand_id: UUID = Depends(get_current_brand_id),
@@ -133,7 +133,7 @@ async def list_campaigns(
     Get paginated list of campaigns for a perfume.
     
     **Query Parameters:**
-    - `perfume_id`: Perfume UUID (required)
+    - `perfume_id`: Product UUID (required)
     - `page`: Page number (default: 1)
     - `limit`: Items per page (default: 20, max: 100)
     
@@ -141,7 +141,7 @@ async def list_campaigns(
     - PaginatedCampaigns: Paginated list with total count
     
     **Raises:**
-    - HTTPException 404: Perfume not found or doesn't belong to brand
+    - HTTPException 404: Product not found or doesn't belong to brand
     """
     try:
         # Verify perfume belongs to brand

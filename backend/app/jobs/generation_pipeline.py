@@ -16,8 +16,8 @@ REMOVED STEPS (Veo S3 handles natively):
 
 PERFUME-SPECIFIC FEATURES:
 - User-first creative approach (user vision = primary, grammar = secondary)
-- Perfume shot grammar as visual language library (not strict rules)
-- Perfume name extraction and storage
+- Product shot grammar as visual language library (not strict rules)
+- Product name extraction and storage
 - TikTok vertical optimization (9:16 hardcoded)
 
 S3-FIRST ARCHITECTURE:
@@ -175,14 +175,14 @@ class GenerationPipeline:
         
         self.product = get_product_by_id(self.db, self.campaign.product_id)
         if not self.product:
-            raise ValueError(f"Perfume {self.campaign.product_id} not found")
+            raise ValueError(f"Product {self.campaign.product_id} not found")
         
         logger.info(f"🔍 Loaded product {self.product.product_id}: brand_id={self.product.brand_id}")
         
         # Verify product belongs to campaign's brand
         if self.product.brand_id != self.campaign.brand_id:
-            logger.error(f"❌ CRITICAL: Perfume {self.product.product_id} brand_id {self.product.brand_id} doesn't match campaign brand_id {self.campaign.brand_id}")
-            raise ValueError(f"Perfume {self.product.product_id} does not belong to campaign's brand {self.campaign.brand_id}")
+            logger.error(f"❌ CRITICAL: Product {self.product.product_id} brand_id {self.product.brand_id} doesn't match campaign brand_id {self.campaign.brand_id}")
+            raise ValueError(f"Product {self.product.product_id} does not belong to campaign's brand {self.campaign.brand_id}")
         
         self.brand = get_brand_by_id(self.db, self.campaign.brand_id)
         if not self.brand:
@@ -246,7 +246,7 @@ class GenerationPipeline:
             
             # STEP 0 REMOVED: Reference image extraction (feature removed in Phase 2 B2B SaaS)
 
-            # STEP 1: Extract Product from Perfume Images
+            # STEP 1: Extract Product from Product Images
             product_url = None
             has_product = product.front_image_url is not None
             
@@ -640,8 +640,8 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.info(f"ScenePlanner chose style: {chosen_style} ({style_source})")
             
             # PHASE 8: Validate grammar compliance
-            from app.services.product_grammar_loader import PerfumeGrammarLoader
-            grammar_loader = PerfumeGrammarLoader()
+            from app.services.product_grammar_loader import ProductGrammarLoader
+            grammar_loader = ProductGrammarLoader()
             
             is_valid, violations = grammar_loader.validate_scene_plan(plan_scenes_list)
             
@@ -1155,7 +1155,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         
         Args:
             campaign: Campaign database object
-            product: Perfume database object
+            product: Product database object
             brand: Brand database object
             ad_project: AdProject schema object
             num_variations: Number of variations to generate (1-3)
@@ -1285,7 +1285,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             var_idx: Variation index (0-based)
             num_variations: Total number of variations
             campaign: Campaign database object
-            product: Perfume database object
+            product: Product database object
             brand: Brand database object
             ad_project: AdProject schema object
             product_url: Product image URL (if available)
@@ -1504,7 +1504,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         
         Args:
             campaign: Campaign database object
-            product: Perfume database object
+            product: Product database object
             brand: Brand database object
             campaign_json: Campaign JSON data
             

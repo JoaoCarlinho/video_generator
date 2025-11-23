@@ -16,7 +16,7 @@ class VideoStyle(Enum):
     MINIMAL_STUDIO = "minimal_studio"
     LIFESTYLE = "lifestyle"
     ANIMATED_2D = "2d_animated"
-    """Perfume video styles (3 user-selectable options)."""
+    """Product video styles (3 user-selectable options)."""
     GOLD_LUXE = "gold_luxe"
     DARK_ELEGANCE = "dark_elegance"
     ROMANTIC_FLORAL = "romantic_floral"

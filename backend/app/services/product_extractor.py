@@ -221,7 +221,7 @@ class ProductExtractor:
         Get perfume image URL for a specific angle with fallback to front image.
         
         Args:
-            perfume: Perfume database object with image URLs
+            perfume: Product database object with image URLs
             angle: Image angle ('front', 'back', 'top', 'left', 'right')
             
         Returns:
@@ -238,7 +238,7 @@ class ProductExtractor:
         elif angle == "right" and perfume.right_image_url:
             return perfume.right_image_url
         else:
-            logger.warning(f"Perfume {perfume.perfume_id} missing {angle} image, falling back to front")
+            logger.warning(f"Product {perfume.perfume_id} missing {angle} image, falling back to front")
             return perfume.front_image_url
 
     async def extract_perfume_for_campaign(self, campaign: Any, perfume: Any) -> str:
@@ -247,7 +247,7 @@ class ProductExtractor:
         
         Args:
             campaign: Campaign database object
-            perfume: Perfume database object
+            perfume: Product database object
             
         Returns:
             Local file path of extracted product PNG with transparent background
@@ -256,7 +256,7 @@ class ProductExtractor:
         front_image_url = self.get_perfume_image(perfume, "front")
         
         if not front_image_url:
-            raise ValueError(f"Perfume {perfume.perfume_id} missing required front image")
+            raise ValueError(f"Product {perfume.perfume_id} missing required front image")
         
         logger.info(f"Extracting perfume product from front image: {front_image_url}")
         

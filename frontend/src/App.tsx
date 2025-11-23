@@ -7,7 +7,7 @@ import SignupPage from './pages/Signup'
 import { Dashboard } from './pages/Dashboard'
 import { Landing } from './pages/Landing'
 import { Onboarding } from './pages/Onboarding'
-import { AddPerfume } from './pages/AddPerfume'
+import { AddProduct } from './pages/AddProduct'
 import { CampaignDashboard } from './pages/CampaignDashboard'
 import { CreateCampaign } from './pages/CreateCampaign'
 import { CreateProject } from './pages/CreateProject'
@@ -48,12 +48,12 @@ function App() {
             }
           />
           
-          {/* Perfume Routes */}
+          {/* Product Routes */}
           <Route
             path="/perfumes/add"
             element={
               <ProtectedRoute>
-                <AddPerfume />
+                <AddProduct />
               </ProtectedRoute>
             }
           />

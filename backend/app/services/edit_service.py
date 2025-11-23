@@ -48,7 +48,7 @@ class EditService:
 
 Given an original scene prompt and an edit instruction, modify the prompt to incorporate the changes while maintaining:
 1. The core scene concept and composition
-2. Perfume shot grammar rules (luxury, elegant, cinematic)
+2. Product shot grammar rules (luxury, elegant, cinematic)
 3. Overall style consistency with the campaign
 4. TikTok vertical (9:16) optimization
 5. User-first creative philosophy (honor the user's vision)
@@ -73,7 +73,7 @@ Edit Instruction: {edit_instruction}
 
 Context:
 - Scene Role: {scene_role}
-- Perfume: {perfume_name}
+- Product: {perfume_name}
 - Style Spec:
   - Lighting: {style_spec.get('lighting_direction', 'N/A')}
   - Camera: {style_spec.get('camera_style', 'N/A')}

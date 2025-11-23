@@ -1,4 +1,4 @@
-"""Compositor Service - Perfume bottle compositing onto TikTok vertical videos.
+"""Compositor Service - Product bottle compositing onto TikTok vertical videos.
 
 This service overlays extracted perfume bottle images onto background videos,
 positioning them with TikTok vertical safe zones (15-75% vertical space)
