@@ -1,6 +1,6 @@
 """Local filesystem storage utilities for local-first generation.
 
-Handles creation, management, and cleanup of local project directories.
+Handles creation, management, and cleanup of local campaign directories.
 All intermediate and final videos stored locally until user finalizes.
 """
 
@@ -18,73 +18,73 @@ LOCAL_STORAGE_ROOT = os.getenv('LOCAL_STORAGE_PATH', '/tmp/genads')
 
 
 class LocalStorageManager:
-    """Manage local project storage directories and files."""
+    """Manage local campaign storage directories and files."""
     
     @staticmethod
-    def get_project_root(project_id: UUID) -> Path:
-        """Get root directory for a project.
+    def get_campaign_root(campaign_id: UUID) -> Path:
+        """Get root directory for a campaign.
         
         Structure:
-        /tmp/genads/{project_id}/
+        /tmp/genads/{campaign_id}/
         ├── input/          # User uploaded files
         ├── drafts/         # Intermediate/draft videos
         └── final/          # Final videos (ready for S3)
         """
-        return Path(LOCAL_STORAGE_ROOT) / str(project_id)
+        return Path(LOCAL_STORAGE_ROOT) / str(campaign_id)
     
     @staticmethod
-    def get_input_dir(project_id: UUID) -> Path:
+    def get_input_dir(campaign_id: UUID) -> Path:
         """Get input files directory (user uploads)."""
-        return LocalStorageManager.get_project_root(project_id) / 'input'
+        return LocalStorageManager.get_campaign_root(campaign_id) / 'input'
     
     @staticmethod
-    def get_drafts_dir(project_id: UUID) -> Path:
+    def get_drafts_dir(campaign_id: UUID) -> Path:
         """Get drafts directory (intermediate videos)."""
-        return LocalStorageManager.get_project_root(project_id) / 'drafts'
+        return LocalStorageManager.get_campaign_root(campaign_id) / 'drafts'
     
     @staticmethod
-    def get_final_dir(project_id: UUID) -> Path:
+    def get_final_dir(campaign_id: UUID) -> Path:
         """Get final videos directory."""
-        return LocalStorageManager.get_project_root(project_id) / 'final'
+        return LocalStorageManager.get_campaign_root(campaign_id) / 'final'
     
     @staticmethod
-    def initialize_project_storage(project_id: UUID) -> Dict[str, str]:
-        """Create directory structure for a project.
+    def initialize_campaign_storage(campaign_id: UUID) -> Dict[str, str]:
+        """Create directory structure for a campaign.
         
         Returns:
             Dict with paths to subdirectories
         """
         try:
-            input_dir = LocalStorageManager.get_input_dir(project_id)
-            drafts_dir = LocalStorageManager.get_drafts_dir(project_id)
-            final_dir = LocalStorageManager.get_final_dir(project_id)
+            input_dir = LocalStorageManager.get_input_dir(campaign_id)
+            drafts_dir = LocalStorageManager.get_drafts_dir(campaign_id)
+            final_dir = LocalStorageManager.get_final_dir(campaign_id)
             
             # Create all directories
             input_dir.mkdir(parents=True, exist_ok=True)
             drafts_dir.mkdir(parents=True, exist_ok=True)
             final_dir.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"✅ Initialized local storage for project {project_id}")
+            logger.info(f"✅ Initialized local storage for campaign {campaign_id}")
             logger.info(f"   Input: {input_dir}")
             logger.info(f"   Drafts: {drafts_dir}")
             logger.info(f"   Final: {final_dir}")
             
             return {
-                'project_root': str(LocalStorageManager.get_project_root(project_id)),
+                'campaign_root': str(LocalStorageManager.get_campaign_root(campaign_id)),
                 'input_dir': str(input_dir),
                 'drafts_dir': str(drafts_dir),
                 'final_dir': str(final_dir)
             }
         except Exception as e:
-            logger.error(f"❌ Failed to initialize local storage for {project_id}: {e}")
+            logger.error(f"❌ Failed to initialize local storage for {campaign_id}: {e}")
             raise
     
     @staticmethod
-    def save_input_file(project_id: UUID, filename: str, file_content: bytes) -> str:
+    def save_input_file(campaign_id: UUID, filename: str, file_content: bytes) -> str:
         """Save user-uploaded file to input directory.
         
         Args:
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             filename: Original filename
             file_content: File bytes
             
@@ -92,7 +92,7 @@ class LocalStorageManager:
             Local file path
         """
         try:
-            input_dir = LocalStorageManager.get_input_dir(project_id)
+            input_dir = LocalStorageManager.get_input_dir(campaign_id)
             file_path = input_dir / filename
             
             file_path.write_bytes(file_content)
@@ -104,11 +104,11 @@ class LocalStorageManager:
             raise
     
     @staticmethod
-    def save_draft_file(project_id: UUID, filename: str, file_path_or_bytes) -> str:
+    def save_draft_file(campaign_id: UUID, filename: str, file_path_or_bytes) -> str:
         """Save intermediate/draft file.
         
         Args:
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             filename: Filename in drafts folder
             file_path_or_bytes: Either a Path to copy from, or bytes to write
             
@@ -116,7 +116,7 @@ class LocalStorageManager:
             Local file path
         """
         try:
-            drafts_dir = LocalStorageManager.get_drafts_dir(project_id)
+            drafts_dir = LocalStorageManager.get_drafts_dir(campaign_id)
             dest_path = drafts_dir / filename
             
             if isinstance(file_path_or_bytes, (str, Path)):
@@ -133,11 +133,11 @@ class LocalStorageManager:
             raise
     
     @staticmethod
-    def save_final_video(project_id: UUID, aspect_ratio: str, file_path: str, variation_index: int = None) -> str:
+    def save_final_video(campaign_id: UUID, aspect_ratio: str, file_path: str, variation_index: int = None) -> str:
         """Save final video.
         
         Args:
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             aspect_ratio: '16:9'
             file_path: Path to video file to save
             variation_index: Optional variation index (0, 1, 2) for multi-variation support
@@ -146,7 +146,7 @@ class LocalStorageManager:
             Local file path in final directory
         """
         try:
-            final_dir = LocalStorageManager.get_final_dir(project_id)
+            final_dir = LocalStorageManager.get_final_dir(campaign_id)
             
             # Save with variation index if provided (for multi-variation support)
             if variation_index is not None:
@@ -174,20 +174,20 @@ class LocalStorageManager:
             return 0
     
     @staticmethod
-    def get_project_storage_size(project_id: UUID) -> int:
-        """Get total size of all files for a project.
+    def get_campaign_storage_size(campaign_id: UUID) -> int:
+        """Get total size of all files for a campaign.
         
         Returns:
             Total size in bytes
         """
         try:
-            project_root = LocalStorageManager.get_project_root(project_id)
+            campaign_root = LocalStorageManager.get_campaign_root(campaign_id)
             
-            if not project_root.exists():
+            if not campaign_root.exists():
                 return 0
             
             total_size = 0
-            for dirpath, dirnames, filenames in os.walk(project_root):
+            for dirpath, dirnames, filenames in os.walk(campaign_root):
                 for filename in filenames:
                     file_path = os.path.join(dirpath, filename)
                     if os.path.exists(file_path):
@@ -199,32 +199,32 @@ class LocalStorageManager:
             return 0
     
     @staticmethod
-    def cleanup_project_storage(project_id: UUID) -> bool:
-        """Delete all local files for a project.
+    def cleanup_campaign_storage(campaign_id: UUID) -> bool:
+        """Delete all local files for a campaign.
         
         Called after finalizing and uploading to S3.
         
         Args:
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             
         Returns:
             True if cleanup successful
         """
         try:
-            project_root = LocalStorageManager.get_project_root(project_id)
+            campaign_root = LocalStorageManager.get_campaign_root(campaign_id)
             
-            if project_root.exists():
-                size_before = LocalStorageManager.get_project_storage_size(project_id)
-                shutil.rmtree(project_root)
+            if campaign_root.exists():
+                size_before = LocalStorageManager.get_campaign_storage_size(campaign_id)
+                shutil.rmtree(campaign_root)
                 
-                logger.info(f"✅ Cleaned up local storage for project {project_id}")
+                logger.info(f"✅ Cleaned up local storage for campaign {campaign_id}")
                 logger.info(f"   Freed {size_before / 1024 / 1024:.1f} MB")
                 return True
             else:
-                logger.warning(f"⚠️ Project storage already deleted: {project_root}")
+                logger.warning(f"⚠️ Campaign storage already deleted: {campaign_root}")
                 return True
         except Exception as e:
-            logger.error(f"❌ Failed to cleanup project storage: {e}")
+            logger.error(f"❌ Failed to cleanup campaign storage: {e}")
             return False
     
     @staticmethod

@@ -53,7 +53,7 @@ class AudioEngine:
     async def generate_perfume_background_music(
         self,
         duration: float,
-        project_id: str,
+        campaign_id: str,
         gender: str = "unisex",  # 'masculine', 'feminine', 'unisex'
     ) -> str:
         """
@@ -61,11 +61,11 @@ class AudioEngine:
 
         Args:
             duration: Music duration in seconds
-            project_id: Project UUID for local storage
+            campaign_id: Campaign UUID for local storage
             gender: Product gender ('masculine', 'feminine', 'unisex')
 
         Returns:
-            Local file path to music file (in /tmp/genads/{project_id}/drafts/)
+            Local file path to music file (in /tmp/genads/{campaign_id}/drafts/)
         """
         logger.info(f"🎵 Generating luxury perfume music ({duration}s, {gender})...")
 
@@ -77,7 +77,7 @@ class AudioEngine:
             music_url = await self._call_musicgen_model(prompt, duration)
 
             # Download and save to local storage
-            local_path = await self._save_music_locally(music_url, project_id, "luxury_perfume")
+            local_path = await self._save_music_locally(music_url, campaign_id, "luxury_perfume")
 
             logger.info(f"✅ Generated perfume music saved locally: {local_path}")
             return local_path
@@ -90,7 +90,7 @@ class AudioEngine:
         self,
         mood: str,
         duration: float,
-        project_id: str,
+        campaign_id: str,
         tempo: str = "moderate",
     ) -> str:
         """
@@ -102,11 +102,11 @@ class AudioEngine:
         Args:
             mood: Music mood/genre (e.g., "uplifting", "energetic", "calm", "modern")
             duration: Music duration in seconds
-            project_id: Project UUID for local storage
+            campaign_id: Campaign UUID for local storage
             tempo: Tempo description ("slow", "moderate", "fast")
 
         Returns:
-            Local file path to music file (in /tmp/genads/{project_id}/drafts/)
+            Local file path to music file (in /tmp/genads/{campaign_id}/drafts/)
         """
         logger.info(f"🎵 Generating {mood} background music ({duration}s)...")
 
@@ -118,7 +118,7 @@ class AudioEngine:
             music_url = await self._call_musicgen_model(prompt, duration)
 
             # Download and save to local storage
-            local_path = await self._save_music_locally(music_url, project_id, mood)
+            local_path = await self._save_music_locally(music_url, campaign_id, mood)
 
             logger.info(f"✅ Generated music saved locally: {local_path}")
             return local_path
@@ -298,16 +298,16 @@ class AudioEngine:
             raise last_exception
         raise RuntimeError("Failed to generate music after retries")
 
-    async def _save_music_locally(self, music_url: str, project_id: str, mood: str) -> str:
+    async def _save_music_locally(self, music_url: str, campaign_id: str, mood: str) -> str:
         """Download music from Replicate and save to local storage.
         
         Args:
             music_url: URL of music file from Replicate
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             mood: Music mood (for filename)
             
         Returns:
-            Local file path (in /tmp/genads/{project_id}/drafts/music.mp3)
+            Local file path (in /tmp/genads/{campaign_id}/drafts/music.mp3)
         """
         try:
             logger.info(f"⬇️ Downloading music from Replicate...")
@@ -325,11 +325,11 @@ class AudioEngine:
             from app.utils.local_storage import LocalStorageManager
             from uuid import UUID
             
-            project_uuid = UUID(project_id)
+            campaign_uuid = UUID(campaign_id)
             filename = "music.mp3"
             
             local_path = LocalStorageManager.save_draft_file(
-                project_uuid,
+                campaign_uuid,
                 filename,
                 audio_data
             )
@@ -345,7 +345,7 @@ class AudioEngine:
         self,
         moods: list,
         duration: float,
-        project_id: str,
+        campaign_id: str,
     ) -> dict:
         """
         Generate multiple music variants.
@@ -353,7 +353,7 @@ class AudioEngine:
         Args:
             moods: List of moods to generate
             duration: Duration for each
-            project_id: Project ID
+            campaign_id: Campaign ID
 
         Returns:
             Dict mapping mood to S3 URL
@@ -367,7 +367,7 @@ class AudioEngine:
                 url = await self.generate_background_music(
                     mood=mood,
                     duration=duration,
-                    project_id=project_id,
+                    campaign_id=campaign_id,
                 )
                 variants[mood] = url
             except Exception as e:

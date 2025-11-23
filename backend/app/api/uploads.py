@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.api.auth import get_current_user_id
 from app.config import settings
-from app.database.crud import get_project
+from app.database.crud import get_campaign
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,25 +27,25 @@ class UploadResponse(BaseModel):
 async def upload_asset(
     file: UploadFile = File(...),
     asset_type: str = Form(...),  # 'product', 'logo', 'guidelines'
-    project_id: Optional[str] = Form(None),
+    campaign_id: Optional[str] = Form(None),
     authorization: Optional[str] = Header(None)
 ):
     """
     Upload an asset file (product image, logo, or guidelines) to S3.
 
-    Files are uploaded to: s3://bucket/projects/{project_id}/input/{asset_type}/
+    Files are uploaded to: s3://bucket/campaigns/{campaign_id}/input/{asset_type}/
 
     Args:
         file: The file to upload
         asset_type: Type of asset ('product', 'logo', 'guidelines')
-        project_id: Optional project ID (if not provided, uses 'temp')
+        campaign_id: Optional campaign ID (if not provided, uses 'temp')
         authorization: JWT token for authentication
 
     Returns:
         S3 URL where the file was saved
     """
     try:
-        from app.utils.s3_utils import upload_to_project_folder
+        from app.utils.s3_utils import upload_to_campaign_folder
 
         # Get user ID from auth token
         user_id = get_current_user_id(authorization)
@@ -65,11 +65,11 @@ async def upload_asset(
         # Upload to S3
         # Map asset types to S3 subfolders
         subfolder = f"input/{asset_type}"
-        proj_id = project_id if project_id else user_id  # Use user_id for temp uploads
+        proj_id = campaign_id if campaign_id else user_id  # Use user_id for temp uploads
 
-        s3_result = await upload_to_project_folder(
+        s3_result = await upload_to_campaign_folder(
             file_content=contents,
-            project_id=str(proj_id),
+            campaign_id=str(proj_id),
             subfolder=subfolder,
             filename=unique_filename
         )
@@ -86,40 +86,40 @@ async def upload_asset(
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
 
-@router.delete("/cleanup-project/{project_id}", summary="Cleanup project temporary files")
-async def cleanup_project_files(
-    project_id: str,
+@router.delete("/cleanup-campaign/{campaign_id}", summary="Cleanup campaign temporary files")
+async def cleanup_campaign_files(
+    campaign_id: str,
     authorization: Optional[str] = Header(None)
 ):
     """
-    Delete all temporary files for a project.
-    Called after video generation completes or project is deleted.
+    Delete all temporary files for a campaign.
+    Called after video generation completes or campaign is deleted.
     """
     try:
         user_id = get_current_user_id(authorization)
         
-        project_dir = UPLOAD_BASE_DIR / str(user_id) / project_id
+        campaign_dir = UPLOAD_BASE_DIR / str(user_id) / campaign_id
         
-        if not project_dir.exists():
+        if not campaign_dir.exists():
             return {"message": "No files to cleanup", "deleted_count": 0}
         
         # Count and delete all files
         deleted_count = 0
-        for file_path in project_dir.rglob("*"):
+        for file_path in campaign_dir.rglob("*"):
             if file_path.is_file():
                 file_path.unlink()
                 deleted_count += 1
         
         # Remove empty directories
-        for dir_path in sorted(project_dir.rglob("*"), reverse=True):
+        for dir_path in sorted(campaign_dir.rglob("*"), reverse=True):
             if dir_path.is_dir() and not any(dir_path.iterdir()):
                 dir_path.rmdir()
         
-        # Remove project directory
-        if project_dir.exists():
-            project_dir.rmdir()
+        # Remove campaign directory
+        if campaign_dir.exists():
+            campaign_dir.rmdir()
         
-        logger.info(f"✅ Cleaned up {deleted_count} files for project {project_id}")
+        logger.info(f"✅ Cleaned up {deleted_count} files for campaign {campaign_id}")
         return {"message": f"Cleaned up {deleted_count} files", "deleted_count": deleted_count}
         
     except Exception as e:
@@ -132,9 +132,9 @@ class ReferenceImageUploadResponse(BaseModel):
     message: str
 
 
-@router.post("/projects/{project_id}/reference-image", response_model=ReferenceImageUploadResponse)
+@router.post("/campaigns/{campaign_id}/reference-image", response_model=ReferenceImageUploadResponse)
 async def upload_reference_image(
-    project_id: str,
+    campaign_id: str,
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(None)
 ):
@@ -145,7 +145,7 @@ async def upload_reference_image(
     to extract visual style (colors, lighting, mood, camera, atmosphere, texture).
     
     Args:
-        project_id: Project UUID
+        campaign_id: Campaign UUID
         file: Reference image file (JPEG, PNG)
         authorization: JWT token
         
@@ -163,7 +163,7 @@ async def upload_reference_image(
         
         # Get user ID
         user_id = get_current_user_id(authorization)
-        logger.info(f"📤 Uploading reference image for project {project_id}")
+        logger.info(f"📤 Uploading reference image for campaign {campaign_id}")
         
         # Validate file size (max 5MB)
         MAX_SIZE = 5 * 1024 * 1024
@@ -176,14 +176,14 @@ async def upload_reference_image(
         if file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP files allowed")
         
-        # Get project to verify ownership
+        # Get campaign to verify ownership
         db_gen = get_db()
         session = next(db_gen)
         try:
-            project = get_project(session, project_id)
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-            if project.user_id != user_id:
+            campaign = get_campaign(session, campaign_id)
+            if not campaign:
+                raise HTTPException(status_code=404, detail="Campaign not found")
+            if campaign.user_id != user_id:
                 raise HTTPException(status_code=403, detail="Unauthorized")
         finally:
             try:
@@ -191,32 +191,32 @@ async def upload_reference_image(
             except StopIteration:
                 pass
         
-        # Create project input directory
-        project_input_dir = UPLOAD_BASE_DIR / str(project_id) / "input"
-        project_input_dir.mkdir(parents=True, exist_ok=True)
+        # Create campaign input directory
+        campaign_input_dir = UPLOAD_BASE_DIR / str(campaign_id) / "input"
+        campaign_input_dir.mkdir(parents=True, exist_ok=True)
         
         # Save reference image
-        reference_image_path = project_input_dir / "reference_image.jpg"
+        reference_image_path = campaign_input_dir / "reference_image.jpg"
         reference_image_path.write_bytes(file_content)
         
         logger.info(f"✅ Saved reference image: {reference_image_path}")
         
-        # Update project JSON with reference image path
+        # Update campaign JSON with reference image path
         db_gen = get_db()
         session = next(db_gen)
         try:
-            project = get_project(session, project_id)
+            campaign = get_campaign(session, campaign_id)
             
-            if project.ad_project_json is None:
-                project.ad_project_json = {}
+            if campaign.ad_campaign_json is None:
+                campaign.ad_campaign_json = {}
             
-            project.ad_project_json["referenceImage"] = {
+            campaign.ad_campaign_json["referenceImage"] = {
                 "localPath": str(reference_image_path),
                 "uploadedAt": datetime.now().isoformat(),
             }
             
             session.commit()
-            logger.info(f"✅ Updated project JSON with reference image path")
+            logger.info(f"✅ Updated campaign JSON with reference image path")
         finally:
             try:
                 next(db_gen)

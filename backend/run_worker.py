@@ -16,7 +16,7 @@ The worker will:
 1. Connect to Redis
 2. Listen on the 'generation' queue
 3. Process video generation jobs
-4. Update project status in database
+4. Update campaign status in database
 
 Requirements:
 - Redis running (local or via Railway)

@@ -1,6 +1,6 @@
 /**
  * Hook for uploading and managing reference images
- * Handles the upload process to POST /api/projects/{projectId}/reference-image
+ * Handles the upload process to POST /api/campaigns/{campaignId}/reference-image
  */
 
 import { useState } from 'react'
@@ -9,7 +9,7 @@ import api from '@/services/api'
 interface UseReferenceImageReturn {
   isLoading: boolean
   error: string | null
-  uploadReferenceImage: (file: File, projectId: string) => Promise<boolean>
+  uploadReferenceImage: (file: File, campaignId: string) => Promise<boolean>
   clearError: () => void
 }
 
@@ -17,7 +17,7 @@ export function useReferenceImage(): UseReferenceImageReturn {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const uploadReferenceImage = async (file: File, projectId: string): Promise<boolean> => {
+  const uploadReferenceImage = async (file: File, campaignId: string): Promise<boolean> => {
     setIsLoading(true)
     setError(null)
 
@@ -42,7 +42,7 @@ export function useReferenceImage(): UseReferenceImageReturn {
 
       // Upload to backend endpoint
       const response = await api.post(
-        `/api/projects/${projectId}/reference-image`,
+        `/api/campaigns/${campaignId}/reference-image`,
         formData,
         {
           headers: {

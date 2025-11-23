@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
-import { ProjectCard } from '@/components/PageComponents/CampaignCard'
+import { CampaignCard } from '@/components/PageComponents/CampaignCard'
 import { useAuth } from '@/hooks/useAuth'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { useCreatives } from '@/hooks/useCreatives'
@@ -219,7 +219,7 @@ export const CreativeDashboard = () => {
                 >
                   {creatives.map((creative) => (
                     <motion.div key={creative.id} variants={itemVariants} className="relative group">
-                      <ProjectCard
+                      <CampaignCard
                         id={creative.id}
                         title={creative.title}
                         brief={creative.brief}

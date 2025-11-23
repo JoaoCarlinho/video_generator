@@ -21,14 +21,14 @@ export const useGeneration = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Trigger generation for project (legacy)
-  const generateVideo = useCallback(async (projectId: string) => {
+  // Trigger generation for campaign (legacy)
+  const generateVideo = useCallback(async (campaignId: string) => {
     setLoading(true)
     setError(null)
 
     try {
       const response = await apiClient.post(
-        `/api/generation/projects/${projectId}/generate/`
+        `/api/generation/campaigns/${campaignId}/generate/`
       )
       return response.data
     } catch (err: any) {
@@ -71,11 +71,11 @@ export const useGeneration = () => {
     }
   }, [])
 
-  // Get generation progress for project (legacy)
-  const getProgress = useCallback(async (projectId: string, signal?: AbortSignal) => {
+  // Get generation progress for campaign (legacy)
+  const getProgress = useCallback(async (campaignId: string, signal?: AbortSignal) => {
     try {
       const response = await apiClient.get(
-        `/api/generation/projects/${projectId}/progress`, // Removed trailing slash to prevent redirect loop
+        `/api/generation/campaigns/${campaignId}/progress`, // Removed trailing slash to prevent redirect loop
         { signal, timeout: 10000 } // 10 second timeout
       )
       return response.data as GenerationProgress
@@ -124,12 +124,12 @@ export const useGeneration = () => {
   }, [])
 
   // Cancel generation
-  const cancelGeneration = useCallback(async (projectId: string) => {
+  const cancelGeneration = useCallback(async (campaignId: string) => {
     setLoading(true)
     setError(null)
 
     try {
-      await apiClient.post(`/api/generation/projects/${projectId}/cancel/`)
+      await apiClient.post(`/api/generation/campaigns/${campaignId}/cancel/`)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to cancel generation'
       setError(message)
@@ -139,15 +139,15 @@ export const useGeneration = () => {
     }
   }, [])
 
-  // Reset project
-  const resetProject = useCallback(async (projectId: string) => {
+  // Reset campaign
+  const resetCampaign = useCallback(async (campaignId: string) => {
     setLoading(true)
     setError(null)
 
     try {
-      await apiClient.post(`/api/generation/projects/${projectId}/reset/`)
+      await apiClient.post(`/api/generation/campaigns/${campaignId}/reset/`)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to reset project'
+      const message = err instanceof Error ? err.message : 'Failed to reset campaign'
       setError(message)
       throw err
     } finally {
@@ -156,13 +156,13 @@ export const useGeneration = () => {
   }, [])
 
   // Select variation (Phase 4: Multi-variation feature)
-  const selectVariation = useCallback(async (projectId: string, variationIndex: number) => {
+  const selectVariation = useCallback(async (campaignId: string, variationIndex: number) => {
     setLoading(true)
     setError(null)
 
     try {
       const response = await apiClient.post(
-        `/api/generation/projects/${projectId}/select-variation`,
+        `/api/generation/campaigns/${campaignId}/select-variation`,
         { variation_index: variationIndex }
       )
       return response.data
@@ -184,7 +184,7 @@ export const useGeneration = () => {
     getCampaignProgress,
     getJobStatus,
     cancelGeneration,
-    resetProject,
+    resetCampaign,
     selectVariation,
   }
 }

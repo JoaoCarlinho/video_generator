@@ -107,7 +107,7 @@ class TextOverlayRenderer:
         font_size: int = 48,
         color: str = "white",
         animation: str = "fade_in",
-        project_id: str = "",
+        campaign_id: str = "",
         scene_index: int = 0,
         font_preset: Optional[Dict[str, Any]] = None,
         variation_index: Optional[int] = None,
@@ -124,7 +124,7 @@ class TextOverlayRenderer:
             font_size: Font size in pixels
             color: Text color (hex or named color)
             animation: Animation type ("fade_in", "slide", "none")
-            project_id: Project UUID for local path
+            campaign_id: Campaign UUID for local path
             scene_index: Scene index for unique filenames
             font_preset: Optional luxury font preset dict (for perfume ads)
 
@@ -155,7 +155,7 @@ class TextOverlayRenderer:
                 )
 
                 # Save locally
-                local_path = await self._save_video_locally(output_path, project_id, scene_index, variation_index)
+                local_path = await self._save_video_locally(output_path, campaign_id, scene_index, variation_index)
 
                 logger.info(f"✅ Text overlay added: {local_path}")
                 return local_path
@@ -168,7 +168,7 @@ class TextOverlayRenderer:
         self,
         video_url: str,
         overlays: list,
-        project_id: str = "",
+        campaign_id: str = "",
     ) -> str:
         """
         Add multiple text overlays to video sequentially.
@@ -176,7 +176,7 @@ class TextOverlayRenderer:
         Args:
             video_url: S3 URL of base video
             overlays: List of overlay dicts with text, position, etc.
-            project_id: Project UUID
+            campaign_id: Campaign UUID
 
         Returns:
             S3 URL of video with all overlays
@@ -197,7 +197,7 @@ class TextOverlayRenderer:
                 font_size=overlay.get("font_size", 48),
                 color=overlay.get("color", "white"),
                 animation=overlay.get("animation", "fade_in"),
-                project_id=project_id,
+                campaign_id=campaign_id,
             )
 
         logger.info(f"✅ All {len(overlays)} overlays added")
@@ -229,7 +229,7 @@ class TextOverlayRenderer:
         position: str = "bottom",
         duration: float = 2.0,
         start_time: float = 0.0,
-        project_id: str = "",
+        campaign_id: str = "",
         scene_index: int = 0,
         variation_index: Optional[int] = None,
     ) -> str:
@@ -249,7 +249,7 @@ class TextOverlayRenderer:
             position: Text position ("center" or "bottom" only)
             duration: How long text displays (seconds, 2-4s recommended)
             start_time: When text appears (seconds into video)
-            project_id: Project UUID for local path
+            campaign_id: Campaign UUID for local path
             scene_index: Scene index for unique filenames
             
         Returns:
@@ -285,7 +285,7 @@ class TextOverlayRenderer:
             font_size=font_size,
             color="#FFFFFF",  # White for luxury contrast
             animation="fade_in",  # Fade-in/out only
-            project_id=project_id,
+            campaign_id=campaign_id,
             scene_index=scene_index,
             font_preset=font_preset,  # Pass preset for font file
             variation_index=variation_index,  # Pass variation index
@@ -520,13 +520,13 @@ class TextOverlayRenderer:
 
         return drawtext_filter
 
-    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
+    async def _save_video_locally(self, video_path: Path, campaign_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
         """Save video to local filesystem."""
         try:
             import shutil
             
-            # Create directory structure: /tmp/genads/{project_id}/draft/text_overlays/
-            save_dir = Path(f"/tmp/genads/{project_id}/draft/text_overlays")
+            # Create directory structure: /tmp/genads/{campaign_id}/draft/text_overlays/
+            save_dir = Path(f"/tmp/genads/{campaign_id}/draft/text_overlays")
             save_dir.mkdir(parents=True, exist_ok=True)
 
             # Copy to permanent location with descriptive name (include variation index if provided)

@@ -11,7 +11,7 @@ This module contains all backend services for video generation:
 8. ReferenceImageStyleExtractor - Extract visual style from reference images
 """
 
-from .scene_planner import ScenePlanner, AdProjectPlan, Scene, StyleSpec, TextOverlay
+from .scene_planner import ScenePlanner, AdCampaignPlan, Scene, StyleSpec, TextOverlay
 from .video_generator import VideoGenerator
 from .audio_engine import AudioEngine
 from .reference_image_extractor import ReferenceImageStyleExtractor, ExtractedStyle
@@ -35,7 +35,7 @@ except (ImportError, AttributeError) as e:
 __all__ = [
     # Scene Planning
     "ScenePlanner",
-    "AdProjectPlan",
+    "AdCampaignPlan",
     "Scene",
     "StyleSpec",
     "TextOverlay",

@@ -31,7 +31,7 @@ export function useStyleSelector() {
     const loadStyles = async () => {
       try {
         setIsLoading(true);
-        const response = await api.get('/api/projects/styles/available');
+        const response = await api.get('/api/campaigns/styles/available');
         
         if (response.data && response.data.styles) {
           setStyles(response.data.styles);

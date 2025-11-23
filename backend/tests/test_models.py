@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from app.database.models import Base, Brand, Product, Project
+from app.database.models import Base, Brand, Product, Campaign
 
 
 @pytest.fixture(scope="function")
@@ -172,13 +172,13 @@ class TestSchemaDefinition:
         # Verify all model classes exist
         assert Brand is not None
         assert Product is not None
-        assert Project is not None
+        assert Campaign is not None
 
     def test_table_names_correct(self):
         """Test that all tables have correct names."""
         assert Brand.__tablename__ == "brands"
         assert Product.__tablename__ == "products"
-        assert Project.__tablename__ == "projects"
+        assert Campaign.__tablename__ == "campaigns"
 
     def test_brand_has_required_columns(self):
         """Test that Brand has all required columns."""

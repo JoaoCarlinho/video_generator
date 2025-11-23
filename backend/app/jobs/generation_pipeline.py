@@ -44,7 +44,7 @@ from app.database.crud import (
     get_brand_by_id,
     update_campaign,
 )
-from app.models.schemas import AdProject, Scene, StyleSpec
+from app.models.schemas import AdCampaign, Scene, StyleSpec
 from app.services.scene_planner import ScenePlanner
 from app.services.product_extractor import ProductExtractor
 from app.services.video_generator import VideoGenerator
@@ -220,9 +220,9 @@ class GenerationPipeline:
             # Initialize local storage (using campaign_id)
             logger.info("Initializing local storage...")
             try:
-                local_paths = LocalStorageManager.initialize_project_storage(self.campaign_id)
+                local_paths = LocalStorageManager.initialize_campaign_storage(self.campaign_id)
                 self.local_paths = local_paths
-                storage_info = LocalStorageManager.get_project_storage_size(self.campaign_id)
+                storage_info = LocalStorageManager.get_campaign_storage_size(self.campaign_id)
                 logger.info(f"Local storage initialized: {self.local_paths}")
             except Exception as e:
                 logger.error(f"Failed to initialize local storage: {e}")
@@ -241,8 +241,8 @@ class GenerationPipeline:
             if 'video_metadata' not in campaign_json:
                 campaign_json['video_metadata'] = {}
             
-            # Build AdProject from campaign data
-            ad_project = self._build_ad_project_from_campaign(campaign, product, brand, campaign_json)
+            # Build AdCampaign from campaign data
+            ad_campaign = self._build_ad_campaign_from_campaign(campaign, product, brand, campaign_json)
             
             # STEP 0 REMOVED: Reference image extraction (feature removed in Phase 2 B2B SaaS)
 
@@ -272,16 +272,16 @@ class GenerationPipeline:
                 # Multi-variation flow: Generate N scene plan variations
                 logger.info(f"Generating {num_variations} scene plan variations...")
                 scene_variations = await self._plan_scenes_variations(
-                    campaign, product, brand, ad_project, num_variations, progress_start=planning_start
+                    campaign, product, brand, ad_campaign, num_variations, progress_start=planning_start
                 )
-                # Use first variation's ad_project for metadata (all variations share same brand/product info)
-                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
-                await self._plan_scenes(campaign, product, brand, ad_project, progress_start=planning_start)
+                # Use first variation's ad_campaign for metadata (all variations share same brand/product info)
+                # _plan_scenes modifies ad_campaign in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, product, brand, ad_campaign, progress_start=planning_start)
             else:
                 # Single variation flow (existing behavior)
-                # _plan_scenes modifies ad_project in place, so we don't need to recreate it
-                await self._plan_scenes(campaign, product, brand, ad_project, progress_start=planning_start)
-                scene_variations = [ad_project.scenes]
+                # _plan_scenes modifies ad_campaign in place, so we don't need to recreate it
+                await self._plan_scenes(campaign, product, brand, ad_campaign, progress_start=planning_start)
+                scene_variations = [ad_campaign.scenes]
 
             # STEP 3-7: Process all variations IN PARALLEL
             logger.info(f"Processing {num_variations} variations in parallel...")
@@ -293,7 +293,7 @@ class GenerationPipeline:
                     campaign=campaign,
                     product=product,
                     brand=brand,
-                    ad_project=ad_project,
+                    ad_campaign=ad_campaign,
                     product_url=product_url,
                     has_product=has_product,
                     progress_start=planning_start + 5,
@@ -384,7 +384,7 @@ class GenerationPipeline:
             # Cleanup partial files
             try:
                 logger.info("Attempting to cleanup partial files...")
-                LocalStorageManager.cleanup_project_storage(self.campaign_id)
+                LocalStorageManager.cleanup_campaign_storage(self.campaign_id)
                 logger.info("Cleanup completed")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup storage: {cleanup_error}")
@@ -500,8 +500,8 @@ class GenerationPipeline:
             return s3_urls
             
             product_url = await extractor.extract_product(
-                image_url=ad_project.product_asset.original_url,
-                project_id=str(self.project_id),
+                image_url=ad_campaign.product_asset.original_url,
+                campaign_id=str(self.campaign_id),
             )
 
             logger.info(f"✅ Product extracted: {product_url}")
@@ -512,7 +512,7 @@ class GenerationPipeline:
             raise
 
     @timed_step("Scene Planning")
-    async def _plan_scenes(self, campaign: Any, product: Any, brand: Any, ad_project: AdProject, progress_start: int = 15) -> Dict[str, Any]:
+    async def _plan_scenes(self, campaign: Any, product: Any, brand: Any, ad_campaign: AdCampaign, progress_start: int = 15) -> Dict[str, Any]:
         """Plan product scenes using LLM with shot grammar constraints."""
         try:
             update_campaign(
@@ -553,7 +553,7 @@ class GenerationPipeline:
                     
                     extracted_guidelines = await extractor.extract_guidelines(
                         guidelines_url=guidelines_url,
-                        brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else ''
+                        brand_name=ad_campaign.brand.get('name', '') if isinstance(ad_campaign.brand, dict) else ''
                     )
                     
                     if extracted_guidelines:
@@ -561,9 +561,9 @@ class GenerationPipeline:
                             f"Extracted guidelines: {len(extracted_guidelines.color_palette)} colors, "
                             f"tone='{extracted_guidelines.tone_of_voice}'"
                         )
-                        if ad_project.video_metadata is None:
-                            ad_project.video_metadata = {}
-                        ad_project.video_metadata['extractedGuidelines'] = extracted_guidelines.to_dict()
+                        if ad_campaign.video_metadata is None:
+                            ad_campaign.video_metadata = {}
+                        ad_campaign.video_metadata['extractedGuidelines'] = extracted_guidelines.to_dict()
                     else:
                         logger.warning("Guidelines extraction returned None, continuing without")
                     
@@ -648,11 +648,11 @@ BRAND GUIDELINES (extracted from guidelines document):
             if not is_valid:
                 logger.warning(f"⚠️ Grammar violations detected: {violations}")
 
-            # Update ad_project with scenes and style spec from plan
-            # Convert plan scenes to AdProject scenes format
-            from app.models.schemas import Overlay, Scene as AdProjectScene
-            ad_project.scenes = [
-                AdProjectScene(
+            # Update ad_campaign with scenes and style spec from plan
+            # Convert plan scenes to AdCampaign scenes format
+            from app.models.schemas import Overlay, Scene as AdCampaignScene
+            ad_campaign.scenes = [
+                AdCampaignScene(
                     id=str(scene.get('scene_id', i)),
                     role=scene.get('role', 'showcase'),
                     duration=scene.get('duration', 5),
@@ -689,13 +689,13 @@ BRAND GUIDELINES (extracted from guidelines document):
             ]
             
             # Normalize scene durations to match target duration
-            ad_project.scenes = self._normalize_scene_durations(
-                ad_project.scenes,
-                ad_project.target_duration,
+            ad_campaign.scenes = self._normalize_scene_durations(
+                ad_campaign.scenes,
+                ad_campaign.target_duration,
                 tolerance=0.10
             )
             
-            # Convert StyleSpec from plan to AdProject StyleSpec format
+            # Convert StyleSpec from plan to AdCampaign StyleSpec format
             style_spec_dict = {
                 'lighting_direction': plan_style_spec.get('lighting_direction') or plan_style_spec.get('lighting', ''),
                 'camera_style': plan_style_spec.get('camera_style', ''),
@@ -705,18 +705,18 @@ BRAND GUIDELINES (extracted from guidelines document):
                 'grade_postprocessing': plan_style_spec.get('grade_postprocessing', ''),
                 'music_mood': plan_style_spec.get('music_mood', 'uplifting'),
             }
-            ad_project.style_spec = StyleSpec(**style_spec_dict)
+            ad_campaign.style_spec = StyleSpec(**style_spec_dict)
 
-            # Store chosen style and derived tone in ad_project_json
-            if ad_project.video_metadata is None:
-                ad_project.video_metadata = {}
-            ad_project.video_metadata['selectedStyle'] = {
+            # Store chosen style and derived tone in ad_campaign_json
+            if ad_campaign.video_metadata is None:
+                ad_campaign.video_metadata = {}
+            ad_campaign.video_metadata['selectedStyle'] = {
                 'style': chosen_style,
                 'source': style_source,
                 'appliedAt': datetime.utcnow().isoformat()
             }
             if 'derivedTone' in plan:
-                ad_project.video_metadata['derivedTone'] = plan['derivedTone']
+                ad_campaign.video_metadata['derivedTone'] = plan['derivedTone']
                 logger.info(f"Stored derived tone in metadata: {plan['derivedTone']}")
             
             # Store results in campaign_json
@@ -725,15 +725,15 @@ BRAND GUIDELINES (extracted from guidelines document):
                 import json
                 campaign_json = json.loads(campaign_json)
             
-            campaign_json['scenes'] = [scene.dict() if hasattr(scene, 'dict') else scene.model_dump() if hasattr(scene, 'model_dump') else scene for scene in ad_project.scenes]
+            campaign_json['scenes'] = [scene.dict() if hasattr(scene, 'dict') else scene.model_dump() if hasattr(scene, 'model_dump') else scene for scene in ad_campaign.scenes]
             campaign_json['style_spec'] = style_spec_dict
-            campaign_json['video_metadata'] = ad_project.video_metadata
+            campaign_json['video_metadata'] = ad_campaign.video_metadata
             campaign_json['product_name'] = product_name
 
-            # PHASE 7: Store chosen style in ad_project_json
-            if not ad_project.video_metadata:
-                ad_project.video_metadata = {}
-            ad_project.video_metadata['selectedStyle'] = {
+            # PHASE 7: Store chosen style in ad_campaign_json
+            if not ad_campaign.video_metadata:
+                ad_campaign.video_metadata = {}
+            ad_campaign.video_metadata['selectedStyle'] = {
                 'style': chosen_style,
                 'source': style_source,
                 'appliedAt': datetime.utcnow().isoformat()
@@ -746,7 +746,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 campaign_json=campaign_json
             )
 
-            logger.info(f"Planned {len(ad_project.scenes)} scenes with style spec")
+            logger.info(f"Planned {len(ad_campaign.scenes)} scenes with style spec")
             return campaign_json
 
         except Exception as e:
@@ -755,7 +755,7 @@ BRAND GUIDELINES (extracted from guidelines document):
 
     @timed_step("Video Generation")
     async def _generate_scene_videos(
-        self, campaign: Any, ad_project: AdProject, progress_start: int = 25
+        self, campaign: Any, ad_campaign: AdCampaign, progress_start: int = 25
     ) -> List[str]:
         """Generate background videos for all scenes in parallel.
 
@@ -772,7 +772,7 @@ BRAND GUIDELINES (extracted from guidelines document):
 
             from app.config import settings
 
-            # STORY 4.4: Get provider from project (defaults to "replicate")
+            # STORY 4.4: Get provider from campaign (defaults to "replicate")
             # Validate provider parameter
             if self.video_provider not in ["replicate", "ecs"]:
                 logger.warning(f"Invalid provider '{self.video_provider}', defaulting to 'replicate'")
@@ -783,7 +783,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 logger.warning("ECS provider requested but not configured, falling back to Replicate")
                 self.video_provider = "replicate"
 
-            logger.info(f"🎬 Project {self.project_id}: Using video provider: {self.video_provider}")
+            logger.info(f"🎬 Campaign {self.campaign_id}: Using video provider: {self.video_provider}")
             video_provider = self.video_provider
 
             # Initialize VideoGenerator with provider
@@ -795,19 +795,19 @@ BRAND GUIDELINES (extracted from guidelines document):
 
             # STORY 3: Build scene background mapping for quick lookup
             scene_background_map = {}
-            if ad_project.scene_backgrounds:
-                for sb in ad_project.scene_backgrounds:
+            if ad_campaign.scene_backgrounds:
+                for sb in ad_campaign.scene_backgrounds:
                     scene_background_map[sb.get('scene_id')] = sb.get('background_url')
 
             # Check if reference style was extracted
             extracted_style = None
-            if project.ad_project_json:
-                extracted_style = project.ad_project_json.get("referenceImage", {}).get("extractedStyle")
+            if campaign.ad_campaign_json:
+                extracted_style = campaign.ad_campaign_json.get("referenceImage", {}).get("extractedStyle")
 
             # PHASE 7: Get the chosen style for all scenes
             chosen_style = None
-            if project.ad_project_json and "video_metadata" in project.ad_project_json:
-                video_metadata = project.ad_project_json.get("video_metadata", {})
+            if campaign.ad_campaign_json and "video_metadata" in campaign.ad_campaign_json:
+                video_metadata = campaign.ad_campaign_json.get("video_metadata", {})
                 style_info = video_metadata.get("selectedStyle", {})
                 chosen_style = style_info.get("style")
                 logger.info(f"PHASE 7: Using chosen style for ALL scenes: {chosen_style} ({style_info.get('source', 'unknown')})")
@@ -820,16 +820,16 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.info("Generating TikTok vertical videos (9:16)")
 
             # LOG: Show scene scripts that will be sent to video generator
-            logger.info(f"📝 Scene scripts to send to video generator ({len(ad_project.scenes)} scenes):")
-            for i, scene in enumerate(ad_project.scenes):
+            logger.info(f"📝 Scene scripts to send to video generator ({len(ad_campaign.scenes)} scenes):")
+            for i, scene in enumerate(ad_campaign.scenes):
                 logger.info(f"   Scene {i+1} script: {scene.background_prompt}")
             
             tasks = []
-            for i, scene in enumerate(ad_project.scenes):
+            for i, scene in enumerate(ad_campaign.scenes):
                 try:
                     task = generator.generate_scene_background(
                         prompt=scene.background_prompt,
-                        style_spec_dict=ad_project.style_spec.dict() if hasattr(ad_project.style_spec, 'dict') else (ad_project.style_spec if isinstance(ad_project.style_spec, dict) else {}),
+                        style_spec_dict=ad_campaign.style_spec.dict() if hasattr(ad_campaign.style_spec, 'dict') else (ad_campaign.style_spec if isinstance(ad_campaign.style_spec, dict) else {}),
                         duration=scene.duration,
                         extracted_style=None,  # Reference image removed in Phase 2
                         style_override=scene.style or chosen_style,
@@ -844,7 +844,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Check for errors with scene context
             for i, result in enumerate(scene_videos):
                 if isinstance(result, Exception):
-                    scene = ad_project.scenes[i]
+                    scene = ad_campaign.scenes[i]
                     logger.error(
                         f"Scene {i} generation failed:\n"
                         f"   Role: {scene.role}\n"
@@ -867,7 +867,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     # REMOVED: _infer_text_type() - No longer needed without manual text rendering
 
     @timed_step("Audio Generation")
-    async def _generate_audio(self, campaign: Any, product: Any, ad_project: AdProject, progress_start: int = 75) -> str:
+    async def _generate_audio(self, campaign: Any, product: Any, ad_campaign: AdCampaign, progress_start: int = 75) -> str:
         """Generate luxury product background music using MusicGen."""
         try:
             update_campaign(
@@ -884,19 +884,19 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             
             # Get mood from style_spec (set by LLM during planning)
-            music_mood = ad_project.style_spec.mood if ad_project.style_spec else "uplifting"
-            if hasattr(ad_project.style_spec, 'music_mood'):
-                music_mood = ad_project.style_spec.music_mood
+            music_mood = ad_campaign.style_spec.mood if ad_campaign.style_spec else "uplifting"
+            if hasattr(ad_campaign.style_spec, 'music_mood'):
+                music_mood = ad_campaign.style_spec.music_mood
             # Use product gender directly from product table
             logger.info(f"Using product gender: {product.product_gender}")
             
             # Calculate total duration from scenes
-            total_duration = sum(scene.duration for scene in ad_project.scenes) if ad_project.scenes else campaign.target_duration
+            total_duration = sum(scene.duration for scene in ad_campaign.scenes) if ad_campaign.scenes else campaign.target_duration
             
             audio_url = await audio_engine.generate_background_music(
                 mood=music_mood,
                 duration=total_duration,
-                project_id=str(self.project_id),
+                campaign_id=str(self.campaign_id),
                 gender=product.product_gender,  # Use product gender directly
             )
 
@@ -990,7 +990,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         self,
         scene_videos: List[str],
         audio_url: str,
-        ad_project: AdProject,
+        ad_campaign: AdCampaign,
         progress_start: int = 85,
         variation_index: int = None,
     ) -> str:
@@ -1008,14 +1008,14 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # STORY 3 (AC#6): Get project from database to retrieve output_formats
-            project = get_project(self.db, self.project_id)
+            # STORY 3 (AC#6): Get campaign from database to retrieve output_formats
+            campaign = get_campaign(self.db, self.campaign_id)
 
             # Use output_formats array if available, fall back to aspect_ratio for backward compat
-            if project.output_formats and len(project.output_formats) > 0:
-                output_aspect_ratios = project.output_formats
-            elif project.aspect_ratio:
-                output_aspect_ratios = [project.aspect_ratio]
+            if campaign.output_formats and len(campaign.output_formats) > 0:
+                output_aspect_ratios = campaign.output_formats
+            elif campaign.aspect_ratio:
+                output_aspect_ratios = [campaign.aspect_ratio]
             else:
                 output_aspect_ratios = ["16:9"]  # Default fallback
 
@@ -1039,7 +1039,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"Final rendering failed: {e}")
             raise
     
-    async def _cleanup_intermediate_files(self, project_id: str) -> None:
+    async def _cleanup_intermediate_files(self, campaign_id: str) -> None:
         """
         Delete intermediate S3 files after user exports final video.
         
@@ -1057,7 +1057,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         - final_1_1.mp4
         - final_16_9.mp4
         
-        This reduces S3 storage from ~950MB to ~150MB per project.
+        This reduces S3 storage from ~950MB to ~150MB per campaign.
         """
         try:
             from app.config import settings
@@ -1069,8 +1069,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 region_name=settings.aws_region,
             )
             
-            # List all objects in project folder
-            prefix = f"projects/{project_id}/"
+            # List all objects in campaign folder
+            prefix = f"campaigns/{campaign_id}/"
             response = s3_client.list_objects_v2(
                 Bucket=settings.s3_bucket_name,
                 Prefix=prefix
@@ -1146,7 +1146,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         campaign: Any,
         product: Any,
         brand: Any,
-        ad_project: AdProject,
+        ad_campaign: AdCampaign,
         num_variations: int,
         progress_start: int = 15,
     ) -> List[List[Dict[str, Any]]]:
@@ -1157,7 +1157,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             campaign: Campaign database object
             product: Product database object
             brand: Brand database object
-            ad_project: AdProject schema object
+            ad_campaign: AdCampaign schema object
             num_variations: Number of variations to generate (1-3)
             progress_start: Progress percentage start
             
@@ -1201,7 +1201,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                     
                     extracted_guidelines = await extractor.extract_guidelines(
                         guidelines_url=guidelines_url,
-                        brand_name=ad_project.brand.get('name', '') if isinstance(ad_project.brand, dict) else ''
+                        brand_name=ad_campaign.brand.get('name', '') if isinstance(ad_campaign.brand, dict) else ''
                     )
                 except Exception as e:
                     logger.warning(f"Guidelines extraction failed: {e}")
@@ -1265,7 +1265,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         campaign: Any,
         product: Any,
         brand: Any,
-        ad_project: AdProject,
+        ad_campaign: AdCampaign,
         product_url: Optional[str],
         has_product: bool,
         progress_start: int = 20,
@@ -1287,7 +1287,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             campaign: Campaign database object
             product: Product database object
             brand: Brand database object
-            ad_project: AdProject schema object
+            ad_campaign: AdCampaign schema object
             product_url: Product image URL (if available)
             has_product: Whether product is available
             progress_start: Progress percentage start
@@ -1298,26 +1298,26 @@ BRAND GUIDELINES (extracted from guidelines document):
         logger.info(f"Processing variation {var_idx + 1}/{num_variations}...")
         
         try:
-            # Convert scene dictionaries to AdProjectScene objects
-            from app.models.schemas import Overlay, Scene as AdProjectScene, AdProject
+            # Convert scene dictionaries to AdCampaignScene objects
+            from app.models.schemas import Overlay, Scene as AdCampaignScene, AdCampaign
             
             # Get chosen style from campaign
             chosen_style = campaign.selected_style or "gold_luxe"
             
-            # Convert scenes to AdProjectScene format
+            # Convert scenes to AdCampaignScene format
             # Handle both dictionaries and Scene objects
-            ad_project_scenes = []
+            ad_campaign_scenes = []
             for i, scene_item in enumerate(scenes):
                 # Check if scene_item is already a Scene object or a dictionary
-                if isinstance(scene_item, AdProjectScene):
+                if isinstance(scene_item, AdCampaignScene):
                     # Already a Scene object, use it directly
-                    ad_project_scenes.append(scene_item)
+                    ad_campaign_scenes.append(scene_item)
                 elif isinstance(scene_item, dict):
                     # Dictionary, convert to Scene object
                     scene_dict = scene_item
                     overlay_dict = scene_dict.get('overlay')
-                    ad_project_scenes.append(
-                        AdProjectScene(
+                    ad_campaign_scenes.append(
+                        AdCampaignScene(
                             id=str(scene_dict.get('scene_id', scene_dict.get('id', i))),
                             role=scene_dict.get('role', 'showcase'),
                             duration=scene_dict.get('duration', 5),
@@ -1349,8 +1349,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 else:
                     # Unknown type, try to convert using getattr
                     logger.warning(f"Unknown scene type: {type(scene_item)}, attempting attribute access")
-                    ad_project_scenes.append(
-                        AdProjectScene(
+                    ad_campaign_scenes.append(
+                        AdCampaignScene(
                             id=str(getattr(scene_item, 'scene_id', getattr(scene_item, 'id', i))),
                             role=getattr(scene_item, 'role', 'showcase'),
                             duration=getattr(scene_item, 'duration', 5),
@@ -1382,16 +1382,16 @@ BRAND GUIDELINES (extracted from guidelines document):
                     )
                 )
             
-            # Create a temporary ad_project with this variation's scenes
-            variation_ad_project = AdProject(
-                creative_prompt=ad_project.creative_prompt,
-                brand=ad_project.brand,
-                target_audience=ad_project.target_audience,
-                target_duration=ad_project.target_duration,
-                scenes=ad_project_scenes,
-                style_spec=ad_project.style_spec,
-                product_asset=ad_project.product_asset,
-                video_metadata=ad_project.video_metadata,
+            # Create a temporary ad_campaign with this variation's scenes
+            variation_ad_campaign = AdCampaign(
+                creative_prompt=ad_campaign.creative_prompt,
+                brand=ad_campaign.brand,
+                target_audience=ad_campaign.target_audience,
+                target_duration=ad_campaign.target_duration,
+                scenes=ad_campaign_scenes,
+                style_spec=ad_campaign.style_spec,
+                product_asset=ad_campaign.product_asset,
+                video_metadata=ad_campaign.video_metadata,
             )
             
             # VEO S3 MIGRATION: Simplified 5-step pipeline (removed compositor + text overlay)
@@ -1400,7 +1400,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             # STEP 1: Generate Videos (Veo S3 integrates product + text natively)
             video_start = progress_start + (var_idx * 5)
             replicate_videos = await self._generate_scene_videos(
-                campaign, variation_ad_project, progress_start=video_start
+                campaign, variation_ad_campaign, progress_start=video_start
             )
             
             # Upload scene videos to S3 (Draft)
@@ -1412,7 +1412,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             
             # STEP 2: Generate Audio (formerly step 5)
             # Audio engine saves locally, returns local path
-            audio_local_path = await self._generate_audio(campaign, perfume, variation_ad_project, progress_start=video_start + 45)
+            audio_local_path = await self._generate_audio(campaign, perfume, variation_ad_campaign, progress_start=video_start + 45)
             
             # Upload audio to S3 (Draft)
             audio_url_result = await upload_draft_music(
@@ -1426,7 +1426,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             
             # STEP 3: Render Final Video (formerly step 6)
             final_local_path = await self._render_final(
-                scene_videos, audio_url, variation_ad_project, progress_start=video_start + 60, variation_index=var_idx
+                scene_videos, audio_url, variation_ad_campaign, progress_start=video_start + 60, variation_index=var_idx
             )
             
             # Upload final video to S3 (Final)
@@ -1470,7 +1470,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             
             # Save to local storage
             local_path = LocalStorageManager.save_final_video(
-                self.project_id,
+                self.campaign_id,
                 aspect_ratio,
                 None  # We'll write bytes instead of copying
             )
@@ -1498,9 +1498,9 @@ BRAND GUIDELINES (extracted from guidelines document):
         brand: Any,
         campaign_json: Dict[str, Any],
         video_provider: str = "replicate"
-    ) -> AdProject:
+    ) -> AdCampaign:
         """
-        Build AdProject schema from campaign, product, and brand data.
+        Build AdCampaign schema from campaign, product, and brand data.
         
         Args:
             campaign: Campaign database object
@@ -1509,7 +1509,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             campaign_json: Campaign JSON data
             
         Returns:
-            AdProject: Built AdProject schema object
+            AdCampaign: Built AdCampaign schema object
         """
         # Build brand dict from brand table
         brand_dict = {
@@ -1532,9 +1532,9 @@ BRAND GUIDELINES (extracted from guidelines document):
             }
         }
         
-        # Build AdProject from campaign data
+        # Build AdCampaign from campaign data
         # Note: style_spec will be populated during scene planning, but we need to provide defaults here
-        # to satisfy AdProject validation. These defaults will be replaced during planning.
+        # to satisfy AdCampaign validation. These defaults will be replaced during planning.
         default_style_spec = campaign_json.get("style_spec", {})
         if not default_style_spec or not isinstance(default_style_spec, dict):
             # Provide minimal defaults - these will be replaced during scene planning
@@ -1548,7 +1548,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 "music_mood": "uplifting",
             }
         
-        ad_project_dict = {
+        ad_campaign_dict = {
             "creative_prompt": campaign.creative_prompt,
             "brand": brand_dict,
             "target_audience": "general consumers",  # Not stored in campaign (removed feature)
@@ -1565,7 +1565,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             }
         }
         
-        return AdProject(**ad_project_dict)
+        return AdCampaign(**ad_campaign_dict)
 
     async def _update_campaign_variations(self, num_variations: int, final_videos: List[str]) -> None:
         """

@@ -58,7 +58,7 @@ class Compositor:
         self,
         background_video_url: str,
         product_image_url: str,
-        project_id: str,
+        campaign_id: str,
         position: str = "center",
         scale: Optional[float] = None,
         opacity: float = 1.0,
@@ -72,7 +72,7 @@ class Compositor:
         Args:
             background_video_url: S3 URL or local path of background video
             product_image_url: S3 URL or local path of extracted perfume bottle PNG
-            project_id: Project UUID for local path organization
+            campaign_id: Campaign UUID for local path organization
             position: Position preset ("center", "center_upper", "center_lower")
             scale: Optional scale override (0.1 to 1.0). If None, uses scene_role-based scaling
             opacity: Product opacity (0.0 to 1.0)
@@ -134,7 +134,7 @@ class Compositor:
                 )
 
                 # Save composited video locally
-                local_path = await self._save_video_locally(output_path, project_id, scene_index, variation_index)
+                local_path = await self._save_video_locally(output_path, campaign_id, scene_index, variation_index)
 
                 logger.info(f"✅ Composited video saved: {local_path}")
                 return local_path
@@ -412,13 +412,13 @@ class Compositor:
             logger.error(f"Error blending: {e}")
             return frame
 
-    async def _save_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
+    async def _save_video_locally(self, video_path: Path, campaign_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
         """Save composited video to local filesystem."""
         try:
             import shutil
             
-            # Create directory structure: /tmp/genads/{project_id}/draft/composited/
-            save_dir = Path(f"/tmp/genads/{project_id}/draft/composited")
+            # Create directory structure: /tmp/genads/{campaign_id}/draft/composited/
+            save_dir = Path(f"/tmp/genads/{campaign_id}/draft/composited")
             save_dir.mkdir(parents=True, exist_ok=True)
             
             # Copy to permanent location with descriptive name (include variation index if provided)
@@ -439,7 +439,7 @@ class Compositor:
         self,
         video_url: str,
         logo_image_url: str,
-        project_id: str,
+        campaign_id: str,
         position: str = "top_right",
         scale: float = 0.1,
         opacity: float = 0.9,
@@ -454,7 +454,7 @@ class Compositor:
         Args:
             video_url: Video to overlay logo onto (local path)
             logo_image_url: Logo image URL (S3)
-            project_id: Project UUID
+            campaign_id: Campaign UUID
             position: Logo position (top_left, top_right, bottom_left, bottom_right, bottom_center)
             scale: Logo size as fraction of frame height (0.05-0.2)
             opacity: Logo opacity (0.0-1.0)
@@ -498,7 +498,7 @@ class Compositor:
                 )
                 
                 # Save locally
-                local_path = await self._save_logo_video_locally(output_path, project_id, scene_index, variation_index)
+                local_path = await self._save_logo_video_locally(output_path, campaign_id, scene_index, variation_index)
                 
                 logger.info(f"✅ Logo composited: {local_path}")
                 return local_path
@@ -508,12 +508,12 @@ class Compositor:
                 # Non-critical failure - return original video
                 return video_url
 
-    async def _save_logo_video_locally(self, video_path: Path, project_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
+    async def _save_logo_video_locally(self, video_path: Path, campaign_id: str, scene_index: int = 0, variation_index: Optional[int] = None) -> str:
         """Save video with logo to local filesystem."""
         try:
             import shutil
             
-            save_dir = Path(f"/tmp/genads/{project_id}/draft/logo")
+            save_dir = Path(f"/tmp/genads/{campaign_id}/draft/logo")
             save_dir.mkdir(parents=True, exist_ok=True)
             
             # Include variation index in filename if provided

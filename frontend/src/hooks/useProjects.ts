@@ -3,7 +3,7 @@ import { useAuth } from './useAuth'
 import { apiClient } from '@/services/api'
 import type { AspectRatio, SceneBackground } from '@/types'
 
-export interface Project {
+export interface Campaign {
   id: string
   title: string
   brief: string
@@ -31,7 +31,7 @@ export interface Project {
   selected_variation_index?: number | null // 0-2 or null
 }
 
-interface CreateProjectInput {
+interface CreateCampaignInput {
   title: string
   brief?: string
   brand_name: string
@@ -57,35 +57,35 @@ interface CreateProjectInput {
   num_variations?: 1 | 2 | 3 // Number of video variations (1-3)
 }
 
-export const useProjects = () => {
+export const useCampaigns = () => {
   const { user } = useAuth()
-  const [projects, setProjects] = useState<Project[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch all projects
-  const fetchProjects = useCallback(async () => {
+  // Fetch all campaigns
+  const fetchCampaigns = useCallback(async () => {
     if (!user) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const response = await apiClient.get('/api/projects/')
-      // API returns { projects: [...], total, limit, offset }
-      setProjects(response.data.projects || [])
+      const response = await apiClient.get('/api/campaigns/')
+      // API returns { campaigns: [...], total, limit, offset }
+      setCampaigns(response.data.campaigns || [])
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch projects'
+      const message = err instanceof Error ? err.message : 'Failed to fetch campaigns'
       setError(message)
-      console.error('Error fetching projects:', err)
+      console.error('Error fetching campaigns:', err)
     } finally {
       setLoading(false)
     }
   }, [user])
 
-  // Create new project
-  const createProject = useCallback(
-    async (input: CreateProjectInput) => {
+  // Create new campaign
+  const createCampaign = useCallback(
+    async (input: CreateCampaignInput) => {
       if (!user) throw new Error('Not authenticated')
 
       setLoading(true)
@@ -98,22 +98,22 @@ export const useProjects = () => {
           video_provider: input.video_provider || 'replicate',
         }
 
-        const response = await apiClient.post('/api/projects/', payload)
-        const newProject = response.data
+        const response = await apiClient.post('/api/campaigns/', payload)
+        const newCampaign = response.data
 
-        setProjects((prev) => [newProject, ...prev])
+        setCampaigns((prev) => [newCampaign, ...prev])
 
         // Log provider selection for analytics
-        console.log('[Project Created]', {
-          projectId: newProject.id,
-          provider: newProject.video_provider || payload.video_provider,
+        console.log('[Campaign Created]', {
+          campaignId: newCampaign.id,
+          provider: newCampaign.video_provider || payload.video_provider,
           timestamp: new Date().toISOString(),
         })
 
-        return newProject
+        return newCampaign
       } catch (err: any) {
         // Extract error message from API response
-        let message = 'Failed to create project'
+        let message = 'Failed to create campaign'
         if (err?.response?.data) {
           const errorData = err.response.data
           if (errorData.detail) {
@@ -135,7 +135,7 @@ export const useProjects = () => {
           message = err.message
         }
         setError(message)
-        console.error('Create project error:', err)
+        console.error('Create campaign error:', err)
         throw new Error(message)
       } finally {
         setLoading(false)
@@ -144,35 +144,35 @@ export const useProjects = () => {
     [user]
   )
 
-  // Get single project
-  const getProject = useCallback(async (projectId: string) => {
-    if (!projectId) throw new Error('Project ID is required')
+  // Get single campaign
+  const getCampaign = useCallback(async (campaignId: string) => {
+    if (!campaignId) throw new Error('Campaign ID is required')
     try {
-      const response = await apiClient.get(`/api/projects/${projectId}`)
+      const response = await apiClient.get(`/api/campaigns/${campaignId}`)
       return response.data
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch project'
+      const message = err instanceof Error ? err.message : 'Failed to fetch campaign'
       setError(message)
       throw err
     }
   }, [])
 
-  // Update project
-  const updateProject = useCallback(
-    async (projectId: string, updates: Partial<CreateProjectInput>) => {
+  // Update campaign
+  const updateCampaign = useCallback(
+    async (campaignId: string, updates: Partial<CreateCampaignInput>) => {
       setLoading(true)
       setError(null)
 
       try {
-        const response = await apiClient.put(`/api/projects/${projectId}`, updates)
+        const response = await apiClient.put(`/api/campaigns/${campaignId}`, updates)
         const updated = response.data
 
-        setProjects((prev) =>
-          prev.map((p) => (p.id === projectId ? updated : p))
+        setCampaigns((prev) =>
+          prev.map((p) => (p.id === campaignId ? updated : p))
         )
         return updated
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to update project'
+        const message = err instanceof Error ? err.message : 'Failed to update campaign'
         setError(message)
         throw err
       } finally {
@@ -182,16 +182,16 @@ export const useProjects = () => {
     []
   )
 
-  // Delete project
-  const deleteProject = useCallback(async (projectId: string) => {
+  // Delete campaign
+  const deleteCampaign = useCallback(async (campaignId: string) => {
     setLoading(true)
     setError(null)
 
     try {
-      await apiClient.delete(`/api/projects/${projectId}`)
-      setProjects((prev) => prev.filter((p) => p.id !== projectId))
+      await apiClient.delete(`/api/campaigns/${campaignId}`)
+      setCampaigns((prev) => prev.filter((p) => p.id !== campaignId))
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete project'
+      const message = err instanceof Error ? err.message : 'Failed to delete campaign'
       setError(message)
       throw err
     } finally {
@@ -200,14 +200,14 @@ export const useProjects = () => {
   }, [])
 
   return {
-    projects,
+    campaigns,
     loading,
     error,
-    fetchProjects,
-    createProject,
-    getProject,
-    updateProject,
-    deleteProject,
+    fetchCampaigns,
+    createCampaign,
+    getCampaign,
+    updateCampaign,
+    deleteCampaign,
   }
 }
 

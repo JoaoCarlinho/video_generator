@@ -187,9 +187,9 @@ export const Dashboard = () => {
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">My Projects</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">My Campaigns</h2>
                   <p className="text-gray-600 text-sm mt-1">
-                    {products.length} project{products.length !== 1 ? 's' : ''}
+                    {products.length} campaign{products.length !== 1 ? 's' : ''}
                   </p>
                 </div>
                 <Button

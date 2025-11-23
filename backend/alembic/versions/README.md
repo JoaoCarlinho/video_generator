@@ -4,7 +4,7 @@ All Alembic migration files have been deleted as part of the database reset.
 
 ## Why?
 
-The project had accumulated migration files with conflicts (duplicate revision IDs) and the schema needed a fresh start.
+The campaign had accumulated migration files with conflicts (duplicate revision IDs) and the schema needed a fresh start.
 
 ## New Approach
 

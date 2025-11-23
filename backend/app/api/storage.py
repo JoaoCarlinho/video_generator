@@ -45,7 +45,7 @@ async def get_presigned_upload_url(request: PresignedUrlRequest):
     **Usage:**
     1. Call this endpoint to get a presigned URL
     2. Upload file to the `upload_url` using PUT request
-    3. Use the `file_url` when creating a project
+    3. Use the `file_url` when creating a campaign
     
     **Example:**
     ```python
@@ -66,9 +66,9 @@ async def get_presigned_upload_url(request: PresignedUrlRequest):
         headers: { 'Content-Type': 'image/png' }
     })
     
-    # Step 3: Use file_url in project creation
-    await createProject({
-        ...projectData,
+    # Step 3: Use file_url in campaign creation
+    await createCampaign({
+        ...campaignData,
         logo_url: response.file_url
     })
     ```

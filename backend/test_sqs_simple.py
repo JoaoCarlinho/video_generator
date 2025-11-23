@@ -48,7 +48,7 @@ def main():
 
         test_message = {
             "job_id": "test-123",
-            "project_id": "00000000-0000-0000-0000-000000000001",
+            "campaign_id": "00000000-0000-0000-0000-000000000001",
             "function": "generate_video",
             "test": True
         }
@@ -81,7 +81,7 @@ def main():
             for msg in messages:
                 body = json.loads(msg['Body'])
                 logger.info(f"   Job ID: {body.get('job_id')}")
-                logger.info(f"   Project ID: {body.get('project_id')}")
+                logger.info(f"   Campaign ID: {body.get('campaign_id')}")
 
                 # Delete the message
                 logger.info("   Deleting test message...")

@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { Trash2, Edit3, Clock, Sparkles, CheckCircle2, Loader2, AlertCircle, FileText } from 'lucide-react'
 
-interface ProjectCardProps {
+interface CampaignCardProps {
   id?: string
   title: string
   brief?: string
@@ -66,7 +66,7 @@ const statusConfig: Record<string, {
   },
 }
 
-export const ProjectCard = ({
+export const CampaignCard = ({
   title,
   brief,
   status,
@@ -76,7 +76,7 @@ export const ProjectCard = ({
   onView,
   onEdit,
   onDelete,
-}: ProjectCardProps) => {
+}: CampaignCardProps) => {
   const formatDate = (date: string | undefined) => {
     if (!date) return ''
     const dateObj = new Date(date)

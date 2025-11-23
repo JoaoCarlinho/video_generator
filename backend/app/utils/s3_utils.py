@@ -50,7 +50,7 @@ def get_s3_client():
 async def upload_product_image(
     file_content: bytes,
     filename: str,
-    project_id: str
+    campaign_id: str
 ) -> dict:
     """
     Upload product image to S3.
@@ -58,7 +58,7 @@ async def upload_product_image(
     **Arguments:**
     - file_content: File bytes to upload
     - filename: Original filename
-    - project_id: Project UUID (used in S3 path)
+    - campaign_id: Campaign UUID (used in S3 path)
     
     **Returns:**
     - dict: {
@@ -77,7 +77,7 @@ async def upload_product_image(
         
         # Generate S3 key
         file_ext = os.path.splitext(filename)[1].lower()
-        s3_key = f"products/{project_id}/{uuid4()}{file_ext}"
+        s3_key = f"products/{campaign_id}/{uuid4()}{file_ext}"
         
         # Upload to S3
         s3 = get_s3_client()
@@ -855,55 +855,55 @@ async def upload_final_video(
 
 
 # ============================================================================
-# DEPRECATED: Old project-based functions (kept for backward compatibility)
+# DEPRECATED: Old campaign-based functions (kept for backward compatibility)
 # These will be removed in Phase 5 when pipeline is updated
 # ============================================================================
 
-async def create_project_folder_structure(project_id: str) -> dict:
+async def create_campaign_folder_structure(campaign_id: str) -> dict:
     """
-    Initialize project folder structure in S3.
+    Initialize campaign folder structure in S3.
     
-    Creates the path structure for a new project:
-    - projects/{project_id}/draft/ (for working files)
-    - projects/{project_id}/final/ (for final rendered videos)
+    Creates the path structure for a new campaign:
+    - campaigns/{campaign_id}/draft/ (for working files)
+    - campaigns/{campaign_id}/final/ (for final rendered videos)
     
     S3 doesn't require explicit folder creation, just prefix usage.
     This function validates access and returns folder information.
     
     **Arguments:**
-    - project_id: UUID of the project (as string)
+    - campaign_id: UUID of the campaign (as string)
     
     **Returns:**
     - dict: {
-        "s3_folder": "projects/550e8400-...",
-        "s3_url": "https://bucket.s3.../projects/550e8400-...",
-        "draft_folder": "projects/550e8400-.../draft/",
-        "draft_url": "https://bucket.s3.../projects/550e8400-.../draft/",
-        "final_folder": "projects/550e8400-.../final/",
-        "final_url": "https://bucket.s3.../projects/550e8400-.../final/",
+        "s3_folder": "campaigns/550e8400-...",
+        "s3_url": "https://bucket.s3.../campaigns/550e8400-...",
+        "draft_folder": "campaigns/550e8400-.../draft/",
+        "draft_url": "https://bucket.s3.../campaigns/550e8400-.../draft/",
+        "final_folder": "campaigns/550e8400-.../final/",
+        "final_url": "https://bucket.s3.../campaigns/550e8400-.../final/",
         "subfolders": {...}
       }
     """
     try:
-        project_folder = f"projects/{project_id}/"
-        s3_url = get_s3_folder_url(project_folder)
+        campaign_folder = f"campaigns/{campaign_id}/"
+        s3_url = get_s3_folder_url(campaign_folder)
         
-        logger.info(f"✅ Initialized folder structure for project {project_id}")
+        logger.info(f"✅ Initialized folder structure for campaign {campaign_id}")
         
         return {
-            "s3_folder": project_folder,
+            "s3_folder": campaign_folder,
             "s3_url": s3_url,
-            "draft_folder": f"{project_folder}draft/",
-            "draft_url": get_s3_folder_url(f"{project_folder}draft/"),
-            "final_folder": f"{project_folder}final/",
-            "final_url": get_s3_folder_url(f"{project_folder}final/"),
+            "draft_folder": f"{campaign_folder}draft/",
+            "draft_url": get_s3_folder_url(f"{campaign_folder}draft/"),
+            "final_folder": f"{campaign_folder}final/",
+            "final_url": get_s3_folder_url(f"{campaign_folder}final/"),
             "subfolders": {
-                "product": f"{project_folder}draft/product/",
-                "scene_videos": f"{project_folder}draft/scene_videos/",
-                "composited_videos": f"{project_folder}draft/composited_videos/",
-                "text_overlays": f"{project_folder}draft/text_overlays/",
-                "music": f"{project_folder}draft/music/",
-                "final": f"{project_folder}final/",
+                "product": f"{campaign_folder}draft/product/",
+                "scene_videos": f"{campaign_folder}draft/scene_videos/",
+                "composited_videos": f"{campaign_folder}draft/composited_videos/",
+                "text_overlays": f"{campaign_folder}draft/text_overlays/",
+                "music": f"{campaign_folder}draft/music/",
+                "final": f"{campaign_folder}final/",
             }
         }
     except Exception as e:
@@ -916,7 +916,7 @@ def get_s3_folder_url(folder_path: str) -> str:
     Generate public HTTPS URL for S3 folder.
     
     **Arguments:**
-    - folder_path: S3 key prefix (e.g., "projects/{id}/draft/")
+    - folder_path: S3 key prefix (e.g., "campaigns/{id}/draft/")
     
     **Returns:**
     - str: Public HTTPS URL
@@ -926,27 +926,27 @@ def get_s3_folder_url(folder_path: str) -> str:
     return f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{folder_path}"
 
 
-async def upload_to_project_folder(
+async def upload_to_campaign_folder(
     file_content: bytes,
-    project_id: str,
+    campaign_id: str,
     subfolder: str,
     filename: str
 ) -> dict:
     """
-    Upload file to project-specific folder in S3.
+    Upload file to campaign-specific folder in S3.
     
-    Automatically organizes files by project and subfolder.
+    Automatically organizes files by campaign and subfolder.
     
     **Arguments:**
     - file_content: File bytes to upload
-    - project_id: Project UUID (as string)
-    - subfolder: Subfolder within project (e.g., "draft/product", "draft/scene_videos")
+    - campaign_id: Campaign UUID (as string)
+    - subfolder: Subfolder within campaign (e.g., "draft/product", "draft/scene_videos")
     - filename: Filename (can include extension)
     
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "projects/.../...",
+        "s3_key": "campaigns/.../...",
         "size_bytes": 12345,
         "filename": "..."
       }
@@ -959,7 +959,7 @@ async def upload_to_project_folder(
             raise RuntimeError("S3_BUCKET_NAME not configured in .env")
         
         # Build S3 key
-        s3_key = f"projects/{project_id}/{subfolder}/{filename}"
+        s3_key = f"campaigns/{campaign_id}/{subfolder}/{filename}"
         
         # Upload to S3
         s3 = get_s3_client()
@@ -973,7 +973,7 @@ async def upload_to_project_folder(
         # Generate URL
         s3_url = get_s3_file_url(s3_key)
         
-        logger.info(f"✅ Uploaded to project folder: {s3_key}")
+        logger.info(f"✅ Uploaded to campaign folder: {s3_key}")
         
         return {
             "url": s3_url,
@@ -983,19 +983,19 @@ async def upload_to_project_folder(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to upload to project folder: {e}")
+        logger.error(f"❌ Failed to upload to campaign folder: {e}")
         raise RuntimeError(f"Upload failed: {str(e)}")
 
 
-async def delete_project_folder(project_id: str) -> bool:
+async def delete_campaign_folder(campaign_id: str) -> bool:
     """
-    Recursively delete all files in project folder.
+    Recursively delete all files in campaign folder.
     
-    Deletes entire project folder including all draft and final files.
-    Called when user deletes a project.
+    Deletes entire campaign folder including all draft and final files.
+    Called when user deletes a campaign.
     
     **Arguments:**
-    - project_id: Project UUID (as string)
+    - campaign_id: Campaign UUID (as string)
     
     **Returns:**
     - bool: True if successful, False if failed
@@ -1006,7 +1006,7 @@ async def delete_project_folder(project_id: str) -> bool:
             return False
         
         s3 = get_s3_client()
-        folder_prefix = f"projects/{project_id}/"
+        folder_prefix = f"campaigns/{campaign_id}/"
         
         # List all objects with this prefix
         paginator = s3.get_paginator('list_objects_v2')
@@ -1054,29 +1054,29 @@ async def delete_project_folder(project_id: str) -> bool:
         return True
     
     except Exception as e:
-        logger.error(f"❌ Failed to delete project folder {project_id}: {e}")
+        logger.error(f"❌ Failed to delete campaign folder {campaign_id}: {e}")
         return False
 
 
 def upload_video_to_s3(
     local_video_path: str,
-    project_id: str,
+    campaign_id: str,
     aspect_ratio: str
 ) -> dict:
     """
     Upload a generated video file to S3 preview folder.
 
-    Uploads video to: s3://bucket/projects/{project_id}/preview/video_{aspect_ratio}.mp4
+    Uploads video to: s3://bucket/campaigns/{campaign_id}/preview/video_{aspect_ratio}.mp4
 
     **Arguments:**
     - local_video_path: Local filesystem path to video file
-    - project_id: Project UUID (as string)
+    - campaign_id: Campaign UUID (as string)
     - aspect_ratio: Aspect ratio (e.g., "16:9", "9:16", "1:1")
 
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "projects/.../preview/video_16-9.mp4",
+        "s3_key": "campaigns/.../preview/video_16-9.mp4",
         "size_bytes": 12345,
         "aspect_ratio": "16:9"
       }
@@ -1100,7 +1100,7 @@ def upload_video_to_s3(
         # Generate S3 key (replace : with - for aspect ratio)
         aspect_safe = aspect_ratio.replace(':', '-')
         filename = f"video_{aspect_safe}.mp4"
-        s3_key = f"projects/{project_id}/preview/{filename}"
+        s3_key = f"campaigns/{campaign_id}/preview/{filename}"
 
         # Upload to S3
         s3 = get_s3_client()
@@ -1128,12 +1128,12 @@ def upload_video_to_s3(
         raise RuntimeError(f"Video upload failed: {str(e)}")
 
 
-async def get_project_folder_stats(project_id: str) -> dict:
+async def get_campaign_folder_stats(campaign_id: str) -> dict:
     """
-    Get statistics about project folder (file count, total size).
+    Get statistics about campaign folder (file count, total size).
     
     **Arguments:**
-    - project_id: Project UUID (as string)
+    - campaign_id: Campaign UUID (as string)
     
     **Returns:**
     - dict: {
@@ -1152,7 +1152,7 @@ async def get_project_folder_stats(project_id: str) -> dict:
             return {"error": "S3 not configured"}
         
         s3 = get_s3_client()
-        folder_prefix = f"projects/{project_id}/"
+        folder_prefix = f"campaigns/{campaign_id}/"
         
         # List all objects
         paginator = s3.get_paginator('list_objects_v2')

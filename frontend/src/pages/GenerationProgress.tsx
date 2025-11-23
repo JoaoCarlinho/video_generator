@@ -22,14 +22,14 @@ const stepLabels: Record<string, string> = {
 }
 
 export const GenerationProgress = () => {
-  const { campaignId, projectId } = useParams<{ campaignId?: string; projectId?: string }>()
+  const { campaignId, campaignId } = useParams<{ campaignId?: string; campaignId?: string }>()
   const navigate = useNavigate()
   const { generateVideo, generateCampaign } = useGeneration()
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
   const hasStartedGenerationRef = useRef(false)
   
-  // Use campaignId if available, otherwise fall back to projectId (legacy)
-  const id = campaignId || projectId || ''
+  // Use campaignId if available, otherwise fall back to campaignId (legacy)
+  const id = campaignId || campaignId || ''
   const isCampaign = !!campaignId
   const storageKey = `generation_started_${id}`
 
@@ -52,7 +52,7 @@ export const GenerationProgress = () => {
         hasStartedGenerationRef.current = true
         sessionStorage.setItem(storageKey, 'true')
         setIsStartingGeneration(true)
-        console.log(`🚀 Starting generation for ${isCampaign ? 'campaign' : 'project'}:`, id)
+        console.log(`🚀 Starting generation for ${isCampaign ? 'campaign' : 'campaign'}:`, id)
         
         const result = isCampaign 
           ? await generateCampaign(id)
@@ -82,7 +82,7 @@ export const GenerationProgress = () => {
   }, [id, isCampaign, generateVideo, generateCampaign, storageKey])
 
   const { progress, isPolling, stopPolling } = useProgressPolling({
-    projectId: isCampaign ? undefined : id,
+    campaignId: isCampaign ? undefined : id,
     campaignId: isCampaign ? id : undefined,
     enabled: true,
     interval: 2000,
@@ -122,27 +122,27 @@ export const GenerationProgress = () => {
             }, 1000)
           }
         } else {
-          // Legacy project-based flow
+          // Legacy campaign-based flow
         console.log('📥 Downloading video to local storage...')
         
-          const projectResponse = await api.get(`/api/projects/${id}`)
-        const project = projectResponse.data
-        const projectAspectRatio = project.aspect_ratio || '9:16'
-        const numVariations = project.num_variations || 1
+          const campaignResponse = await api.get(`/api/campaigns/${id}`)
+        const campaign = campaignResponse.data
+        const campaignAspectRatio = campaign.aspect_ratio || '9:16'
+        const numVariations = campaign.num_variations || 1
         
-        console.log(`📐 Project aspect ratio: ${projectAspectRatio}`)
+        console.log(`📐 Campaign aspect ratio: ${campaignAspectRatio}`)
         console.log(`🎬 Number of variations: ${numVariations}`)
         
         // For single variation, download video to local storage
         // For multiple variations, videos are already stored locally by the pipeline
         if (numVariations === 1) {
           try {
-              const response = await api.get(`/api/local-generation/projects/${id}/preview`, {
+              const response = await api.get(`/api/local-generation/campaigns/${id}/preview`, {
               responseType: 'blob'
             })
             
             if (response.data) {
-                await storeVideo(id, projectAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
+                await storeVideo(id, campaignAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
               console.log(`✅ Downloaded video from local storage`)
             }
           } catch (err) {
@@ -160,11 +160,11 @@ export const GenerationProgress = () => {
           if (numVariations > 1) {
             // Multiple variations - go to selection page
             console.log(`🎯 Routing to selection page for ${numVariations} variations`)
-              navigate(`/projects/${id}/select`)
+              navigate(`/campaigns/${id}/select`)
           } else {
             // Single variation - go directly to results
             console.log(`🎯 Routing to results page (single variation)`)
-              navigate(`/projects/${id}/results`)
+              navigate(`/campaigns/${id}/results`)
           }
         }, 1000)
         }
@@ -175,7 +175,7 @@ export const GenerationProgress = () => {
           if (isCampaign) {
             navigate(`/campaigns/${id}/results`)
           } else {
-            navigate(`/projects/${id}/results`)
+            navigate(`/campaigns/${id}/results`)
           }
         }, 1000)
       }

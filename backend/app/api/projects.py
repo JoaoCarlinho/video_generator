@@ -1,4 +1,4 @@
-"""API endpoints for project management."""
+"""API endpoints for campaign management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
@@ -8,25 +8,25 @@ import logging
 
 from app.database.connection import get_db, init_db
 from app.database.crud import (
-    create_project,
-    get_project,
-    get_project_by_user,
-    get_user_projects,
-    update_project,
-    update_project_s3_paths,
-    update_project_status,
-    delete_project,
+    create_campaign,
+    get_campaign,
+    get_campaign_by_user,
+    get_user_campaigns,
+    update_campaign,
+    update_campaign_s3_paths,
+    update_campaign_status,
+    delete_campaign,
     get_generation_stats
 )
 from app.models.schemas import (
-    CreateProjectRequest,
-    ProjectResponse,
-    ProjectDetailResponse,
-    ProjectListResponse,
+    CreateCampaignRequest,
+    CampaignResponse,
+    CampaignDetailResponse,
+    CampaignListResponse,
     ErrorResponse
 )
 from app.api.auth import get_current_user_id
-from app.utils.s3_utils import create_project_folder_structure, delete_project_folder
+from app.utils.s3_utils import create_campaign_folder_structure, delete_campaign_folder
 from app.services.style_manager import StyleManager
 
 logger = logging.getLogger(__name__)
@@ -41,14 +41,14 @@ router = APIRouter(redirect_slashes=False)
 # CREATE Endpoints
 # ============================================================================
 
-@router.post("/", response_model=ProjectResponse)
-async def create_new_project(
-    request: CreateProjectRequest,
+@router.post("/", response_model=CampaignResponse)
+async def create_new_campaign(
+    request: CreateCampaignRequest,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    Create a new luxury perfume TikTok ad project.
+    Create a new luxury perfume TikTok ad campaign.
     
     Logs request data for debugging validation errors.
     
@@ -56,7 +56,7 @@ async def create_new_project(
     - Authorization: Bearer {token} (optional in development)
     
     **Request Body:**
-    - title: Project title (max 200 chars)
+    - title: Campaign title (max 200 chars)
     - creative_prompt: User's creative vision for the perfume ad (20-3000 chars)
     - target_duration: Target video duration (15-60 seconds for TikTok)
     - brand_name: Brand name (max 100 chars)
@@ -72,7 +72,7 @@ async def create_new_project(
     
     **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all perfume ads.
     
-    **Response:** ProjectResponse with newly created project
+    **Response:** CampaignResponse with newly created campaign
     
     **Errors:**
     - 400: Invalid input (validation errors)
@@ -96,7 +96,7 @@ async def create_new_project(
     """
     try:
         # Log request data for debugging
-        logger.info(f"Creating project with data: title={request.title}, brand_name={request.brand_name}, perfume_name={request.perfume_name}, creative_prompt length={len(request.creative_prompt) if request.creative_prompt else 0}")
+        logger.info(f"Creating campaign with data: title={request.title}, brand_name={request.brand_name}, perfume_name={request.perfume_name}, creative_prompt length={len(request.creative_prompt) if request.creative_prompt else 0}")
         
         # Validate required fields
         if not request.perfume_name or not request.perfume_name.strip():
@@ -171,8 +171,8 @@ async def create_new_project(
                 "source": "user_selected"
             }
         
-        # Create initial ad_project_json
-        ad_project_json = {
+        # Create initial ad_campaign_json
+        ad_campaign_json = {
             "version": "1.0",
             "creative_prompt": request.creative_prompt,
             "target_duration": request.target_duration,
@@ -206,13 +206,13 @@ async def create_new_project(
             "render_status": None
         }
         
-        # Create project in database
-        project = create_project(
+        # Create campaign in database
+        campaign = create_campaign(
             db=db,
             user_id=user_id,
             title=request.title,
             brief=request.creative_prompt,  # Store creative_prompt as brief in DB for backwards compat
-            ad_project_json=ad_project_json,
+            ad_campaign_json=ad_campaign_json,
             mood="",  # Deprecated, keeping for DB schema compatibility
             duration=request.target_duration,
             aspect_ratio=request.aspect_ratio,  # Deprecated but kept for backward compat
@@ -226,63 +226,63 @@ async def create_new_project(
             num_variations=request.num_variations  # MULTI-VARIATION: Store variation count
         )
         
-        # S3 RESTRUCTURING: Initialize S3 folder structure for new project
+        # S3 RESTRUCTURING: Initialize S3 folder structure for new campaign
         try:
-            folders = await create_project_folder_structure(str(project.id))
-            # Note: update_project_s3_paths is NOT async, don't await it
-            update_project_s3_paths(
+            folders = await create_campaign_folder_structure(str(campaign.id))
+            # Note: update_campaign_s3_paths is NOT async, don't await it
+            update_campaign_s3_paths(
                 db,
-                project.id,
+                campaign.id,
                 folders["s3_folder"],
                 folders["s3_url"]
             )
-            logger.info(f"✅ Created project {project.id} with S3 folders at {folders['s3_url']}")
+            logger.info(f"✅ Created campaign {campaign.id} with S3 folders at {folders['s3_url']}")
         except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize S3 folders for {project.id}: {e}")
-            # Continue anyway - project created, S3 will be initialized during generation
+            logger.warning(f"⚠️ Failed to initialize S3 folders for {campaign.id}: {e}")
+            # Continue anyway - campaign created, S3 will be initialized during generation
         
-        # Convert project to response - handle both DB and mock projects
-        return ProjectResponse.model_validate({
-            "id": project.id,
-            "user_id": project.user_id,
-            "title": project.title,
-            "status": project.status,
-            "progress": project.progress,
-            "cost": float(project.cost) if project.cost else 0.0,
-            "aspect_ratio": getattr(project, 'aspect_ratio', '9:16'),  # Phase 9: Default to 9:16
-            "created_at": project.created_at,
-            "updated_at": project.updated_at,
+        # Convert campaign to response - handle both DB and mock campaigns
+        return CampaignResponse.model_validate({
+            "id": campaign.id,
+            "user_id": campaign.user_id,
+            "title": campaign.title,
+            "status": campaign.status,
+            "progress": campaign.progress,
+            "cost": float(campaign.cost) if campaign.cost else 0.0,
+            "aspect_ratio": getattr(campaign, 'aspect_ratio', '9:16'),  # Phase 9: Default to 9:16
+            "created_at": campaign.created_at,
+            "updated_at": campaign.updated_at,
         })
     
     except Exception as e:
-        logger.error(f"❌ Failed to create project: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create project: {str(e)}")
+        logger.error(f"❌ Failed to create campaign: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create campaign: {str(e)}")
 
 
 # ============================================================================
 # READ Endpoints
 # ============================================================================
 
-@router.get("/{project_id}", response_model=ProjectDetailResponse)
-async def get_project_details(
-    project_id: UUID,
+@router.get("/{campaign_id}", response_model=CampaignDetailResponse)
+async def get_campaign_details(
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    Get detailed information about a specific project.
+    Get detailed information about a specific campaign.
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
     
-    **Response:** ProjectDetailResponse with full configuration
+    **Response:** CampaignDetailResponse with full configuration
     
     **Errors:**
-    - 404: Project not found
-    - 403: Not authorized to view this project
+    - 404: Campaign not found
+    - 403: Not authorized to view this campaign
     - 401: Missing or invalid authorization
     """
     try:
@@ -290,41 +290,41 @@ async def get_project_details(
         
         user_id = get_current_user_id(authorization)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
+        # Get campaign and verify ownership
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
         
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        return ProjectDetailResponse.model_validate(project)
+        return CampaignDetailResponse.model_validate(campaign)
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get project {project_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get project: {str(e)}")
+        logger.error(f"❌ Failed to get campaign {campaign_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get campaign: {str(e)}")
 
 
-@router.get("/", response_model=ProjectListResponse)
-async def list_user_projects(
-    limit: int = Query(50, ge=1, le=100, description="Max projects to return"),
-    offset: int = Query(0, ge=0, description="Number of projects to skip"),
+@router.get("/", response_model=CampaignListResponse)
+async def list_user_campaigns(
+    limit: int = Query(50, ge=1, le=100, description="Max campaigns to return"),
+    offset: int = Query(0, ge=0, description="Number of campaigns to skip"),
     status: str = Query(None, description="Filter by status (optional)"),
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    List all projects for the current user with pagination.
+    List all campaigns for the current user with pagination.
     
     **Query Parameters:**
-    - limit: Maximum number of projects (1-100, default 50)
-    - offset: Number of projects to skip (default 0)
+    - limit: Maximum number of campaigns (1-100, default 50)
+    - offset: Number of campaigns to skip (default 0)
     - status: (optional) Filter by status (PENDING, QUEUED, EXTRACTING_PRODUCT, PLANNING, GENERATING_SCENES, COMPOSITING, ADDING_OVERLAYS, GENERATING_AUDIO, RENDERING, COMPLETED, FAILED)
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
     
-    **Response:** ProjectListResponse with list of projects
+    **Response:** CampaignListResponse with list of campaigns
     
     **Errors:**
     - 400: Invalid query parameters
@@ -335,8 +335,8 @@ async def list_user_projects(
         
         user_id = get_current_user_id(authorization)
         
-        # Get projects
-        projects = get_user_projects(
+        # Get campaigns
+        campaigns = get_user_campaigns(
             db=db,
             user_id=user_id,
             limit=limit,
@@ -345,11 +345,11 @@ async def list_user_projects(
         )
         
         # Count total (for pagination info)
-        total = len(projects)  # In production, use a separate count query
+        total = len(campaigns)  # In production, use a separate count query
         
-        # Convert projects to response - handle both DB and mock projects
-        response_projects = [
-            ProjectResponse.model_validate({
+        # Convert campaigns to response - handle both DB and mock campaigns
+        response_campaigns = [
+            CampaignResponse.model_validate({
                 "id": p.id,
                 "user_id": p.user_id,
                 "title": p.title,
@@ -360,19 +360,19 @@ async def list_user_projects(
                 "created_at": p.created_at,
                 "updated_at": p.updated_at,
             })
-            for p in projects
+            for p in campaigns
         ]
         
-        return ProjectListResponse(
+        return CampaignListResponse(
             total=total,
             limit=limit,
             offset=offset,
-            projects=response_projects
+            campaigns=response_campaigns
         )
     
     except Exception as e:
-        logger.error(f"❌ Failed to list projects: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list projects: {str(e)}")
+        logger.error(f"❌ Failed to list campaigns: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list campaigns: {str(e)}")
 
 
 @router.get("/stats/summary", response_model=dict)
@@ -389,7 +389,7 @@ async def get_user_stats(
     **Response:**
     ```json
     {
-      "total_projects": 10,
+      "total_campaigns": 10,
       "completed": 8,
       "failed": 1,
       "in_progress": 1,
@@ -475,29 +475,29 @@ async def get_available_styles():
 # UPDATE Endpoints
 # ============================================================================
 
-@router.put("/{project_id}", response_model=ProjectResponse)
-async def update_project_details(
-    project_id: UUID,
+@router.put("/{campaign_id}", response_model=CampaignResponse)
+async def update_campaign_details(
+    campaign_id: UUID,
     request: dict,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    Update project details (title, brief, etc).
+    Update campaign details (title, brief, etc).
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
     
     **Request Body:**
-    - Flexible: any project fields to update
+    - Flexible: any campaign fields to update
     
-    **Response:** Updated ProjectResponse
+    **Response:** Updated CampaignResponse
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 401: Missing or invalid authorization
     """
@@ -507,50 +507,50 @@ async def update_project_details(
         user_id = get_current_user_id(authorization)
         
         # Verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Update project
-        updated = update_project(db, project_id, **request)
+        # Update campaign
+        updated = update_campaign(db, campaign_id, **request)
         
         if not updated:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        return ProjectResponse.model_validate(updated)
+        return CampaignResponse.model_validate(updated)
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to update project {project_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update project: {str(e)}")
+        logger.error(f"❌ Failed to update campaign {campaign_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update campaign: {str(e)}")
 
 
 # ============================================================================
 # DELETE Endpoints
 # ============================================================================
 
-@router.delete("/{project_id}")
-async def delete_project_endpoint(
-    project_id: UUID,
+@router.delete("/{campaign_id}")
+async def delete_campaign_endpoint(
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    Delete a project (only if owned by current user).
+    Delete a campaign (only if owned by current user).
     
-    Also deletes all S3 files associated with the project.
+    Also deletes all S3 files associated with the campaign.
     
     **Path Parameters:**
-    - project_id: UUID of the project to delete
+    - campaign_id: UUID of the campaign to delete
     
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
     
-    **Response:** {"status": "deleted", "project_id": "...", "s3_cleaned": true/false}
+    **Response:** {"status": "deleted", "campaign_id": "...", "s3_cleaned": true/false}
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
     - 401: Missing or invalid authorization
     """
@@ -559,41 +559,41 @@ async def delete_project_endpoint(
         
         user_id = get_current_user_id(authorization)
         
-        # Get project to retrieve S3 folder path
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found or not authorized")
+        # Get campaign to retrieve S3 folder path
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found or not authorized")
         
         # S3 RESTRUCTURING: Delete S3 folder and all contents
         s3_cleaned = False
-        if project.s3_project_folder:
+        if campaign.s3_campaign_folder:
             try:
-                s3_cleaned = await delete_project_folder(str(project_id))
+                s3_cleaned = await delete_campaign_folder(str(campaign_id))
                 if s3_cleaned:
-                    logger.info(f"✅ Deleted S3 folder: {project.s3_project_folder}")
+                    logger.info(f"✅ Deleted S3 folder: {campaign.s3_campaign_folder}")
                 else:
-                    logger.warning(f"⚠️ Partial S3 cleanup for {project_id}")
+                    logger.warning(f"⚠️ Partial S3 cleanup for {campaign_id}")
             except Exception as e:
                 logger.error(f"⚠️ S3 cleanup error (non-critical): {e}")
                 # Continue with database deletion anyway
         
-        # Delete project from database
-        success = delete_project(db, project_id, user_id)
+        # Delete campaign from database
+        success = delete_campaign(db, campaign_id, user_id)
         
         if not success:
-            raise HTTPException(status_code=404, detail="Project not found or not authorized")
+            raise HTTPException(status_code=404, detail="Campaign not found or not authorized")
         
         return {
             "status": "deleted",
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "s3_cleaned": s3_cleaned
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to delete project {project_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
+        logger.error(f"❌ Failed to delete campaign {campaign_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete campaign: {str(e)}")
 
 
 

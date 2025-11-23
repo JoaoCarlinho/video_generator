@@ -5,16 +5,16 @@
 
 import { supabase } from './auth'
 
-const STORAGE_BUCKET = 'project-assets' // You may need to create this bucket in Supabase
+const STORAGE_BUCKET = 'campaign-assets' // You may need to create this bucket in Supabase
 
 /**
- * Upload multiple product images for a project
- * @param projectId - The project ID for folder organization
+ * Upload multiple product images for a campaign
+ * @param campaignId - The campaign ID for folder organization
  * @param files - Array of image files to upload
  * @returns Array of public URLs for uploaded images
  */
 export const uploadProductImages = async (
-  projectId: string,
+  campaignId: string,
   files: File[]
 ): Promise<string[]> => {
   const urls: string[] = []
@@ -22,7 +22,7 @@ export const uploadProductImages = async (
   for (const file of files) {
     const timestamp = Date.now()
     const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-    const filePath = `projects/${projectId}/products/${fileName}`
+    const filePath = `campaigns/${campaignId}/products/${fileName}`
 
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -49,19 +49,19 @@ export const uploadProductImages = async (
 
 /**
  * Upload a single scene background image
- * @param projectId - The project ID for folder organization
+ * @param campaignId - The campaign ID for folder organization
  * @param sceneId - The scene ID
  * @param file - The background image file
  * @returns Public URL for the uploaded image
  */
 export const uploadSceneBackground = async (
-  projectId: string,
+  campaignId: string,
   sceneId: string,
   file: File
 ): Promise<string> => {
   const timestamp = Date.now()
   const fileName = `${sceneId}_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-  const filePath = `projects/${projectId}/scenes/${fileName}`
+  const filePath = `campaigns/${campaignId}/scenes/${fileName}`
 
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)

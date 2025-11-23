@@ -200,7 +200,7 @@ class SceneEditPipeline:
             final_video_path = await renderer.render_final_video(
                 scene_video_urls=scene_temps,
                 audio_url=audio_url,
-                project_id=str(self.campaign_id),
+                campaign_id=str(self.campaign_id),
                 variation_index=self.campaign.selected_variation_index or 0
             )
             

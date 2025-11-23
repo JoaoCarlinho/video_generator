@@ -1,7 +1,7 @@
 /**
  * PHASE 7: StyleSelector Component - Luxury Theme
  * 
- * Displays 5 video styles for user selection in CreateProject
+ * Displays 5 video styles for user selection in CreateCampaign
  * Styles: Cinematic, Dark Premium, Minimal Studio, Lifestyle, 2D Animated  (Shows style cards with descriptions, keywords, and use cases.)
  * User can select one style or leave blank for LLM to choose.
  */

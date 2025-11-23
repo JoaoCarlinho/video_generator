@@ -93,7 +93,7 @@ export interface ReferenceImage {
   extractedAt?: string
 }
 
-// Project Types
+// Campaign Types
 export interface BrandConfig {
   name: string
   description?: string
@@ -114,10 +114,10 @@ export interface SceneBackground {
   backgroundUrl: string
 }
 
-export interface Project {
+export interface Campaign {
   id: string
   userId: string
-  projectName: string
+  campaignName: string
   brief: string
   brandConfig: BrandConfig
   targetAudience: string
@@ -128,14 +128,14 @@ export interface Project {
   sceneBackgrounds?: SceneBackground[]
   outputFormats?: AspectRatio[]
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
-  adProjectJson?: Record<string, any>
+  adCampaignJson?: Record<string, any>
   createdAt: string
   updatedAt: string
   num_variations?: number // 1-3
   selected_variation_index?: number | null // 0-2 or null
 }
 
-export interface CreateProjectInput {
+export interface CreateCampaignInput {
   title: string
   brief?: string
   brand_name: string
@@ -158,7 +158,7 @@ export interface CreateProjectInput {
 // Generation Types
 export interface GenerationJob {
   id: string
-  projectId: string
+  campaignId: string
   status: 'queued' | 'processing' | 'completed' | 'failed'
   progress: number
   currentStep: string
@@ -220,8 +220,8 @@ export interface SelectedStyleConfig {
   display_name?: string
 }
 
-// PHASE 7: Update CreateProjectInput to include style
-export interface CreateProjectInputWithStyle extends CreateProjectInput {
+// PHASE 7: Update CreateCampaignInput to include style
+export interface CreateCampaignInputWithStyle extends CreateCampaignInput {
   selected_style?: VideoStyleType | null
 }
 

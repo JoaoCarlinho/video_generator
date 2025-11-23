@@ -34,12 +34,12 @@ class SQSWorkerConfig:
         logger.info(f"📌 Queue URL: {self.queue_url}")
         logger.info(f"📌 DLQ URL: {self.dlq_url}")
 
-    def enqueue_job(self, project_id: str) -> Dict[str, Any]:
+    def enqueue_job(self, campaign_id: str) -> Dict[str, Any]:
         """
         Enqueue a generation job to SQS.
 
         Args:
-            project_id: UUID string of project to generate
+            campaign_id: UUID string of campaign to generate
 
         Returns:
             Dict with job_id and metadata
@@ -51,7 +51,7 @@ class SQSWorkerConfig:
             # Create message body
             message_body = {
                 "job_id": job_id,
-                "project_id": project_id,
+                "campaign_id": campaign_id,
                 "function": "generate_video",
                 "enqueued_at": time.time()
             }
@@ -65,20 +65,20 @@ class SQSWorkerConfig:
                         'StringValue': job_id,
                         'DataType': 'String'
                     },
-                    'ProjectId': {
-                        'StringValue': project_id,
+                    'CampaignId': {
+                        'StringValue': campaign_id,
                         'DataType': 'String'
                     }
                 }
             )
 
-            logger.info(f"✅ Enqueued job {job_id} for project {project_id}")
+            logger.info(f"✅ Enqueued job {job_id} for campaign {campaign_id}")
             logger.info(f"📌 SQS Message ID: {response['MessageId']}")
 
             return {
                 "id": job_id,
                 "message_id": response['MessageId'],
-                "project_id": project_id
+                "campaign_id": campaign_id
             }
 
         except ClientError as e:
@@ -93,7 +93,7 @@ class SQSWorkerConfig:
         Get status of a specific job.
 
         Note: SQS doesn't track job status like RQ does.
-        Status must be tracked in the database (projects table).
+        Status must be tracked in the database (campaigns table).
         This method is kept for API compatibility but returns limited info.
 
         Args:
@@ -103,11 +103,11 @@ class SQSWorkerConfig:
             Dict with job status information
         """
         # SQS doesn't have built-in job status tracking
-        # Status should be tracked in database via project.status
+        # Status should be tracked in database via campaign.status
         return {
             "job_id": job_id,
             "status": "unknown",
-            "message": "Job status tracked in database. Check project.status instead."
+            "message": "Job status tracked in database. Check campaign.status instead."
         }
 
     def cancel_job(self, job_id: str) -> bool:
@@ -115,7 +115,7 @@ class SQSWorkerConfig:
         Cancel a job (not supported in SQS).
 
         Note: SQS doesn't support canceling specific messages once sent.
-        The worker will need to check project.status and skip cancelled jobs.
+        The worker will need to check campaign.status and skip cancelled jobs.
 
         Args:
             job_id: Job ID
@@ -124,7 +124,7 @@ class SQSWorkerConfig:
             False (cancellation not supported)
         """
         logger.warning(f"⚠️ Job cancellation not supported in SQS")
-        logger.warning(f"⚠️ To cancel job {job_id}, update project.status to 'CANCELLED' in database")
+        logger.warning(f"⚠️ To cancel job {job_id}, update campaign.status to 'CANCELLED' in database")
         return False
 
     def receive_messages(self, max_messages: int = 1, wait_time: int = 20) -> list:
@@ -230,12 +230,12 @@ class SQSWorkerConfig:
                         # Parse message body
                         body = json.loads(message['Body'])
                         job_id = body['job_id']
-                        project_id = body['project_id']
+                        campaign_id = body['campaign_id']
 
-                        logger.info(f"🎬 Processing job {job_id} for project {project_id}")
+                        logger.info(f"🎬 Processing job {job_id} for campaign {campaign_id}")
 
                         # Process the job
-                        generate_video(project_id)
+                        generate_video(campaign_id)
 
                         # Delete message from queue (job completed)
                         self.delete_message(message['ReceiptHandle'])

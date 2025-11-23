@@ -54,14 +54,14 @@ class ProductExtractor:
     async def extract_product(
         self,
         image_url: str,
-        project_id: str,
+        campaign_id: str,
     ) -> str:
         """
         Extract product from image and save to local filesystem.
 
         Args:
             image_url: URL or local path of product image
-            project_id: Project UUID for organizing local files
+            campaign_id: Campaign UUID for organizing local files
 
         Returns:
             Local file path of extracted product PNG with transparent background
@@ -79,7 +79,7 @@ class ProductExtractor:
             extracted_image = await self._remove_background(image_data)
 
             # Save to local filesystem
-            local_path = await self._save_to_local(extracted_image, project_id)
+            local_path = await self._save_to_local(extracted_image, campaign_id)
 
             logger.info(f"✅ Product extracted and saved to {local_path}")
             return local_path
@@ -184,17 +184,17 @@ class ProductExtractor:
             logger.error(f"Error removing background: {e}")
             raise
 
-    async def _save_to_local(self, image: Image.Image, project_id: str) -> str:
+    async def _save_to_local(self, image: Image.Image, campaign_id: str) -> str:
         """Save extracted product image to local filesystem."""
         try:
             from pathlib import Path
             
-            # Create directory structure: /tmp/genads/{project_id}/draft/product/
-            project_dir = Path(f"/tmp/genads/{project_id}/draft/product")
-            project_dir.mkdir(parents=True, exist_ok=True)
+            # Create directory structure: /tmp/genads/{campaign_id}/draft/product/
+            campaign_dir = Path(f"/tmp/genads/{campaign_id}/draft/product")
+            campaign_dir.mkdir(parents=True, exist_ok=True)
             
             # Save as PNG
-            local_path = project_dir / "extracted.png"
+            local_path = campaign_dir / "extracted.png"
             image.save(local_path, format="PNG")
 
             logger.info(f"✅ Saved product to local filesystem: {local_path}")
@@ -263,7 +263,7 @@ class ProductExtractor:
         # Extract product using existing method
         product_url = await self.extract_product(
             image_url=front_image_url,
-            project_id=str(campaign.campaign_id),  # LocalStorageManager uses project_id naming
+            campaign_id=str(campaign.campaign_id),  # LocalStorageManager uses campaign_id naming
         )
         
         return product_url

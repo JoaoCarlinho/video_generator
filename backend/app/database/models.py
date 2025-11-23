@@ -76,6 +76,7 @@ class Campaign(Base):
 
     # Relationships
     product = relationship("Product", back_populates="campaigns")
+    creatives = relationship("Creative", back_populates="campaign", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Campaign {self.id} - {self.name}>"
@@ -84,6 +85,63 @@ class Campaign(Base):
     def display_name(self):
         """Auto-generate display name from name, event, and year."""
         return f"{self.name}-{self.seasonal_event}-{self.year}"
+
+
+class Creative(Base):
+    """Creative model for storing individual creative executions within a campaign."""
+
+    __tablename__ = "creatives"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey('campaigns.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    ad_creative_json = Column(JSONB, nullable=False)  # Creative configuration and content
+    status = Column(String(50), default="pending", index=True)  # pending, generating, completed, failed
+    progress = Column(Integer, default=0)
+    cost = Column(Numeric(10, 2), default=0)
+    error_message = Column(Text, nullable=True)
+
+    # S3 storage paths
+    s3_campaign_folder = Column(String, nullable=True)
+    s3_campaign_folder_url = Column(String, nullable=True)
+
+    # Video settings
+    aspect_ratio = Column(String, default='16:9')
+    product_images = Column(ARRAY(Text), nullable=True)
+    scene_backgrounds = Column(JSONB, nullable=True)
+    output_formats = Column(ARRAY(Text), nullable=True, default=['16:9'])
+
+    # Local storage paths
+    local_campaign_path = Column(String(500), nullable=True)
+    local_video_paths = Column(JSON, nullable=True)
+    local_input_files = Column(JSON, nullable=True)
+    local_draft_files = Column(JSON, nullable=True)
+
+    # Style and provider settings
+    selected_style = Column(String(50), nullable=True)
+    video_provider = Column(String(20), nullable=False, default='replicate', server_default='replicate')
+    video_provider_metadata = Column(JSONB, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    campaign = relationship("Campaign", back_populates="creatives")
+
+    def __repr__(self):
+        return f"<Creative {self.id} - {self.title}>"
+
+    @validates('video_provider')
+    def validate_video_provider(self, key, value):
+        """Validate that video_provider is either 'replicate' or 'ecs'."""
+        valid_providers = ['replicate', 'ecs']
+        if value not in valid_providers:
+            raise ValueError(
+                f"Invalid video provider: '{value}'. "
+                f"Must be one of: {', '.join(valid_providers)}"
+            )
+        return value
 
 
 # ============================================================================
@@ -104,70 +162,3 @@ class AuthUser(Base):
     
     def __repr__(self):
         return f"<AuthUser {self.id}>"
-
-
-# ============================================================================
-# DEPRECATED: Project model (will be removed in Phase 3-4)
-# Kept temporarily for backward compatibility with existing API endpoints
-# ============================================================================
-class Project(Base):
-    """DEPRECATED: Project model - replaced by Campaign in Phase 2.
-    
-    This model is kept temporarily for backward compatibility.
-    Will be removed when API endpoints are updated in Phase 3-4.
-    """
-    
-    __tablename__ = "projects"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    title = Column(String, nullable=False)
-    ad_project_json = Column(JSONB, nullable=False)
-    status = Column(String, default="pending", index=True)
-    progress = Column(Integer, default=0)
-    cost = Column(Numeric(10, 2), default=0)
-    error_message = Column(Text, nullable=True)
-    
-    # S3 RESTRUCTURING: Per-project folder organization
-    s3_project_folder = Column(String, nullable=True)        # projects/{id}/
-    s3_project_folder_url = Column(String, nullable=True)    # https://bucket.s3.../projects/{id}/
-    
-    # VIDEO GENERATION SETTINGS
-    aspect_ratio = Column(String, default='16:9')  # DEPRECATED: Use output_formats instead
-
-    # MULTI-FORMAT OUTPUT (Story 3)
-    product_images = Column(ARRAY(Text), nullable=True)      # Array of product image URLs (max 10)
-    scene_backgrounds = Column(JSONB, nullable=True)         # JSON array of scene background mappings
-    output_formats = Column(ARRAY(Text), nullable=True, default=['16:9'])  # Array of aspect ratios
-
-    # LOCAL STORAGE: Local-first generation paths
-    local_project_path = Column(String(500), nullable=True)    # /tmp/genads/{project_id}
-    local_video_paths = Column(JSON, nullable=True)          # {"16:9": "/path/to/video.mp4", "9:16": "/path/to/video_9x16.mp4"}
-    local_input_files = Column(JSON, nullable=True)          # {"product_image": "/path/to/image.png", ...}
-    local_draft_files = Column(JSON, nullable=True)          # {"scene_1_bg": "/path/to/video.mp4", ...}
-    
-    # PHASE 7: Style Selection
-    selected_style = Column(String(50), nullable=True)       # 'cinematic', 'dark_premium', 'minimal_studio', 'lifestyle', '2d_animated', or NULL
-
-    # WAN 2.5: Video Provider Tracking
-    video_provider = Column(String(20), nullable=False, default='replicate', server_default='replicate')  # 'replicate' or 'ecs'
-    video_provider_metadata = Column(JSONB, nullable=True)   # Provider-specific metadata (endpoint version, failover events)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    @validates('video_provider')
-    def validate_video_provider(self, key, value):
-        """Validate that video_provider is either 'replicate' or 'ecs'."""
-        valid_providers = ['replicate', 'ecs']
-        if value not in valid_providers:
-            raise ValueError(
-                f"Invalid video provider: '{value}'. "
-                f"Must be one of: {', '.join(valid_providers)}"
-            )
-        return value
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    
-    def __repr__(self):
-        return f"<Project {self.id} - {self.title} (provider: {self.video_provider})>"

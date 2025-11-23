@@ -44,7 +44,7 @@ class Renderer:
         self,
         scene_video_urls: List[str],
         audio_url: str,
-        project_id: str,
+        campaign_id: str,
         variation_index: int = None,
     ) -> str:
         """
@@ -53,7 +53,7 @@ class Renderer:
         Args:
             scene_video_urls: List of URLs/paths of scene videos (in order)
             audio_url: URL/path of background music
-            project_id: Project UUID
+            campaign_id: Campaign UUID
 
         Returns:
             Local file path of final video
@@ -100,7 +100,7 @@ class Renderer:
                 from app.utils.local_storage import LocalStorageManager
                 from uuid import UUID
                 local_path = LocalStorageManager.save_final_video(
-                    UUID(project_id),
+                    UUID(campaign_id),
                     "9:16",
                     str(output_path),
                     variation_index=variation_index
@@ -272,13 +272,13 @@ class Renderer:
             raise
 
     async def _upload_final_video(
-        self, video_path: Path, project_id: str, aspect_ratio: str
+        self, video_path: Path, campaign_id: str, aspect_ratio: str
     ) -> str:
         """Upload final video to S3."""
         try:
-            # S3 RESTRUCTURING: Use new project folder structure with final/ subfolder
+            # S3 RESTRUCTURING: Use new campaign folder structure with final/ subfolder
             aspect_tag = aspect_ratio.replace(':', '_')
-            s3_key = f"projects/{project_id}/final/{project_id}_{aspect_tag}.mp4"
+            s3_key = f"campaigns/{campaign_id}/final/{campaign_id}_{aspect_tag}.mp4"
 
             file_size = video_path.stat().st_size
             logger.info(f"Uploading final video ({file_size / 1024 / 1024:.1f}MB)...")

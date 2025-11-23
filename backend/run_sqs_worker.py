@@ -8,7 +8,7 @@ Run this to start the background job worker that polls AWS SQS:
 The worker will:
 1. Poll SQS queue for messages
 2. Process video generation jobs
-3. Update project status in database
+3. Update campaign status in database
 4. Delete messages after successful processing
 
 Requirements:

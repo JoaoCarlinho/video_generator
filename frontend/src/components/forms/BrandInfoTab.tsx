@@ -38,15 +38,15 @@ export const BrandInfoTab: React.FC<BrandInfoTabProps> = ({ data, onChange }) =>
         </p>
       </div>
 
-      {/* Project Title */}
+      {/* Campaign Title */}
       <div className="relative">
         <Input
-          label="Project Title"
+          label="Campaign Title"
           placeholder="e.g., Premium Skincare - Summer Campaign"
           value={data.title}
           onChange={(e) => handleChange('title', e.target.value)}
           required
-          helpText="Give your project a memorable name"
+          helpText="Give your campaign a memorable name"
         />
         {isTitleValid && (
           <div className="absolute right-3 top-9 text-success-500">

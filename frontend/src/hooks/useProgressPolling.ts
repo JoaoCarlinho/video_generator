@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGeneration, type GenerationProgress } from './useGeneration'
 
 interface UseProgressPollingOptions {
-  projectId?: string
+  campaignId?: string
   campaignId?: string
   enabled?: boolean
   interval?: number
@@ -11,7 +11,7 @@ interface UseProgressPollingOptions {
 }
 
 export const useProgressPolling = ({
-  projectId,
+  campaignId,
   campaignId,
   enabled = true,
   interval = 2000,
@@ -19,7 +19,7 @@ export const useProgressPolling = ({
   onError,
 }: UseProgressPollingOptions) => {
   const { getProgress, getCampaignProgress } = useGeneration()
-  const id = campaignId || projectId || ''
+  const id = campaignId || campaignId || ''
   const isCampaign = !!campaignId
   const [progress, setProgress] = useState<GenerationProgress | null>(null)
   const [loading, setLoading] = useState(false)

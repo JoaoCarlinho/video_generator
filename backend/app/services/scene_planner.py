@@ -62,7 +62,7 @@ class Scene(BaseModel):
     overlay: TextOverlay
 
 
-class AdProjectPlan(BaseModel):
+class AdCampaignPlan(BaseModel):
     """Complete ad video plan."""
     creative_prompt: str
     brand_name: str

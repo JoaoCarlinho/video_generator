@@ -4,7 +4,7 @@
  */
 
 export interface VideoStorageEntry {
-  projectId: string
+  campaignId: string
   aspectRatio: '9:16' | '1:1' | '16:9'
   videoBlob: Blob
   timestamp: number
@@ -27,7 +27,7 @@ function getDB(): Promise<IDBDatabase> {
       const db = (event.target as IDBOpenDBRequest).result
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, {
-          keyPath: ['projectId', 'aspectRatio'],
+          keyPath: ['campaignId', 'aspectRatio'],
         })
       }
     }
@@ -36,7 +36,7 @@ function getDB(): Promise<IDBDatabase> {
 
 // Store a video blob in IndexedDB
 export async function storeVideo(
-  projectId: string,
+  campaignId: string,
   aspectRatio: '9:16' | '1:1' | '16:9',
   videoBlob: Blob,
   isFinal: boolean = false
@@ -46,7 +46,7 @@ export async function storeVideo(
   const store = tx.objectStore(STORE_NAME)
 
   const entry: VideoStorageEntry = {
-    projectId,
+    campaignId,
     aspectRatio,
     videoBlob,
     timestamp: Date.now(),
@@ -62,7 +62,7 @@ export async function storeVideo(
 
 // Retrieve a video blob from IndexedDB
 export async function getVideo(
-  projectId: string,
+  campaignId: string,
   aspectRatio: '9:16' | '1:1' | '16:9'
 ): Promise<Blob | null> {
   const db = await getDB()
@@ -70,7 +70,7 @@ export async function getVideo(
   const store = tx.objectStore(STORE_NAME)
 
   return new Promise((resolve, reject) => {
-    const request = store.get([projectId, aspectRatio])
+    const request = store.get([campaignId, aspectRatio])
     request.onerror = () => reject(request.error)
     request.onsuccess = () => {
       const entry = request.result as VideoStorageEntry | undefined
@@ -79,9 +79,9 @@ export async function getVideo(
   })
 }
 
-// Get all videos for a project
-export async function getProjectVideos(
-  projectId: string
+// Get all videos for a campaign
+export async function getCampaignVideos(
+  campaignId: string
 ): Promise<Record<'9:16' | '1:1' | '16:9', Blob | null>> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readonly')
@@ -92,7 +92,7 @@ export async function getProjectVideos(
     request.onerror = () => reject(request.error)
     request.onsuccess = () => {
       const entries = request.result as VideoStorageEntry[]
-      const projectEntries = entries.filter((e) => e.projectId === projectId)
+      const campaignEntries = entries.filter((e) => e.campaignId === campaignId)
 
       const result: Record<'9:16' | '1:1' | '16:9', Blob | null> = {
         '9:16': null,
@@ -100,7 +100,7 @@ export async function getProjectVideos(
         '16:9': null,
       }
 
-      projectEntries.forEach((entry) => {
+      campaignEntries.forEach((entry) => {
         result[entry.aspectRatio] = entry.videoBlob
       })
 
@@ -110,7 +110,7 @@ export async function getProjectVideos(
 }
 
 // Mark videos as finalized (ready to upload)
-export async function markAsFinalized(projectId: string): Promise<void> {
+export async function markAsFinalized(campaignId: string): Promise<void> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readwrite')
   const store = tx.objectStore(STORE_NAME)
@@ -120,9 +120,9 @@ export async function markAsFinalized(projectId: string): Promise<void> {
     request.onerror = () => reject(request.error)
     request.onsuccess = () => {
       const entries = request.result as VideoStorageEntry[]
-      const projectEntries = entries.filter((e) => e.projectId === projectId)
+      const campaignEntries = entries.filter((e) => e.campaignId === campaignId)
 
-      projectEntries.forEach((entry) => {
+      campaignEntries.forEach((entry) => {
         entry.isFinal = true
         store.put(entry)
       })
@@ -132,8 +132,8 @@ export async function markAsFinalized(projectId: string): Promise<void> {
   })
 }
 
-// Delete all videos for a project from IndexedDB
-export async function deleteProjectVideos(projectId: string): Promise<void> {
+// Delete all videos for a campaign from IndexedDB
+export async function deleteCampaignVideos(campaignId: string): Promise<void> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readwrite')
   const store = tx.objectStore(STORE_NAME)
@@ -143,10 +143,10 @@ export async function deleteProjectVideos(projectId: string): Promise<void> {
     request.onerror = () => reject(request.error)
     request.onsuccess = () => {
       const entries = request.result as VideoStorageEntry[]
-      const projectEntries = entries.filter((e) => e.projectId === projectId)
+      const campaignEntries = entries.filter((e) => e.campaignId === campaignId)
 
-      projectEntries.forEach((entry) => {
-        store.delete([entry.projectId, entry.aspectRatio])
+      campaignEntries.forEach((entry) => {
+        store.delete([entry.campaignId, entry.aspectRatio])
       })
 
       resolve()
@@ -156,16 +156,16 @@ export async function deleteProjectVideos(projectId: string): Promise<void> {
 
 // Get video as blob URL (for preview)
 export async function getVideoURL(
-  projectId: string,
+  campaignId: string,
   aspectRatio: '9:16' | '1:1' | '16:9'
 ): Promise<string | null> {
-  const videoBlob = await getVideo(projectId, aspectRatio)
+  const videoBlob = await getVideo(campaignId, aspectRatio)
   if (!videoBlob) return null
   return URL.createObjectURL(videoBlob)
 }
 
 // Get storage usage in bytes
-export async function getStorageUsage(projectId: string): Promise<number> {
+export async function getStorageUsage(campaignId: string): Promise<number> {
   const db = await getDB()
   const tx = db.transaction([STORE_NAME], 'readonly')
   const store = tx.objectStore(STORE_NAME)
@@ -175,8 +175,8 @@ export async function getStorageUsage(projectId: string): Promise<number> {
     request.onerror = () => reject(request.error)
     request.onsuccess = () => {
       const entries = request.result as VideoStorageEntry[]
-      const projectEntries = entries.filter((e) => e.projectId === projectId)
-      const totalSize = projectEntries.reduce((sum, entry) => sum + entry.videoBlob.size, 0)
+      const campaignEntries = entries.filter((e) => e.campaignId === campaignId)
+      const totalSize = campaignEntries.reduce((sum, entry) => sum + entry.videoBlob.size, 0)
       resolve(totalSize)
     }
   })

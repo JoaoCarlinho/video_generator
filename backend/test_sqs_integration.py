@@ -74,11 +74,11 @@ def test_enqueue_message(worker):
     logger.info("=" * 60)
 
     try:
-        # Use a test project ID
-        test_project_id = "00000000-0000-0000-0000-000000000001"
+        # Use a test campaign ID
+        test_campaign_id = "00000000-0000-0000-0000-000000000001"
 
-        logger.info(f"Enqueueing test message for project: {test_project_id}")
-        job = worker.enqueue_job(test_project_id)
+        logger.info(f"Enqueueing test message for campaign: {test_campaign_id}")
+        job = worker.enqueue_job(test_campaign_id)
 
         logger.info(f"✅ Message enqueued successfully")
         logger.info(f"   Job ID: {job['id']}")
@@ -106,7 +106,7 @@ def test_receive_message(worker):
                 import json
                 body = json.loads(msg['Body'])
                 logger.info(f"   Job ID: {body.get('job_id')}")
-                logger.info(f"   Project ID: {body.get('project_id')}")
+                logger.info(f"   Campaign ID: {body.get('campaign_id')}")
                 logger.info(f"   Function: {body.get('function')}")
 
                 # Delete the test message
@@ -163,7 +163,7 @@ def main():
         logger.info("\nNext steps:")
         logger.info("1. Run the SQS worker: python run_sqs_worker.py")
         logger.info("2. Start the API: uvicorn app.main:app --reload")
-        logger.info("3. Test full end-to-end flow with a real project")
+        logger.info("3. Test full end-to-end flow with a real campaign")
         sys.exit(0)
     else:
         logger.error("\n❌ Some tests FAILED - check logs above")

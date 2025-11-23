@@ -10,7 +10,7 @@ import { Onboarding } from './pages/Onboarding'
 import { AddProduct } from './pages/AddProduct'
 import { CampaignDashboard } from './pages/CampaignDashboard'
 import { CreateCampaign } from './pages/CreateCampaign'
-import { CreateProject } from './pages/CreateProject'
+import { CreateCampaign } from './pages/CreateCampaign'
 import { GenerationProgress } from './pages/GenerationProgress'
 import { VideoResults } from './pages/VideoResults'
 import { BrandOnboarding } from './pages/BrandOnboarding'
@@ -105,12 +105,12 @@ function App() {
             path="/create"
             element={
               <ProtectedRoute>
-                <CreateProject />
+                <CreateCampaign />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/projects/:projectId/progress"
+            path="/campaigns/:campaignId/progress"
             element={
               <ProtectedRoute>
                 <GenerationProgress />
@@ -118,7 +118,7 @@ function App() {
             }
           />
           <Route
-            path="/projects/:projectId/select"
+            path="/campaigns/:campaignId/select"
             element={
               <ProtectedRoute>
                 <VideoSelection />
@@ -126,7 +126,7 @@ function App() {
             }
           />
           <Route
-            path="/projects/:projectId/results"
+            path="/campaigns/:campaignId/results"
             element={
               <ProtectedRoute>
                 <VideoResults />

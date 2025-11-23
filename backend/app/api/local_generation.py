@@ -10,7 +10,7 @@ from uuid import UUID
 import logging
 
 from app.database.connection import get_db, init_db
-from app.database.crud import get_project_by_user, update_project_status
+from app.database.crud import get_campaign_by_user, update_campaign_status
 from app.api.auth import get_current_user_id
 from app.utils.local_storage import LocalStorageManager, format_storage_size
 # S3 imports removed - using local storage only
@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/projects/{project_id}/preview")
+@router.get("/campaigns/{campaign_id}/preview")
 async def get_preview_video(
-    project_id: UUID,
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -32,26 +32,26 @@ async def get_preview_video(
     Returns a redirect to S3 URL for efficient video delivery.
 
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
 
     **Response:**
     - 307 Redirect to S3 URL OR
     - Content-Type: video/mp4 (streamed from local if S3 unavailable)
 
     **Errors:**
-    - 404: Project not found or video not available
+    - 404: Campaign not found or video not available
     - 403: Not authorized
     """
     try:
         init_db()
         user_id = get_current_user_id(authorization)
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # Get campaign and verify ownership
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
 
         # PRIORITY 1: Check S3 URLs (output_videos field)
-        s3_video_urls = project.output_videos or {}
+        s3_video_urls = campaign.output_videos or {}
         if s3_video_urls:
             # Get the first available S3 URL
             s3_url = next((url for url in s3_video_urls.values() if url), None)
@@ -62,7 +62,7 @@ async def get_preview_video(
                 return RedirectResponse(url=s3_url, status_code=307)
 
         # FALLBACK: Check local storage
-        local_video_paths = project.local_video_paths or {}
+        local_video_paths = campaign.local_video_paths or {}
         local_video_path = next(iter(local_video_paths.values()), None) if local_video_paths else None
 
         if local_video_path and LocalStorageManager.file_exists(local_video_path):
@@ -93,20 +93,20 @@ async def get_preview_video(
         raise HTTPException(status_code=500, detail=f"Failed to get preview video: {str(e)}")
 
 
-@router.get("/projects/{project_id}/storage-info")
+@router.get("/campaigns/{campaign_id}/storage-info")
 async def get_storage_info(
-    project_id: UUID,
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
-    """Get local storage information for a project.
+    """Get local storage information for a campaign.
     
     Returns storage usage and status.
     
     **Response:**
     ```json
     {
-        "project_id": "...",
+        "campaign_id": "...",
         "local_storage_size": 524288000,
         "local_storage_size_formatted": "500 MB",
         "status": "READY_FOR_REVIEW",
@@ -120,22 +120,22 @@ async def get_storage_info(
         init_db()
         user_id = get_current_user_id(authorization)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # Get campaign and verify ownership
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
         # Calculate storage size
-        storage_size = LocalStorageManager.get_project_storage_size(project_id)
+        storage_size = LocalStorageManager.get_campaign_storage_size(campaign_id)
         
         return {
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "local_storage_size": storage_size,
             "local_storage_size_formatted": format_storage_size(storage_size),
-            "status": project.status,
-            "local_video_paths": project.local_video_paths or {},
+            "status": campaign.status,
+            "local_video_paths": campaign.local_video_paths or {},
             "has_all_aspects": all(
-                v in (project.local_video_paths or {})
+                v in (campaign.local_video_paths or {})
                 for v in ['16:9']
             )
         }
@@ -147,91 +147,91 @@ async def get_storage_info(
         raise HTTPException(status_code=500, detail=f"Failed to get storage info: {str(e)}")
 
 
-@router.post("/projects/{project_id}/finalize")
-async def finalize_project(
-    project_id: UUID,
+@router.post("/campaigns/{campaign_id}/finalize")
+async def finalize_campaign(
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """Finalize video: mark as finalized and keep videos in local storage.
     
     Called when user confirms they want to keep the video.
-    - Marks project as FINALIZED
+    - Marks campaign as FINALIZED
     - Keeps videos in local storage (no S3 upload)
     - Videos remain accessible via preview endpoint
     
     **Path Parameters:**
-    - project_id: UUID of the project
+    - campaign_id: UUID of the campaign
     
     **Response:**
     ```json
     {
         "status": "finalized",
-        "project_id": "...",
+        "campaign_id": "...",
         "local_video_paths": {
             "16:9": "/tmp/genads/.../video_16-9.mp4"
         },
-        "message": "Project finalized. Videos remain in local storage."
+        "message": "Campaign finalized. Videos remain in local storage."
     }
     ```
     
     **Errors:**
-    - 404: Project not found
+    - 404: Campaign not found
     - 403: Not authorized
-    - 400: Project not ready for finalization
+    - 400: Campaign not ready for finalization
     """
     try:
         init_db()
         user_id = get_current_user_id(authorization)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # Get campaign and verify ownership
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Check if project is ready for finalization
-        if project.status not in ['READY_FOR_REVIEW', 'COMPLETED']:
+        # Check if campaign is ready for finalization
+        if campaign.status not in ['READY_FOR_REVIEW', 'COMPLETED']:
             raise HTTPException(
                 status_code=400,
-                detail=f"Project cannot be finalized in status: {project.status}"
+                detail=f"Campaign cannot be finalized in status: {campaign.status}"
             )
         
         # Get local video paths
-        local_video_paths = project.local_video_paths or {}
+        local_video_paths = campaign.local_video_paths or {}
         if not local_video_paths:
             raise HTTPException(
                 status_code=400,
                 detail="No videos available for finalization"
             )
         
-        logger.info(f"🚀 Finalizing project {project_id} (keeping videos in local storage)")
+        logger.info(f"🚀 Finalizing campaign {campaign_id} (keeping videos in local storage)")
         
-        # Update project status to FINALIZED (keep videos in local storage)
-        project.status = 'FINALIZED'
+        # Update campaign status to FINALIZED (keep videos in local storage)
+        campaign.status = 'FINALIZED'
         db.commit()
         
-        logger.info(f"✅ Updated project status to FINALIZED")
+        logger.info(f"✅ Updated campaign status to FINALIZED")
         
         return {
             "status": "finalized",
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "local_video_paths": local_video_paths,
-            "message": "Project finalized. Videos remain in local storage."
+            "message": "Campaign finalized. Videos remain in local storage."
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to finalize project: {e}")
+        logger.error(f"❌ Failed to finalize campaign: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to finalize project: {str(e)}"
+            detail=f"Failed to finalize campaign: {str(e)}"
         )
 
 
-@router.post("/projects/{project_id}/cleanup-local")
+@router.post("/campaigns/{campaign_id}/cleanup-local")
 async def cleanup_local_storage(
-    project_id: UUID,
+    campaign_id: UUID,
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -245,24 +245,24 @@ async def cleanup_local_storage(
         init_db()
         user_id = get_current_user_id(authorization)
         
-        # Get project and verify ownership
-        project = get_project_by_user(db, project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # Get campaign and verify ownership
+        campaign = get_campaign_by_user(db, campaign_id, user_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
         
         # Clear local storage metadata
-        project.local_project_path = None
-        project.local_video_paths = {}
-        project.local_input_files = {}
-        project.local_draft_files = {}
+        campaign.local_campaign_path = None
+        campaign.local_video_paths = {}
+        campaign.local_input_files = {}
+        campaign.local_draft_files = {}
         db.commit()
         
         # Delete files from disk
-        success = LocalStorageManager.cleanup_project_storage(project_id)
+        success = LocalStorageManager.cleanup_campaign_storage(campaign_id)
         
         return {
             "status": "cleaned",
-            "project_id": str(project_id),
+            "campaign_id": str(campaign_id),
             "message": "Local storage cleaned up"
         }
     
