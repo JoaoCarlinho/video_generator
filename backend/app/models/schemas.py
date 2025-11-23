@@ -243,6 +243,13 @@ class BrandResponse(BaseModel):
 
 
 # ============================================================================
+# Brand Schema Aliases (for backward compatibility)
+# ============================================================================
+BrandDetail = BrandResponse
+BrandCreate = CreateBrandRequest
+
+
+# ============================================================================
 # Product Schemas
 # ============================================================================
 
@@ -518,3 +525,19 @@ class ProvidersHealthResponse(BaseModel):
                 }
             }
         }
+
+
+# ============================================================================
+# Additional Schema Aliases (for backward compatibility)
+# ============================================================================
+# Product aliases
+ProductDetail = ProductResponse
+ProductCreate = CreateProductRequest
+
+# Campaign aliases
+CampaignDetail = CampaignResponse
+CampaignCreate = CreateCampaignRequest
+
+# Perfume aliases (perfumes were renamed to products)
+PerfumeDetail = ProductResponse
+PerfumeCreate = CreateProductRequest
