@@ -427,3 +427,5 @@ bmad/
 frontend/.env.production
 product_images/
 *.bak*
+frontend/deployment-status-20251123-023149.txt
+deployment-urls.txt
