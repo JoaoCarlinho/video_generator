@@ -197,9 +197,11 @@ class ErrorResponse(BaseModel):
 
 class GenerationProgressResponse(BaseModel):
     """Response schema for generation progress polling."""
-    project_id: UUID
+    campaign_id: UUID
     status: str
     progress: int
+    current_step: str
+    cost_so_far: float
     error_message: Optional[str] = None
     local_video_paths: Optional[Dict[str, str]] = None
 
@@ -255,8 +257,10 @@ BrandCreate = CreateBrandRequest
 
 class CreateProductRequest(BaseModel):
     """Request schema for creating a new product."""
-    product_type: str = Field(..., min_length=1, max_length=100, description="Product type (required)")
+    product_type: str = Field(..., min_length=1, max_length=100, description="Product type (fragrance, car, watch, energy, etc.)")
     name: str = Field(..., min_length=1, max_length=200, description="Product name (required)")
+    product_gender: Optional[str] = Field(None, description="Product gender: masculine, feminine, unisex, or NULL for non-gendered")
+    product_attributes: Optional[Dict[str, Any]] = Field(None, description="Type-specific attributes (e.g., car_category, watch_movement)")
     icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
     image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
 
@@ -268,11 +272,21 @@ class CreateProductRequest(BaseModel):
             raise ValueError('Maximum 10 image URLs allowed')
         return v
 
+    @field_validator('product_gender')
+    @classmethod
+    def validate_product_gender(cls, v):
+        """Validate product_gender is one of allowed values."""
+        if v is not None and v not in ['masculine', 'feminine', 'unisex']:
+            raise ValueError('product_gender must be one of: masculine, feminine, unisex')
+        return v
+
 
 class UpdateProductRequest(BaseModel):
     """Request schema for updating an existing product."""
     product_type: Optional[str] = Field(None, min_length=1, max_length=100, description="Product type")
     name: Optional[str] = Field(None, min_length=1, max_length=200, description="Product name")
+    product_gender: Optional[str] = Field(None, description="Product gender: masculine, feminine, unisex, or NULL")
+    product_attributes: Optional[Dict[str, Any]] = Field(None, description="Type-specific attributes")
     icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
     image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
 
@@ -282,6 +296,14 @@ class UpdateProductRequest(BaseModel):
         """Validate image_urls array has max 10 items."""
         if v is not None and len(v) > 10:
             raise ValueError('Maximum 10 image URLs allowed')
+        return v
+
+    @field_validator('product_gender')
+    @classmethod
+    def validate_product_gender(cls, v):
+        """Validate product_gender is one of allowed values."""
+        if v is not None and v not in ['masculine', 'feminine', 'unisex']:
+            raise ValueError('product_gender must be one of: masculine, feminine, unisex')
         return v
 
 
@@ -291,6 +313,8 @@ class ProductResponse(BaseModel):
     brand_id: UUID
     product_type: str
     name: str
+    product_gender: Optional[str]
+    product_attributes: Optional[Dict[str, Any]]
     icp_segment: Optional[str]
     image_urls: Optional[List[str]]
     created_at: datetime
@@ -386,6 +410,15 @@ class CampaignResponse(BaseModel):
         from_attributes = True
 
 
+class PaginatedCampaigns(BaseModel):
+    """Paginated list of campaigns."""
+    campaigns: List[CampaignResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
 # ============================================================================
 # Ad Project Domain Models (used in pipeline)
 # ============================================================================
@@ -460,8 +493,8 @@ class AudioSettings(BaseModel):
     enable_voiceover: bool = False
 
 
-class AdProject(BaseModel):
-    """Complete ad project configuration stored in database JSON field."""
+class AdCampaign(BaseModel):
+    """Complete ad campaign configuration stored in database JSON field."""
     version: str = "1.0"
     creative_prompt: str
     target_duration: int
@@ -536,4 +569,5 @@ ProductCreate = CreateProductRequest
 
 # Campaign aliases
 CampaignDetail = CampaignResponse
+CampaignDetailResponse = CampaignResponse  # Alias for backward compatibility
 CampaignCreate = CreateCampaignRequest

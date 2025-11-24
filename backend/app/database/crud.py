@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from app.database.models import Campaign, Brand, Product, Campaign, AuthUser  # AuthUser needed for FK resolution
+from app.database.models import Campaign, Brand, Product, Creative, AuthUser  # AuthUser needed for FK resolution
 from app.models.schemas import (
     CreateCampaignRequest,
     CampaignResponse,
@@ -765,6 +765,37 @@ def get_user_brands(
         return []
 
 
+def get_brand_by_user_id(
+    db: Session,
+    user_id: UUID
+) -> Optional[Brand]:
+    """
+    Get the primary brand for a specific user.
+    Returns the most recently created brand for the user.
+
+    Args:
+        db: Database session
+        user_id: ID of the user
+
+    Returns:
+        Brand: Primary brand for user, or None if no brands exist
+    """
+    try:
+        brand = db.query(Brand).filter(
+            Brand.user_id == user_id
+        ).order_by(desc(Brand.created_at)).first()
+
+        if brand:
+            logger.debug(f"✅ Found primary brand {brand.id} for user {user_id}")
+        else:
+            logger.warning(f"⚠️ No brand found for user {user_id}")
+
+        return brand
+    except Exception as e:
+        logger.error(f"❌ Failed to get brand for user {user_id}: {e}")
+        return None
+
+
 def get_brand(
     db: Session,
     brand_id: UUID,
@@ -915,26 +946,41 @@ def delete_brand(
         logger.error(f"❌ Failed to delete brand {brand_id}: {e}")
 def get_brand_stats(db: Session, brand_id: UUID) -> Dict[str, Any]:
     """
-    Get brand statistics (perfumes count, campaigns count, total cost).
-    
+    Get brand statistics (products count, campaigns count, total cost).
+
+    Note: Campaign doesn't have brand_id - it links to Product, which has brand_id.
+    So we need to join through Product to get campaigns for a brand.
+
     Args:
         db: Database session
         brand_id: Brand ID
-    
+
     Returns:
         Dict with statistics
     """
     try:
-        perfumes_count = db.query(Product).filter(Product.brand_id == brand_id).count()
-        campaigns_count = db.query(Campaign).filter(Campaign.brand_id == brand_id).count()
-        total_cost = db.query(func.sum(Campaign.cost)).filter(Campaign.brand_id == brand_id).scalar() or 0
-        
+        # Products count - direct query
+        products_count = db.query(Product).filter(Product.brand_id == brand_id).count()
+
+        # Campaigns count - join through Product
+        campaigns_count = db.query(Campaign).join(
+            Product, Campaign.product_id == Product.id
+        ).filter(Product.brand_id == brand_id).count()
+
+        # Total cost - sum from Creatives, joining through Campaign and Product
+        # Cost is tracked at the Creative level, not Campaign level
+        total_cost = db.query(func.sum(Creative.cost)).join(
+            Campaign, Creative.campaign_id == Campaign.id
+        ).join(
+            Product, Campaign.product_id == Product.id
+        ).filter(Product.brand_id == brand_id).scalar() or 0
+
         stats = {
-            "total_perfumes": perfumes_count,
+            "total_products": products_count,
             "total_campaigns": campaigns_count,
             "total_cost": float(total_cost)
         }
-        
+
         logger.debug(f"✅ Generated stats for brand {brand_id}: {stats}")
         return stats
     except Exception as e:
@@ -952,6 +998,8 @@ def create_product(
     brand_id: UUID,
     product_type: str,
     name: str,
+    product_gender: Optional[str] = None,
+    product_attributes: Optional[Dict] = None,
     icp_segment: Optional[str] = None,
     image_urls: Optional[List[str]] = None
 ) -> Optional[Product]:
@@ -962,8 +1010,10 @@ def create_product(
         db: Database session
         user_id: ID of the authenticated user (for brand ownership validation)
         brand_id: ID of the brand to associate product with
-        product_type: Type of product
+        product_type: Type of product (fragrance, car, watch, energy, etc.)
         name: Product name
+        product_gender: Product gender (masculine, feminine, unisex, or None)
+        product_attributes: Type-specific attributes as dict (optional)
         icp_segment: ICP/target audience segment (optional)
         image_urls: List of S3 image URLs (optional, max 10)
 
@@ -989,6 +1039,8 @@ def create_product(
             brand_id=brand_id,
             product_type=product_type,
             name=name,
+            product_gender=product_gender,
+            product_attributes=product_attributes,
             icp_segment=icp_segment,
             image_urls=image_urls
         )
@@ -996,7 +1048,7 @@ def create_product(
         db.commit()
         db.refresh(product)
 
-        logger.info(f"✅ Created product {product.id} ({name}) for brand {brand_id}")
+        logger.info(f"✅ Created product {product.id} ({name}, type={product_type}) for brand {brand_id}")
         return product
     except Exception as e:
         db.rollback()
@@ -1125,7 +1177,7 @@ def update_product(
         db: Database session
         user_id: ID of the authenticated user (for brand ownership validation)
         product_id: ID of the product to update
-        **updates: Fields to update (product_type, name, icp_segment, image_urls)
+        **updates: Fields to update (product_type, name, product_gender, product_attributes, icp_segment, image_urls)
 
     Returns:
         Product: Updated product object if successful, None if not found or unauthorized
@@ -1231,10 +1283,7 @@ def create_campaign(
     seasonal_event: str,
     year: int,
     duration: int,
-    scene_configs: List[Dict[str, Any]],
-    selected_style: str,
-    target_duration: int,
-    num_variations: int = 1
+    scene_configs: List[Dict[str, Any]]
 ) -> Optional[Campaign]:
     """
     Create a new campaign associated with a product.
@@ -1243,6 +1292,7 @@ def create_campaign(
         db: Database session
         user_id: ID of the authenticated user (for ownership validation)
         product_id: ID of the product to associate campaign with
+        brand_id: ID of the brand (for validation, not stored in campaign)
         name: Campaign name
         seasonal_event: Seasonal event or marketing initiative
         year: Campaign year
@@ -1254,6 +1304,11 @@ def create_campaign(
 
     Raises:
         Exception: If database insert fails
+
+    Note:
+        brand_id is not stored in the Campaign model - campaigns are associated
+        with products, and products are associated with brands. The brand can
+        be accessed via campaign.product.brand.
     """
     try:
         # Validate product ownership via brand
@@ -1266,22 +1321,15 @@ def create_campaign(
             logger.warning(f"⚠️ Cannot create campaign: Product {product_id} not found or not owned by user {user_id}")
             return None
 
-        # Create campaign
+        # Create campaign with "pending" status to allow immediate generation
         campaign = Campaign(
             product_id=product_id,
-            brand_id=brand_id,
             name=name,
-            num_variations=num_variations,
-            creative_prompt=creative_prompt,
             seasonal_event=seasonal_event,
-            selected_style=selected_style,
             year=year,
             duration=duration,
             scene_configs=scene_configs,
-            status="draft",
-            progress=0,
-            cost=0,
-            campaign_json={}
+            status="pending"
         )
         db.add(campaign)
         db.commit()
@@ -1403,6 +1451,45 @@ def get_campaign_by_id(
         return None
 
 
+def get_campaigns_by_product(
+    db: Session,
+    product_id: UUID,
+    page: int = 1,
+    limit: int = 20
+) -> tuple[List[Campaign], int]:
+    """
+    Get campaigns for a product with pagination.
+
+    Args:
+        db: Database session
+        product_id: ID of the product
+        page: Page number (1-indexed)
+        limit: Number of campaigns per page
+
+    Returns:
+        tuple: (list of campaigns, total count)
+    """
+    try:
+        # Calculate offset
+        offset = (page - 1) * limit
+
+        # Get total count
+        total = db.query(Campaign).filter(
+            Campaign.product_id == product_id
+        ).count()
+
+        # Get paginated campaigns
+        campaigns = db.query(Campaign).filter(
+            Campaign.product_id == product_id
+        ).order_by(desc(Campaign.created_at)).limit(limit).offset(offset).all()
+
+        logger.info(f"✅ Retrieved {len(campaigns)} campaigns for product {product_id} (page {page}, total {total})")
+        return campaigns, total
+    except Exception as e:
+        logger.error(f"❌ Failed to get campaigns for product {product_id}: {e}")
+        return [], 0
+
+
 def update_campaign(
     db: Session,
     user_id: UUID,
@@ -1489,4 +1576,213 @@ def delete_campaign(
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to delete campaign {campaign_id}: {e}")
+        raise
+
+
+# ============================================================================
+# Creative CRUD Operations
+# ============================================================================
+
+def create_creative(
+    db: Session,
+    campaign_id: UUID,
+    user_id: UUID,
+    title: str,
+    ad_creative_json: Dict[str, Any],
+    status: str = "pending",
+    aspect_ratio: str = "9:16",
+    video_provider: str = "replicate",
+    output_formats: Optional[List[str]] = None
+) -> Optional[Creative]:
+    """
+    Create a new creative for a campaign.
+    
+    Args:
+        db: Database session
+        campaign_id: ID of the parent campaign
+        user_id: ID of the user creating the creative
+        title: Creative title
+        ad_creative_json: Creative configuration JSON
+        status: Initial status (default: "pending")
+        aspect_ratio: Aspect ratio for the creative
+        video_provider: Video generation provider
+        output_formats: List of output aspect ratios
+    
+    Returns:
+        Creative: Created creative object
+    """
+    try:
+        # Verify campaign exists and user has access
+        campaign = db.query(Campaign).join(Product).join(Brand).filter(
+            Campaign.id == campaign_id,
+            Brand.user_id == user_id
+        ).first()
+        
+        if not campaign:
+            logger.warning(f"⚠️ Cannot create creative: Campaign {campaign_id} not found or not owned by user {user_id}")
+            return None
+        
+        # Create creative
+        creative = Creative(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            title=title,
+            ad_creative_json=ad_creative_json,
+            status=status,
+            aspect_ratio=aspect_ratio,
+            video_provider=video_provider,
+            output_formats=output_formats or [aspect_ratio],
+            progress=0,
+            cost=0
+        )
+        
+        db.add(creative)
+        db.commit()
+        db.refresh(creative)
+        
+        logger.info(f"✅ Created creative {creative.id} for campaign {campaign_id}")
+        return creative
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create creative: {e}")
+        raise
+
+
+def get_creative_by_id(db: Session, creative_id: UUID) -> Optional[Creative]:
+    """
+    Get a creative by ID.
+    
+    Args:
+        db: Database session
+        creative_id: ID of the creative
+    
+    Returns:
+        Creative: Creative object if found, None otherwise
+    """
+    return db.query(Creative).filter(Creative.id == creative_id).first()
+
+
+def get_creatives_for_campaign(
+    db: Session,
+    campaign_id: UUID,
+    user_id: UUID,
+    limit: int = 20,
+    offset: int = 0
+) -> Tuple[List[Creative], int]:
+    """
+    Get all creatives for a campaign with pagination.
+    
+    Args:
+        db: Database session
+        campaign_id: ID of the campaign
+        user_id: ID of the user (for ownership validation)
+        limit: Maximum number of creatives to return
+        offset: Number of creatives to skip
+    
+    Returns:
+        Tuple of (list of creatives, total count)
+    """
+    try:
+        # Verify campaign ownership
+        campaign = db.query(Campaign).join(Product).join(Brand).filter(
+            Campaign.id == campaign_id,
+            Brand.user_id == user_id
+        ).first()
+        
+        if not campaign:
+            logger.warning(f"⚠️ Cannot list creatives: Campaign {campaign_id} not found or not owned by user {user_id}")
+            return [], 0
+        
+        # Get creatives
+        query = db.query(Creative).filter(Creative.campaign_id == campaign_id)
+        total = query.count()
+        creatives = query.order_by(desc(Creative.created_at)).offset(offset).limit(limit).all()
+        
+        logger.info(f"✅ Retrieved {len(creatives)} creatives for campaign {campaign_id} (total: {total})")
+        return creatives, total
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get creatives for campaign {campaign_id}: {e}")
+        raise
+
+
+def update_creative(
+    db: Session,
+    creative_id: UUID,
+    **updates
+) -> Optional[Creative]:
+    """
+    Update creative fields.
+    
+    Args:
+        db: Database session
+        creative_id: ID of the creative
+        **updates: Fields to update
+    
+    Returns:
+        Creative: Updated creative object
+    """
+    try:
+        creative = db.query(Creative).filter(Creative.id == creative_id).first()
+        
+        if not creative:
+            logger.warning(f"⚠️ Creative {creative_id} not found")
+            return None
+        
+        for key, value in updates.items():
+            if hasattr(creative, key):
+                setattr(creative, key, value)
+        
+        db.commit()
+        db.refresh(creative)
+        
+        logger.info(f"✅ Updated creative {creative_id}")
+        return creative
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update creative {creative_id}: {e}")
+        raise
+
+
+def delete_creative(
+    db: Session,
+    campaign_id: UUID,
+    creative_id: UUID,
+    user_id: UUID
+) -> bool:
+    """
+    Delete a creative.
+    
+    Args:
+        db: Database session
+        campaign_id: ID of the parent campaign
+        creative_id: ID of the creative to delete
+        user_id: ID of the user (for ownership validation)
+    
+    Returns:
+        bool: True if deleted, False if not found or unauthorized
+    """
+    try:
+        # Get creative with ownership check
+        creative = db.query(Creative).join(Campaign).join(Product).join(Brand).filter(
+            Creative.id == creative_id,
+            Creative.campaign_id == campaign_id,
+            Brand.user_id == user_id
+        ).first()
+        
+        if not creative:
+            logger.warning(f"⚠️ Cannot delete: Creative {creative_id} not found or not owned by user {user_id}")
+            return False
+        
+        db.delete(creative)
+        db.commit()
+        
+        logger.info(f"✅ Deleted creative {creative_id}")
+        return True
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to delete creative {creative_id}: {e}")
         raise

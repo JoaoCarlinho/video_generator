@@ -1,0 +1,201 @@
+{
+  "grammar_version": "1.0",
+  "target_platform": "tiktok_vertical",
+  "product_type": "car",
+  "duration_range": [15, 60],
+  "scene_count_range": [3, 5],
+  "target_aspect_ratio": "9:16",
+  "target_resolution": "1080x1920",
+  "description": "Automotive TikTok vertical video shot grammar. Defines car commercial-specific scenes with dynamic motion and design focus.",
+
+  "allowed_shot_types": {
+    "hero_reveal": {
+      "id": "hero_reveal",
+      "display_name": "Hero Reveal Shot",
+      "description": "Dramatic reveal of the vehicle showcasing overall design",
+      "duration_range": [4, 8],
+      "priority": 1,
+      "variations": [
+        "rotating_platform",
+        "dolly_reveal_from_front",
+        "aerial_descent",
+        "garage_door_opening",
+        "spotlight_fade_in",
+        "360_turntable"
+      ],
+      "camera_movements": [
+        "slow_orbit",
+        "dolly_forward",
+        "crane_down",
+        "static",
+        "slow_zoom_out"
+      ],
+      "lighting_keywords": [
+        "studio lighting",
+        "dramatic shadows",
+        "edge lighting",
+        "spotlight",
+        "golden hour",
+        "reflective highlights"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.7,
+      "use_product": true,
+      "llm_instruction": "Create a dramatic hero reveal of the vehicle. Show the full car in an impressive way with cinematic lighting. Duration: 4-8 seconds."
+    },
+
+    "design_details": {
+      "id": "design_details",
+      "display_name": "Design Detail Shot",
+      "description": "Close-up of specific design elements (grille, headlights, wheels, lines)",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "led_headlight_activation",
+        "grille_closeup",
+        "wheel_detail",
+        "body_line_tracking",
+        "door_handle_detail",
+        "badge_logo",
+        "exhaust_tips",
+        "paint_reflection"
+      ],
+      "camera_movements": [
+        "slow_pan",
+        "tracking_shot",
+        "static_macro",
+        "gentle_tilt"
+      ],
+      "lighting_keywords": [
+        "focused light",
+        "chrome reflections",
+        "paint shimmer",
+        "detail lighting"
+      ],
+      "recommended_position": "closeup",
+      "recommended_scale": 1.2,
+      "use_product": true,
+      "llm_instruction": "Extreme close-up of a design detail showing craftsmanship. Duration: 3-6 seconds."
+    },
+
+    "motion_sequence": {
+      "id": "motion_sequence",
+      "display_name": "Dynamic Motion Shot",
+      "description": "Vehicle in motion showing performance and capability",
+      "duration_range": [4, 8],
+      "priority": 1,
+      "variations": [
+        "tracking_side_view",
+        "pursuit_angle",
+        "overhead_highway",
+        "mountain_road_curves",
+        "city_street_navigate",
+        "speed_blur_effect"
+      ],
+      "camera_movements": [
+        "tracking",
+        "follow_cam",
+        "drone_overhead",
+        "static_pass_by"
+      ],
+      "lighting_keywords": [
+        "natural daylight",
+        "motion blur",
+        "dynamic lighting",
+        "environment reflections"
+      ],
+      "recommended_position": "environmental",
+      "recommended_scale": 0.6,
+      "use_product": true,
+      "llm_instruction": "Show the vehicle in dynamic motion. Convey speed, power, or agility. Duration: 4-8 seconds."
+    },
+
+    "interior_luxury": {
+      "id": "interior_luxury",
+      "display_name": "Interior Craftsmanship",
+      "description": "Interior shots showcasing technology, materials, and comfort",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "dashboard_tech_display",
+        "leather_stitching_detail",
+        "steering_wheel",
+        "gear_selector",
+        "ambient_lighting",
+        "panoramic_roof",
+        "seat_adjustment"
+      ],
+      "camera_movements": [
+        "slow_pan_across_dashboard",
+        "detail_focus_pull",
+        "static"
+      ],
+      "lighting_keywords": [
+        "ambient interior light",
+        "screen glow",
+        "soft cabin lighting",
+        "material textures"
+      ],
+      "recommended_position": "interior",
+      "recommended_scale": 0.8,
+      "use_product": false,
+      "llm_instruction": "Interior shot highlighting luxury materials and technology. Duration: 3-6 seconds."
+    },
+
+    "lifestyle_context": {
+      "id": "lifestyle_context",
+      "display_name": "Lifestyle/Environment Shot",
+      "description": "Vehicle in aspirational lifestyle context",
+      "duration_range": [3, 7],
+      "priority": 3,
+      "variations": [
+        "coastal_road_scenic",
+        "urban_sophistication",
+        "mountain_adventure",
+        "family_loading_cargo",
+        "valet_arrival",
+        "sunset_parked"
+      ],
+      "camera_movements": [
+        "static_wide",
+        "slow_pan",
+        "drone_pullback"
+      ],
+      "lighting_keywords": [
+        "golden hour",
+        "natural light",
+        "environmental ambiance"
+      ],
+      "recommended_position": "environmental",
+      "recommended_scale": 0.5,
+      "use_product": true,
+      "llm_instruction": "Show the vehicle in an aspirational lifestyle setting. Duration: 3-7 seconds."
+    },
+
+    "finale_branding": {
+      "id": "finale_branding",
+      "display_name": "Final Branding Shot",
+      "description": "Clean final shot with logo/brand name",
+      "duration_range": [2, 4],
+      "priority": 1,
+      "variations": [
+        "vehicle_with_logo_overlay",
+        "badge_closeup",
+        "clean_studio_shot",
+        "brand_lockup"
+      ],
+      "camera_movements": [
+        "static",
+        "slow_zoom_in"
+      ],
+      "lighting_keywords": [
+        "clean studio light",
+        "premium finish"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.6,
+      "use_product": true,
+      "llm_instruction": "Final branding shot with vehicle and brand identity. Duration: 2-4 seconds."
+    }
+  }
+}

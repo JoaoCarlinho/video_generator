@@ -1,0 +1,190 @@
+{
+  "grammar_version": "1.0",
+  "target_platform": "tiktok_vertical",
+  "product_type": "energy",
+  "duration_range": [15, 60],
+  "scene_count_range": [3, 5],
+  "target_aspect_ratio": "9:16",
+  "target_resolution": "1080x1920",
+  "description": "Energy and utilities TikTok vertical video shot grammar. Focuses on innovation, sustainability, and reliability.",
+
+  "allowed_shot_types": {
+    "clean_energy_source": {
+      "id": "clean_energy_source",
+      "display_name": "Clean Energy Source",
+      "description": "Solar panels, wind turbines, or other renewable energy sources",
+      "duration_range": [4, 8],
+      "priority": 1,
+      "variations": [
+        "solar_panels_sun_tracking",
+        "wind_turbines_rotation",
+        "solar_farm_aerial",
+        "panel_installation",
+        "turbine_against_sky",
+        "clean_tech_grid"
+      ],
+      "camera_movements": [
+        "drone_ascending",
+        "slow_pan_across",
+        "time_lapse",
+        "tracking_shot"
+      ],
+      "lighting_keywords": [
+        "bright sunlight",
+        "clean daylight",
+        "blue sky",
+        "optimistic lighting"
+      ],
+      "recommended_position": "environmental",
+      "recommended_scale": 0.6,
+      "use_product": false,
+      "llm_instruction": "Show clean renewable energy sources in operation. Convey sustainability and innovation. Duration: 4-8 seconds."
+    },
+
+    "power_in_action": {
+      "id": "power_in_action",
+      "display_name": "Power/Energy In Use",
+      "description": "Energy powering homes, businesses, or technology",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "home_lights_turning_on",
+        "electric_vehicle_charging",
+        "city_lights_evening",
+        "factory_production",
+        "digital_connectivity",
+        "modern_appliances_working"
+      ],
+      "camera_movements": [
+        "reveal_shot",
+        "pan_across_scene",
+        "static_observation"
+      ],
+      "lighting_keywords": [
+        "warm interior glow",
+        "city lights",
+        "technology illumination",
+        "welcoming ambiance"
+      ],
+      "recommended_position": "lifestyle",
+      "recommended_scale": 0.7,
+      "use_product": false,
+      "llm_instruction": "Show energy powering everyday life and modern convenience. Duration: 3-6 seconds."
+    },
+
+    "innovation_tech": {
+      "id": "innovation_tech",
+      "display_name": "Technology & Innovation",
+      "description": "Smart grids, energy management tech, modern infrastructure",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "smart_meter_display",
+        "control_center_monitors",
+        "app_energy_management",
+        "grid_infrastructure",
+        "data_visualization",
+        "tech_interface"
+      ],
+      "camera_movements": [
+        "screen_focus",
+        "tech_detail",
+        "slow_zoom"
+      ],
+      "lighting_keywords": [
+        "screen_glow",
+        "modern_tech_lighting",
+        "blue_tech_tones"
+      ],
+      "recommended_position": "detail",
+      "recommended_scale": 0.9,
+      "use_product": false,
+      "llm_instruction": "Showcase innovative energy technology and smart solutions. Duration: 3-6 seconds."
+    },
+
+    "environmental_benefit": {
+      "id": "environmental_benefit",
+      "display_name": "Environmental Impact",
+      "description": "Nature, clean air, sustainability benefits",
+      "duration_range": [3, 7],
+      "priority": 3,
+      "variations": [
+        "green_landscapes",
+        "clean_water_resources",
+        "thriving_nature",
+        "blue_sky_clarity",
+        "wildlife_habitat",
+        "sustainable_future"
+      ],
+      "camera_movements": [
+        "drone_nature_flyover",
+        "slow_pan_scenery",
+        "static_beauty"
+      ],
+      "lighting_keywords": [
+        "natural_daylight",
+        "clear_atmosphere",
+        "vibrant_nature"
+      ],
+      "recommended_position": "environmental",
+      "recommended_scale": 0.5,
+      "use_product": false,
+      "llm_instruction": "Show environmental benefits and sustainability. Duration: 3-7 seconds."
+    },
+
+    "community_reliability": {
+      "id": "community_reliability",
+      "display_name": "Community & Reliability",
+      "description": "People, families, businesses relying on consistent power",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "family_at_home_evening",
+        "business_operations",
+        "essential_services",
+        "community_connection",
+        "reliable_service",
+        "customer_satisfaction"
+      ],
+      "camera_movements": [
+        "lifestyle_observation",
+        "warm_pan",
+        "static_comfort"
+      ],
+      "lighting_keywords": [
+        "warm_homey_light",
+        "reliable_ambiance",
+        "comfortable_setting"
+      ],
+      "recommended_position": "lifestyle",
+      "recommended_scale": 0.7,
+      "use_product": false,
+      "llm_instruction": "Show people and communities benefiting from reliable energy. Duration: 3-6 seconds."
+    },
+
+    "finale_branding": {
+      "id": "finale_branding",
+      "display_name": "Final Branding Shot",
+      "description": "Clean final shot with company logo and tagline",
+      "duration_range": [2, 4],
+      "priority": 1,
+      "variations": [
+        "logo_with_clean_energy_visual",
+        "brand_lockup",
+        "tagline_presentation"
+      ],
+      "camera_movements": [
+        "static",
+        "subtle_fade_in"
+      ],
+      "lighting_keywords": [
+        "clean_professional",
+        "trustworthy_presentation"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.6,
+      "use_product": false,
+      "llm_instruction": "Final branding shot with company identity and messaging. Duration: 2-4 seconds."
+    }
+  }
+}

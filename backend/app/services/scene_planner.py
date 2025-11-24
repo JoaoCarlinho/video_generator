@@ -18,7 +18,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from app.services.style_manager import StyleManager
-from app.services.perfume_grammar_loader import ProductGrammarLoader
+from app.services.product_grammar_loader import ProductGrammarLoader
+from app.product_config.product_types import get_product_type_config
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,21 @@ class AdCampaignPlan(BaseModel):
 # ============================================================================
 
 class ScenePlanner:
-    """Plans LUXURY PERFUME video scenes using LLM with shot grammar constraints."""
+    """Plans product video scenes using LLM with shot grammar constraints.
+
+    Supports multiple product types: fragrance, car, watch, energy.
+    Each product type has its own shot grammar and visual language.
+    """
 
     def __init__(self, api_key: str):
-        """Initialize with OpenAI API key and perfume grammar constraints."""
+        """Initialize with OpenAI API key.
+
+        Grammar loader is initialized per product type when planning scenes.
+        """
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-5.1"
-        self.grammar_loader = ProductGrammarLoader()
-        logger.info("✅ ScenePlanner initialized with perfume shot grammar constraints")
+        self.grammar_loader = None  # Will be initialized per product type
+        logger.info("✅ ScenePlanner initialized")
 
     async def plan_scenes(
         self,
@@ -104,9 +112,10 @@ class ScenePlanner:
         extracted_style: Optional[Dict[str, Any]] = None,
         perfume_name: Optional[str] = None,
         perfume_gender: Optional[str] = None,
+        product_type: str = "fragrance",
     ) -> Dict[str, Any]:
         """
-        Generate TikTok vertical video scene plan with perfume grammar constraints.
+        Generate TikTok vertical video scene plan with product-type-specific grammar constraints.
 
         Args:
             creative_prompt: User's creative vision for the video
@@ -120,17 +129,28 @@ class ScenePlanner:
             has_logo: Whether logo is available
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
             extracted_style: Optional extracted style from reference image
-            perfume_name: Product product name (e.g., "Noir Élégance")
-            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex')
+            perfume_name: Product name (e.g., "Noir Élégance" for fragrance, "Model S" for car)
+            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex') - only for product types that support gender
+            product_type: Product type ('fragrance', 'car', 'watch', 'energy')
 
         Returns:
             Dictionary with scenes, style_spec, chosenStyle, styleSource
         """
+        # Get product type configuration
+        product_config = get_product_type_config(product_type)
+        logger.info(f"Product type: {product_type} ({product_config.display_name})")
+
+        # Initialize grammar loader with product-specific grammar file
+        from pathlib import Path
+        base_dir = Path(__file__).parent.parent
+        grammar_path = base_dir / "templates" / "scene_grammar" / product_config.shot_grammar_file
+        self.grammar_loader = ProductGrammarLoader(str(grammar_path))
+
         # Use perfume_name if provided, otherwise fallback to brand_name
-        actual_perfume_name = perfume_name or brand_name
-        logger.info(f"Planning video for '{brand_name}' / Product: '{actual_perfume_name}' (target: {target_duration}s)")
+        actual_product_name = perfume_name or brand_name
+        logger.info(f"Planning video for '{brand_name}' / Product: '{actual_product_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
-        if perfume_gender:
+        if perfume_gender and product_config.supports_gender:
             logger.info(f"Product gender: {perfume_gender}")
         
         # STEP 1: Derive tone from target audience (Task 2)
@@ -156,18 +176,20 @@ class ScenePlanner:
                 target_audience=target_audience or "general consumers"
             )
 
-        # STEP 3: Generate scene plan via LLM with PERFUME GRAMMAR CONSTRAINTS
-        scenes_json = await self._generate_perfume_scenes_with_grammar(
+        # STEP 3: Generate scene plan via LLM with PRODUCT-TYPE-SPECIFIC GRAMMAR CONSTRAINTS
+        scenes_json = await self._generate_product_scenes_with_grammar(
             creative_prompt=creative_prompt,
             brand_name=brand_name,
-            perfume_name=actual_perfume_name,
+            product_name=actual_product_name,
             brand_description=brand_description,
             brand_colors=brand_colors,
             brand_guidelines=brand_guidelines,
             target_audience=target_audience or "general consumers",
             target_duration=target_duration,
             chosen_style=chosen_style,
-            perfume_gender=perfume_gender,
+            product_gender=perfume_gender,
+            product_type=product_type,
+            product_config=product_config,
         )
 
         style_to_background = {
@@ -628,41 +650,46 @@ Plan the scene now!"""
             logger.error(f"Error generating scenes: {e}")
             raise
 
-    async def _generate_perfume_scenes_with_grammar(
+    async def _generate_product_scenes_with_grammar(
         self,
         creative_prompt: str,
         brand_name: str,
-        perfume_name: str,
+        product_name: str,
         brand_description: Optional[str],
         brand_colors: List[str],
         brand_guidelines: Optional[str],
         target_audience: str,
         target_duration: int,
         chosen_style: str,
-        perfume_gender: Optional[str] = None,
+        product_gender: Optional[str] = None,
+        product_type: str = "fragrance",
+        product_config: Any = None,
         retry_count: int = 0,
     ) -> List[Dict[str, Any]]:
         """
-        Generate PERFUME SCENE PLAN using STRICT SHOT GRAMMAR CONSTRAINTS.
-        
-        This method constrains LLM to ONLY generate scenes using allowed perfume shot types.
-        If LLM violates grammar, retry up to 3 times. After 3 failures, use predefined template.
-        
+        Generate PRODUCT SCENE PLAN using STRICT SHOT GRAMMAR CONSTRAINTS.
+
+        This method constrains LLM to ONLY generate scenes using allowed shot types
+        for the specific product type (fragrance, car, watch, energy).
+        If LLM violates grammar, retry up to 3 times. After 3 failures, use template.
+
         Args:
             creative_prompt: User's creative vision
             brand_name: Brand name
-            perfume_name: Product product name
+            product_name: Product name
             brand_description: Brand story
             brand_colors: Brand colors
             brand_guidelines: Brand guidelines
             target_audience: Target audience
             target_duration: Target duration
-            chosen_style: Product style (gold_luxe, dark_elegance, romantic_floral)
-            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex')
+            chosen_style: Visual style
+            product_gender: Product gender (if supported by product type)
+            product_type: Product type ('fragrance', 'car', 'watch', 'energy')
+            product_config: ProductTypeConfig instance
             retry_count: Current retry attempt (0-3)
-            
+
         Returns:
-            List of scene dictionaries conforming to perfume grammar
+            List of scene dictionaries conforming to product grammar
         """
         
         # Get grammar constraints
@@ -692,48 +719,22 @@ Plan the scene now!"""
                 f"  ⚠️ YOU MUST USE THIS EXACT ID: '{shot_id}' (NOT '{type_key}')"
             )
         
-        # Build gender-specific visual language guidance
+        # Build gender-specific visual language guidance (if supported)
         gender_guidance = ""
-        if perfume_gender:
-            if perfume_gender == "masculine":
-                gender_guidance = """
-🎯 GENDER-SPECIFIC VISUAL LANGUAGE (MASCULINE)
+        if product_gender and product_config and product_config.supports_gender:
+            if product_config.gender_prompts and product_gender in product_config.gender_prompts:
+                gender_guidance = f"""
+🎯 GENDER-SPECIFIC VISUAL LANGUAGE ({product_gender.upper()})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is a MASCULINE perfume. Apply these visual characteristics:
-- **Colors**: Darker tones (deep blacks, charcoal, navy, burgundy), bold contrasts
-- **Lighting**: Stronger, more dramatic lighting with deeper shadows
-- **Mood**: Confident, powerful, sophisticated, bold
-- **Textures**: Rugged materials, leather, metal accents, strong geometric shapes
-- **Camera**: More dynamic movements, stronger angles, bolder compositions
-- **Atmosphere**: Premium, commanding, assertive, refined strength
-"""
-            elif perfume_gender == "feminine":
-                gender_guidance = """
-🎯 GENDER-SPECIFIC VISUAL LANGUAGE (FEMININE)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is a FEMININE perfume. Apply these visual characteristics:
-- **Colors**: Softer tones (rose gold, blush, lavender, soft pastels), elegant gradients
-- **Lighting**: Softer, more diffused lighting with gentle highlights
-- **Mood**: Elegant, graceful, delicate, refined, romantic
-- **Textures**: Silk, satin, flowers, soft fabrics, flowing movements
-- **Camera**: More gentle movements, softer angles, elegant compositions
-- **Atmosphere**: Luxurious, graceful, sophisticated elegance, refined beauty
-"""
-            elif perfume_gender == "unisex":
-                gender_guidance = """
-🎯 GENDER-SPECIFIC VISUAL LANGUAGE (UNISEX)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is a UNISEX perfume. Apply these visual characteristics:
-- **Colors**: Balanced palette (neutral tones, sophisticated grays, balanced warm/cool)
-- **Lighting**: Balanced lighting, neither too harsh nor too soft
-- **Mood**: Modern, sophisticated, versatile, inclusive, contemporary
-- **Textures**: Clean modern materials, minimalist surfaces, balanced compositions
-- **Camera**: Balanced movements, neutral angles, modern compositions
-- **Atmosphere**: Contemporary luxury, inclusive elegance, modern sophistication
+{product_config.gender_prompts[product_gender]}
 """
         
-        # Build VEO S3 perfume-specific prompt with USER-FIRST philosophy
-        prompt = f"""You are a world-class PERFUME COMMERCIAL DIRECTOR working with Google's Veo S3 model.
+        # Build VEO S3 product-specific prompt with USER-FIRST philosophy
+        director_persona = product_config.director_persona if product_config else "world-class commercial director"
+        visual_language_title = product_config.visual_language_title if product_config else "VISUAL LANGUAGE LIBRARY"
+        common_elements_title = product_config.common_elements_title if product_config else "COMMON COMMERCIAL ELEMENTS"
+
+        prompt = f"""You are a {director_persona} working with Google's Veo S3 model.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 YOUR MISSION: Bring the user's creative vision to life with stunning execution
@@ -741,14 +742,14 @@ This is a UNISEX perfume. Apply these visual characteristics:
 
 PRIORITY HIERARCHY (CRITICAL):
 1. USER'S CREATIVE PROMPT (PRIMARY) - The story, concept, emotion they want
-2. PERFUME VISUAL LANGUAGE (SECONDARY) - The cinematography style and execution quality
+2. PRODUCT VISUAL LANGUAGE (SECONDARY) - The cinematography style and execution quality
 3. VEO S3 TECHNICAL CAPABILITIES (TOOLS) - How to achieve the vision
 
 🚨 GOLDEN RULE:
-If user prompt says "underwater scene with dolphins", you create that underwater scene 
-with perfume ad cinematography (NOT force it into "silk fabric" just because that's in the grammar).
+If user prompt says "underwater scene with dolphins", you create that underwater scene
+with {product_type} commercial cinematography (NOT force it into grammar templates).
 
-The perfume shot grammar is a VISUAL LANGUAGE LIBRARY, not a strict rulebook.
+The shot grammar is a VISUAL LANGUAGE LIBRARY, not a strict rulebook.
 Use it to inform HOW you shoot scenes, not WHAT scenes to create.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -757,7 +758,7 @@ Use it to inform HOW you shoot scenes, not WHAT scenes to create.
 {creative_prompt}
 
 Brand: {brand_name}
-Product: {perfume_name}
+Product: {product_name} ({product_type})
 {f"Brand Description: {brand_description}" if brand_description else ""}
 {f"Brand Guidelines: {str(brand_guidelines)[:300]}" if brand_guidelines else ""}
 {gender_guidance}
@@ -793,16 +794,16 @@ PRODUCT INTEGRATION (when use_product=True):
   revealed through rack focus, emerging from fog
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 PERFUME VISUAL LANGUAGE LIBRARY (Use as Reference, Not Rules)
+📚 {visual_language_title} (Use as Reference, Not Rules)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-COMMON PERFUME AD ELEMENTS (Adapt to User's Concept):
+{common_elements_title} (Adapt to User's Concept):
 {chr(10).join(shot_descriptions)}
 
 💡 USE THESE TO INFORM EXECUTION STYLE, NOT TO DICTATE CONTENT
-- If user wants "midnight garden" → create midnight garden with perfume cinematography
-- If user wants "ocean waves" → create ocean scene with luxury execution
-- If user wants "abstract light" → create abstract light with elegant production
+- If user wants "midnight garden" → create midnight garden with {product_type} cinematography
+- If user wants "ocean waves" → create ocean scene with {product_type} execution
+- If user wants "abstract light" → create abstract light with {product_type} production
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 TECHNICAL REQUIREMENTS
@@ -811,13 +812,13 @@ Platform: TikTok Vertical (9:16, 1080×1920)
 Style: {chosen_style}
 Duration: ~{target_duration}s
 Scene Count: {scene_count} scenes
-{f"Gender: {perfume_gender.upper()}" if perfume_gender else ""}
+{f"Gender: {product_gender.upper()}" if product_gender else ""}
 
 MANDATORY STRUCTURE:
 1. FIRST scene: {flow_rules.get('first_scene_must_be', ['macro_bottle', 'atmospheric'])} shot type
 2. LAST scene: {flow_rules.get('last_scene_must_be', ['brand_moment'])} shot type
 3. Product appears in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
-4. Final scene includes perfume name "{perfume_name}" + brand "{brand_name}"
+4. Final scene includes product name "{product_name}" + brand "{brand_name}"
 5. Total duration: ±{int(target_duration * 0.15)}s from {target_duration}s
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -826,17 +827,17 @@ MANDATORY STRUCTURE:
 
 STEP 1: Read user's creative prompt → Understand their vision
 STEP 2: Design scenes → Realize THEIR concept (not grammar templates)
-STEP 3: Apply perfume cinematography → Make it luxurious with advanced techniques
+STEP 3: Apply {product_type} cinematography → Make it stunning with advanced techniques
 STEP 4: Use Veo S3 tools → Achieve cinematic quality
 
 THE FORMULA:
-User's Concept (WHAT to show) + Product Cinematography (HOW to show it) = Perfect Scene
+User's Concept (WHAT to show) + {product_type.title()} Cinematography (HOW to show it) = Perfect Scene
 
 EXAMPLES:
 ✓ User: "Midnight garden with fireflies" → Create midnight garden + cinematic execution
-✓ User: "Ocean waves and freedom" → Create ocean scene + perfume lighting
-✓ User: "Abstract light painting" → Create abstract light + luxury production
-✗ User: "Midnight garden" → DON'T force "silk fabric" (grammar override)
+✓ User: "Ocean waves and freedom" → Create ocean scene + {product_type} lighting
+✓ User: "Abstract light painting" → Create abstract light + {product_type} production
+✗ User: "Midnight garden" → DON'T force grammar templates (honor user's vision)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 OUTPUT FORMAT (JSON)
@@ -857,7 +858,7 @@ Return ONLY valid JSON array with {scene_count} scene objects:
     "camera_movement": "dolly_in",
     "transition_to_next": "fade",
     "overlay": {{
-      "text": "{perfume_name}",
+      "text": "{product_name}",
       "position": "bottom",
       "duration": 2.0,
       "font_size": 48,
@@ -884,7 +885,7 @@ Return ONLY valid JSON array with {scene_count} scene objects:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"""You are a world-class perfume commercial director working with Veo S3.
+                        "content": f"""You are a {director_persona} working with Veo S3.
 
 VEO S3 USER-FIRST PHILOSOPHY:
 1. User's creative prompt = PRIMARY (honor their vision and concept)
@@ -893,17 +894,17 @@ VEO S3 USER-FIRST PHILOSOPHY:
 
 CRITICAL TECHNICAL RULES:
 1. Use ONLY these exact shot_type IDs: {', '.join(allowed_ids)}
-2. DO NOT use dictionary keys like 'macro_bottle_shots' - use 'macro_bottle' instead
+2. DO NOT use dictionary keys - use the actual shot_type IDs from the list
 3. DO NOT invent new shot types
 4. Every scene MUST have a shot_type field with one of the exact IDs above
 5. Output only valid JSON arrays
 
-BALANCE: Realize user's creative concept + Apply perfume cinematography = Perfect execution
+BALANCE: Realize user's creative concept + Apply {product_type} cinematography = Perfect execution
 
 Example CORRECT approach:
-- User: "Underwater scene" → Create underwater scene + perfume lighting/cinematography
+- User: "Underwater scene" → Create underwater scene + {product_type} lighting/cinematography
 Example WRONG approach:
-- User: "Underwater scene" → Force "silk fabric" (ignoring user's concept)
+- User: "Underwater scene" → Force grammar templates (ignoring user's concept)
 
 Follow user's vision FIRST, grammar rules SECOND."""
                     },
@@ -943,74 +944,80 @@ Follow user's vision FIRST, grammar rules SECOND."""
             if not is_valid:
                 if retry_count < 2:
                     # Retry with more explicit prompt
-                    logger.info(f"Retrying with more explicit grammar instructions...")
-                    return await self._generate_perfume_scenes_with_grammar(
+                    logger.info("Retrying with more explicit grammar instructions...")
+                    return await self._generate_product_scenes_with_grammar(
                         creative_prompt=creative_prompt,
                         brand_name=brand_name,
-                        perfume_name=perfume_name,
+                        product_name=product_name,
                         brand_description=brand_description,
                         brand_colors=brand_colors,
                         brand_guidelines=brand_guidelines,
                         target_audience=target_audience,
                         target_duration=target_duration,
                         chosen_style=chosen_style,
-                        perfume_gender=perfume_gender,
+                        product_gender=product_gender,
+                        product_type=product_type,
+                        product_config=product_config,
                         retry_count=retry_count + 1,
                     )
                 else:
                     # 3 retries failed - use predefined template
-                    logger.error(f"❌ Grammar violations after 3 retries. Using fallback template.")
-                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
-                    logger.info(f"📝 Fallback template scene scripts:")
+                    logger.error("❌ Grammar violations after 3 retries. Using fallback template.")
+                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
+                    logger.info("📝 Fallback template scene scripts:")
                     for i, scene in enumerate(fallback_scenes):
                         logger.info(f"   Scene {i+1} script: {scene.get('background_prompt', 'MISSING')}")
                     return fallback_scenes
-            
+
             # Validate scene count
             if len(scenes) != scene_count:
                 logger.warning(f"Scene count mismatch: expected {scene_count}, got {len(scenes)}")
                 if retry_count < 2:
-                    logger.info(f"Retrying to get exact scene count...")
-                    return await self._generate_perfume_scenes_with_grammar(
+                    logger.info("Retrying to get exact scene count...")
+                    return await self._generate_product_scenes_with_grammar(
                         creative_prompt=creative_prompt,
                         brand_name=brand_name,
-                        perfume_name=perfume_name,
+                        product_name=product_name,
                         brand_description=brand_description,
                         brand_colors=brand_colors,
                         brand_guidelines=brand_guidelines,
                         target_audience=target_audience,
                         target_duration=target_duration,
                         chosen_style=chosen_style,
-                        perfume_gender=perfume_gender,
+                        product_gender=product_gender,
+                        product_type=product_type,
+                        product_config=product_config,
                         retry_count=retry_count + 1,
                     )
                 else:
-                    logger.error(f"Fallback to template due to scene count mismatch")
-                    return self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
+                    logger.error("Fallback to template due to scene count mismatch")
+                    return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
             
-            logger.info(f"✅ Generated {len(scenes)} perfume scenes (grammar validated)")
+            logger.info(f"✅ Generated {len(scenes)} {product_type} scenes (grammar validated)")
             return scenes
-            
+
         except Exception as e:
-            logger.error(f"Error generating perfume scenes: {e}")
+            logger.error(f"Error generating {product_type} scenes: {e}")
             if retry_count < 2:
-                logger.info(f"Retrying due to error...")
-                return await self._generate_perfume_scenes_with_grammar(
+                logger.info("Retrying due to error...")
+                return await self._generate_product_scenes_with_grammar(
                     creative_prompt=creative_prompt,
                     brand_name=brand_name,
-                    perfume_name=perfume_name,
+                    product_name=product_name,
                     brand_description=brand_description,
                     brand_colors=brand_colors,
                     brand_guidelines=brand_guidelines,
                     target_audience=target_audience,
                     target_duration=target_duration,
                     chosen_style=chosen_style,
-                    perfume_gender=perfume_gender,
+                    product_gender=product_gender,
+                    product_type=product_type,
+                    product_config=product_config,
                     retry_count=retry_count + 1,
                 )
             else:
-                logger.error(f"Fallback to template due to LLM error")
-                return self._get_fallback_template(scene_count, target_duration, chosen_style, perfume_name, brand_name, brand_colors)
+                logger.error("Fallback to template due to LLM error")
+                return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
 
     def _get_fallback_template(
         self,
@@ -1474,17 +1481,24 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             )
             
             # Generate scenes for this variation using existing method
-            scenes_json = await self._generate_perfume_scenes_with_grammar(
+            # Note: product_type and product_config would need to be passed to this method
+            # For now, defaulting to fragrance for backward compatibility
+            from app.config.product_types import get_product_type_config
+            product_config = get_product_type_config("fragrance")
+
+            scenes_json = await self._generate_product_scenes_with_grammar(
                 creative_prompt=variation_prompt,
                 brand_name=brand_name,
-                perfume_name=perfume_name or brand_name,
+                product_name=perfume_name or brand_name,
                 brand_description=brand_description,
                 brand_colors=brand_colors,
                 brand_guidelines=brand_guidelines,
                 target_audience=target_audience or "general consumers",
                 target_duration=target_duration,
                 chosen_style=selected_style or "cinematic",
-                perfume_gender=perfume_gender,
+                product_gender=perfume_gender,
+                product_type="fragrance",
+                product_config=product_config,
             )
             
             variation_scenes.append(scenes_json)

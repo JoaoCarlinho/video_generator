@@ -15,6 +15,9 @@ from app.database import crud
 
 logger = logging.getLogger(__name__)
 
+# Test user ID for development mode
+TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
+
 
 def get_current_user_id(authorization: str = Header(None)) -> UUID:
     """
@@ -40,9 +43,9 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
     if not authorization:
         if env == "development":
             # Development: use test user ID and ensure it exists in database
-            _ensure_test_user_exists(test_user_id)
+            _ensure_test_user_exists(TEST_USER_ID)
             logger.debug("⚠️  No auth header - using test user ID")
-            return test_user_id
+            return TEST_USER_ID
         else:
             # Production: require token
             raise HTTPException(
@@ -64,7 +67,7 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
         if env == "development":
             # Development: accept any token
             logger.debug(f"✓ Accepted dev token")
-            return UUID("00000000-0000-0000-0000-000000000001")
+            return TEST_USER_ID
 
         # Production: validate JWT with Supabase
         try:
@@ -227,7 +230,7 @@ def get_current_brand_id(
             status_code=404,
             detail="Brand not found. Please complete onboarding."
         )
-    return brand.brand_id
+    return brand.id
 
 
 def verify_onboarding(
@@ -261,33 +264,33 @@ def verify_perfume_ownership(
     db: Session = Depends(get_db)
 ) -> bool:
     """
-    Verify that perfume belongs to current user's brand.
-    
+    Verify that product belongs to current user's brand.
+
     **Arguments:**
     - perfume_id: Product ID to verify
-    
+
     **Returns:**
-    - bool: True if perfume belongs to brand
-    
+    - bool: True if product belongs to brand
+
     **Raises:**
-    - HTTPException 404: If perfume not found or doesn't belong to brand
+    - HTTPException 404: If product not found or doesn't belong to brand
     """
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    
-    perfume = crud.get_perfume_by_id(db, perfume_id)
-    if not perfume:
+
+    product = crud.get_product_by_id(db, perfume_id)
+    if not product:
         raise HTTPException(
             status_code=404,
             detail="Product not found"
         )
-    
-    if perfume.brand_id != brand_id:
+
+    if product.brand_id != brand_id:
         raise HTTPException(
             status_code=404,
             detail="Product not found"  # Return 404 to avoid info leak
         )
-    
+
     return True
 
 
@@ -317,8 +320,8 @@ def verify_campaign_ownership(
             status_code=404,
             detail="Campaign not found"
         )
-    
-    if campaign.brand_id != brand_id:
+
+    if campaign.product.brand_id != brand_id:
         raise HTTPException(
             status_code=404,
             detail="Campaign not found"  # Return 404 to avoid info leak

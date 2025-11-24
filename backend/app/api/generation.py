@@ -15,7 +15,7 @@ from app.database.connection import get_db, init_db
 from app.database import crud
 from app.models.schemas import GenerationProgressResponse, CampaignStatus
 from app.jobs.worker import create_worker
-from app.api.auth import get_current_brand_id, verify_campaign_ownership
+from app.api.auth import get_current_brand_id, get_current_user_id, verify_campaign_ownership
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -93,16 +93,13 @@ async def trigger_generation(
         
         # Enqueue job with RQ
         job = worker_config.enqueue_job(str(campaign_id))
+
+        # Update campaign status to processing
+        campaign.status = CampaignStatus.PROCESSING.value
+        db.commit()
+        db.refresh(campaign)
         
-        # Update campaign status
-        crud.update_campaign(
-            db,
-            campaign_id,
-            status=CampaignStatus.PROCESSING.value,
-            progress=0
-        )
-        
-        logger.info(f"✅ Enqueued generation for campaign {campaign_id}, job_id={job.id}")
+        logger.info(f"✅ Enqueued generation for campaign {campaign_id}, job_id={job['id']}")
         
         return {
             "status": "queued",
@@ -411,14 +408,22 @@ async def get_generation_progress(
             CampaignStatus.COMPLETED.value: "Completed",
             CampaignStatus.FAILED.value: "Failed"
         }
-        
+
+        # Calculate progress based on status (Campaign model doesn't have progress field)
+        progress_map = {
+            CampaignStatus.PENDING.value: 0,
+            CampaignStatus.PROCESSING.value: 50,
+            CampaignStatus.COMPLETED.value: 100,
+            CampaignStatus.FAILED.value: 0
+        }
+
         return GenerationProgressResponse(
-            campaign_id=campaign.campaign_id,
+            campaign_id=campaign.id,
             status=campaign.status,
-            progress=campaign.progress,
+            progress=progress_map.get(campaign.status, 0),
             current_step=step_map.get(campaign.status, campaign.status),
-            cost_so_far=float(campaign.cost),
-            error_message=campaign.error_message
+            cost_so_far=0.0,  # Campaign model doesn't track cost
+            error_message=None  # Campaign model doesn't have error_message field
         )
     
     except HTTPException:
@@ -785,3 +790,247 @@ async def download_video(
         raise HTTPException(status_code=500, detail=f"Failed to download video: {str(e)}")
 
 
+
+
+# ============================================================================
+# Creative Generation Endpoints
+# ============================================================================
+
+@router.post("/creatives/{creative_id}/generate", deprecated=False)
+@router.post("/creatives/{creative_id}/generate/", deprecated=False)
+async def trigger_creative_generation(
+    creative_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger video generation for a creative.
+    
+    **Path Parameters:**
+    - creative_id: UUID of the creative to generate
+    
+    **Response:** 
+    ```json
+    {
+        "status": "queued",
+        "job_id": "...",
+        "message": "Generation job enqueued",
+        "creative_id": "..."
+    }
+    ```
+    
+    **Errors:**
+    - 404: Creative not found
+    - 403: Not authorized
+    - 409: Generation already in progress
+    - 503: Worker not available
+    - 500: Failed to enqueue job
+    """
+    try:
+        if not worker_config:
+            raise HTTPException(
+                status_code=503,
+                detail="Worker not available. SQS connection required."
+            )
+        
+        init_db()
+        
+        # Get creative
+        creative = crud.get_creative_by_id(db, creative_id)
+        
+        if not creative:
+            raise HTTPException(status_code=404, detail="Creative not found")
+        
+        # Verify ownership
+        if creative.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Check if already generating (allow retry from pending or failed)
+        if creative.status not in ["pending", "failed"]:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot start generation: creative is in state '{creative.status}'. Only pending or failed creatives can be generated."
+            )
+        
+        # Enqueue job with RQ (pass creative_id instead of campaign_id)
+        job = worker_config.enqueue_job(str(creative_id))
+        
+        # Update creative status to processing
+        creative.status = "processing"
+        creative.progress = 0
+        db.commit()
+        db.refresh(creative)
+        
+        logger.info(f"✅ Enqueued generation for creative {creative_id}, job_id={job['id']}")
+        
+        return {
+            "status": "queued",
+            "job_id": str(job["id"]),
+            "message": "Generation job enqueued",
+            "creative_id": str(creative_id)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to trigger generation: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger generation: {str(e)}")
+
+
+@router.get("/creatives/{creative_id}/progress")
+@router.get("/creatives/{creative_id}/progress/")
+async def get_creative_progress(
+    creative_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Get generation progress for a creative.
+    
+    **Path Parameters:**
+    - creative_id: UUID of the creative
+    
+    **Returns:**
+    Creative progress including status, progress percentage, and cost
+    """
+    try:
+        init_db()
+        
+        # Get creative
+        creative = crud.get_creative_by_id(db, creative_id)
+        
+        if not creative:
+            raise HTTPException(status_code=404, detail="Creative not found")
+        
+        # Verify ownership
+        if creative.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Map status to readable step
+        step_map = {
+            "pending": "Pending",
+            "processing": "Processing",
+            "completed": "Completed",
+            "failed": "Failed"
+        }
+        
+        return {
+            "creative_id": creative.id,
+            "status": creative.status,
+            "progress": creative.progress,
+            "current_step": step_map.get(creative.status, creative.status),
+            "cost_so_far": float(creative.cost),
+            "error_message": creative.error_message
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get progress for {creative_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
+
+
+@router.get("/creatives/{creative_id}/stream/{aspect_ratio}")
+async def stream_creative_video(
+    creative_id: UUID,
+    aspect_ratio: str,
+    user_id: UUID = Depends(get_current_user_id),
+    variation_index: int = Query(0, ge=0, le=2),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream video for a specific creative and aspect ratio.
+    
+    **Path Parameters:**
+    - creative_id: UUID of the creative
+    - aspect_ratio: Aspect ratio (9:16, 1:1, 16:9)
+    
+    **Query Parameters:**
+    - variation_index: Variation index (0-2, default: 0)
+    """
+    try:
+        init_db()
+        
+        # Get creative
+        creative = crud.get_creative_by_id(db, creative_id)
+        
+        if not creative:
+            raise HTTPException(status_code=404, detail="Creative not found")
+        
+        # Verify ownership
+        if creative.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get video from S3
+        s3 = boto3.client('s3')
+        bucket_name = settings.s3_bucket_name
+        
+        # Construct S3 key with creative_id
+        s3_key = f"creatives/{creative_id}/{aspect_ratio}/variation_{variation_index}/final.mp4"
+        
+        try:
+            response = s3.get_object(Bucket=bucket_name, Key=s3_key)
+            video_content = response['Body'].read()
+            
+            return StreamingResponse(
+                BytesIO(video_content),
+                media_type="video/mp4",
+                headers={
+                    "Content-Disposition": f"inline; filename=creative_{creative_id}_{aspect_ratio}.mp4"
+                }
+            )
+        except s3.exceptions.NoSuchKey:
+            raise HTTPException(status_code=404, detail=f"Video not found for {aspect_ratio}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to stream video for creative {creative_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stream video: {str(e)}")
+
+
+@router.post("/creatives/{creative_id}/cancel")
+async def cancel_creative_generation(
+    creative_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Cancel an in-progress creative generation.
+    
+    **Path Parameters:**
+    - creative_id: UUID of the creative
+    """
+    try:
+        init_db()
+        
+        # Get creative
+        creative = crud.get_creative_by_id(db, creative_id)
+        
+        if not creative:
+            raise HTTPException(status_code=404, detail="Creative not found")
+        
+        # Verify ownership
+        if creative.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        if creative.status != "processing":
+            raise HTTPException(
+                status_code=400,
+                detail="Creative is not currently processing"
+            )
+        
+        # Update status to failed (cancellation)
+        creative.status = "failed"
+        creative.error_message = "Generation cancelled by user"
+        db.commit()
+        
+        logger.info(f"✅ Cancelled generation for creative {creative_id}")
+        
+        return {"message": "Generation cancelled", "creative_id": str(creative_id)}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to cancel generation: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel generation: {str(e)}")

@@ -263,7 +263,7 @@ class ProductExtractor:
         # Extract product using existing method
         product_url = await self.extract_product(
             image_url=front_image_url,
-            campaign_id=str(campaign.campaign_id),  # LocalStorageManager uses campaign_id naming
+            campaign_id=str(campaign.id),  # LocalStorageManager uses campaign_id naming
         )
         
         return product_url

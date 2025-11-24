@@ -13,21 +13,16 @@ from io import BytesIO
 from app.database.connection import get_db
 from app.database.crud import get_campaign_by_id
 from app.api.auth import verify_campaign_ownership
-from app.jobs.worker import create_worker
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/campaigns", tags=["editing"])
 
-# Initialize worker config
-try:
-    worker_config = create_worker()
-except Exception as e:
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.warning(f"⚠️ Failed to initialize worker config: {e}")
-    worker_config = None
+# TODO: Editing feature temporarily disabled - needs migration from Redis/RQ to SQS
+# The system has moved to SQS for job queuing, but editing still uses Redis/RQ
+# Until editing is migrated, the edit endpoints will return 503 Service Unavailable
+worker_config = None
 
 
 # ============================================================================

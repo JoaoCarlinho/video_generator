@@ -128,16 +128,16 @@ class StorageService:
     def check_file_exists(self, s3_key: str) -> bool:
         """
         Check if a file exists in S3.
-        
+
         Args:
             s3_key: S3 key of the file to check
-        
+
         Returns:
             True if file exists, False otherwise
         """
         if not self.s3_client or not self.bucket_name:
             return False
-        
+
         try:
             self.s3_client.head_object(
                 Bucket=self.bucket_name,
@@ -146,6 +146,61 @@ class StorageService:
             return True
         except ClientError:
             return False
+
+    async def upload_file(
+        self,
+        file_content: bytes,
+        folder: str,
+        filename: str,
+        content_type: str,
+        user_id: str
+    ) -> Optional[str]:
+        """
+        Upload a file directly to S3.
+
+        Args:
+            file_content: File content as bytes
+            folder: Folder path in S3 (e.g., 'products', 'brands')
+            filename: Original filename
+            content_type: MIME type of the file
+            user_id: User ID for organizing files
+
+        Returns:
+            S3 URL of the uploaded file, or None if failed
+        """
+        if not self.s3_client or not self.bucket_name:
+            logger.warning("⚠️ S3 not configured, cannot upload file")
+            return None
+
+        try:
+            # Generate unique filename with timestamp
+            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            file_extension = filename.split('.')[-1] if '.' in filename else ''
+            unique_filename = f"{uuid.uuid4().hex}_{timestamp}"
+            if file_extension:
+                unique_filename += f".{file_extension}"
+
+            # Construct S3 key
+            s3_key = f"{folder}/{user_id}/{unique_filename}"
+
+            # Upload file
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=file_content,
+                ContentType=content_type
+            )
+
+            # Construct public URL
+            file_url = f"https://{self.bucket_name}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
+
+            logger.info(f"✅ Uploaded file to S3: {s3_key}")
+
+            return file_url
+
+        except ClientError as e:
+            logger.error(f"❌ Failed to upload file: {e}")
+            return None
 
 
 # Global storage service instance

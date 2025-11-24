@@ -144,23 +144,21 @@ async def onboard_brand(
         logger.info(f"💾 Creating brand {brand_id} in database")
         brand = crud.create_brand(
             db=db,
-            brand_id=brand_id,  # Pass the brand_id so S3 paths match database
             user_id=user_id,
+            company_name=brand_name,  # Use brand_name as company_name
             brand_name=brand_name,
-            brand_logo_url=logo_url,
-            brand_guidelines_url=guidelines_url
+            guidelines=guidelines_url,  # Store URL as guidelines text
+            logo_urls={"primary": logo_url}  # Store logo URL in JSONB dict
         )
-        
-        # Verify brand was created with correct brand_id
-        if brand.brand_id != brand_id:
-            logger.error(f"❌ CRITICAL: Brand created with wrong brand_id! Expected {brand_id}, got {brand.brand_id}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Brand created with incorrect brand_id. Expected {brand_id}, got {brand.brand_id}"
-            )
-        logger.info(f"✅ Verified brand {brand.brand_id} created with correct brand_id")
-        
-        logger.info(f"✅ Brand onboarding completed: {brand.brand_id}")
+
+        # Override the generated ID with the pre-generated brand_id to match S3 paths
+        brand.id = brand_id
+        db.commit()
+        db.refresh(brand)
+
+        logger.info(f"✅ Brand created with ID: {brand.id}")
+
+        logger.info(f"✅ Brand onboarding completed: {brand.id}")
         return BrandDetail.model_validate(brand)
     
     except HTTPException:
@@ -175,35 +173,31 @@ async def onboard_brand(
 
 @router.get(
     "/me",
-    response_model=BrandDetail,
+    response_model=BrandDetail | None,
     summary="Get current brand",
-    description="Get brand details for the authenticated user."
+    description="Get brand details for the authenticated user. Returns null if onboarding not completed."
 )
 async def get_my_brand(
-    brand_id: UUID = Depends(get_current_brand_id),
+    user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
-) -> BrandDetail:
+) -> BrandDetail | None:
     """
     Get brand details for the current authenticated user.
-    
+
     **Returns:**
-    - BrandDetail: Brand details
-    
+    - BrandDetail: Brand details if onboarding completed
+    - None: If user hasn't completed onboarding yet
+
     **Raises:**
-    - HTTPException 404: Brand not found (onboarding not completed)
+    - HTTPException 500: Database or internal error
     """
     try:
-        brand = crud.get_brand_by_id(db, brand_id)
+        brand = crud.get_brand_by_user_id(db, user_id)
         if not brand:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Brand not found"
-            )
-        
+            return None
+
         return BrandDetail.model_validate(brand)
-    
-    except HTTPException:
-        raise
+
     except Exception as e:
         logger.error(f"❌ Failed to get brand: {e}", exc_info=True)
         raise HTTPException(
@@ -215,10 +209,10 @@ async def get_my_brand(
 @router.get(
     "/me/stats",
     summary="Get brand statistics",
-    description="Get statistics for the authenticated user's brand (products count, campaigns count, total cost)."
+    description="Get statistics for the authenticated user's brand. Returns zeros if onboarding not completed."
 )
 async def get_brand_stats(
-    brand_id: UUID = Depends(get_current_brand_id),
+    user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -226,17 +220,26 @@ async def get_brand_stats(
     - Total products
     - Total campaigns
     - Total cost
-    
+
     **Returns:**
-    - Dict with statistics
-    
+    - Dict with statistics (zeros if brand not found)
+
     **Raises:**
-    - HTTPException 404: Brand not found
+    - HTTPException 500: Database or internal error
     """
     try:
-        stats = crud.get_brand_stats(db, brand_id)
+        brand = crud.get_brand_by_user_id(db, user_id)
+        if not brand:
+            # Return empty stats if user hasn't completed onboarding
+            return {
+                "total_products": 0,
+                "total_campaigns": 0,
+                "total_cost": 0.0
+            }
+
+        stats = crud.get_brand_stats(db, brand.id)
         return stats
-    
+
     except Exception as e:
         logger.error(f"❌ Failed to get brand stats: {e}", exc_info=True)
         raise HTTPException(

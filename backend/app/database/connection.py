@@ -94,6 +94,15 @@ def init_db():
             autoflush=False,
             bind=engine
         )
+
+        # Create all tables if they don't exist (excluding auth schema tables)
+        from app.database.models import Base
+        # Filter out tables that belong to the 'auth' schema (Supabase-managed)
+        tables_to_create = [table for table in Base.metadata.sorted_tables
+                           if table.schema != 'auth']
+        Base.metadata.create_all(bind=engine, tables=tables_to_create)
+        logger.info(f"✅ Database tables created/verified ({len(tables_to_create)} tables)")
+
         logger.info("✅ Database connection initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}", exc_info=True)

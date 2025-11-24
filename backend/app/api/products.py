@@ -1,9 +1,9 @@
 """API endpoints for product management."""
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 import logging
 
 from app.database.connection import get_db
@@ -12,14 +12,20 @@ from app.database.crud import (
     get_brand_products,
     get_product,
     update_product,
-    delete_product
+    delete_product,
+    create_campaign,
+    get_campaigns_by_product
 )
 from app.models.schemas import (
     CreateProductRequest,
     UpdateProductRequest,
-    ProductResponse
+    ProductResponse,
+    CampaignCreate,
+    CampaignDetail
 )
-from app.api.auth import get_current_user_id
+from app.api.auth import get_current_user_id, get_current_brand_id, verify_perfume_ownership
+from app.services.storage import storage_service
+from fastapi import status
 
 logger = logging.getLogger(__name__)
 
@@ -29,50 +35,102 @@ router = APIRouter()
 # Product Endpoints
 # ============================================================================
 
-@router.post("/brands/{brand_id}/products", response_model=ProductResponse, status_code=201)
+@router.post(
+    "/brands/{brand_id}/products",
+    response_model=ProductResponse,
+    status_code=201
+)
 async def create_product_endpoint(
     brand_id: UUID,
-    request: CreateProductRequest,
+    product_name: str = Form(...),
+    product_gender: Optional[str] = Form(None),
+    product_type: str = Form("fragrance"),
+    icp_segment: Optional[str] = Form(None),
+    front_image: UploadFile = File(...),
+    back_image: Optional[UploadFile] = File(None),
+    top_image: Optional[UploadFile] = File(None),
+    left_image: Optional[UploadFile] = File(None),
+    right_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
     """
-    Create a new product associated with a brand.
+    Create a new product with multipart/form-data file uploads.
 
     **Path Parameters:**
     - brand_id: UUID of the brand to associate product with
 
-    **Request Body:**
-    ```json
-    {
-        "product_type": "SaaS",
-        "name": "Analytics Platform",
-        "icp_segment": "Mid-market B2B companies",
-        "image_urls": ["https://s3.../product1.png", "https://s3.../product2.png"]
-    }
-    ```
+    **Form Data:**
+    - product_name: Name of the product (required)
+    - product_gender: Gender (masculine/feminine/unisex, optional)
+    - product_type: Type of product (default: fragrance)
+    - icp_segment: Target audience description (optional)
+    - front_image: Front product image (required)
+    - back_image: Back product image (optional)
+    - top_image: Top product image (optional)
+    - left_image: Left product image (optional)
+    - right_image: Right product image (optional)
 
     **Response:** ProductResponse with created product data
 
     **Errors:**
     - 401: Not authenticated
     - 404: Brand not found or not owned by user
-    - 400: Invalid request data (max 10 image URLs)
-    - 500: Database error
+    - 400: Invalid request data
+    - 500: Database error or S3 upload failure
     """
     try:
         # Get authenticated user
         user_id = get_current_user_id(authorization)
+
+        # Collect images to upload
+        images_to_upload = [
+            ("front", front_image),
+            ("back", back_image),
+            ("top", top_image),
+            ("left", left_image),
+            ("right", right_image)
+        ]
+
+        # Upload images to S3
+        image_urls = []
+        for angle, image_file in images_to_upload:
+            if image_file:
+                # Read file content
+                file_content = await image_file.read()
+
+                # Upload to S3
+                s3_url = await storage_service.upload_file(
+                    file_content=file_content,
+                    folder="products",
+                    filename=image_file.filename or f"{angle}.jpg",
+                    content_type=image_file.content_type or "image/jpeg",
+                    user_id=str(user_id)
+                )
+
+                if s3_url:
+                    image_urls.append(s3_url)
+                else:
+                    logger.warning(
+                        f"⚠️ Failed to upload {angle} image for product"
+                    )
+
+        if not image_urls:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one product image must be uploaded"
+            )
 
         # Create product (validates brand ownership)
         product = create_product(
             db=db,
             user_id=user_id,
             brand_id=brand_id,
-            product_type=request.product_type,
-            name=request.name,
-            icp_segment=request.icp_segment,
-            image_urls=request.image_urls
+            product_type=product_type,
+            name=product_name,
+            product_gender=product_gender,
+            icp_segment=icp_segment,
+            image_urls=image_urls
         )
 
         if not product:
@@ -81,7 +139,9 @@ async def create_product_endpoint(
                 detail=f"Brand {brand_id} not found or not owned by user"
             )
 
-        logger.info(f"✅ Created product {product.id} for brand {brand_id}")
+        logger.info(
+            f"✅ Created product {product.id} for brand {brand_id}"
+        )
 
         return product
 
@@ -89,7 +149,10 @@ async def create_product_endpoint(
         raise
     except Exception as e:
         logger.error(f"❌ Failed to create product: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create product: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create product: {str(e)}"
+        )
 
 
 @router.get("/brands/{brand_id}/products", response_model=List[ProductResponse])
@@ -287,3 +350,91 @@ async def delete_product_endpoint(
     except Exception as e:
         logger.error(f"❌ Failed to delete product {product_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete product: {str(e)}")
+
+
+# ============================================================================
+# Campaign Endpoints for Products
+# ============================================================================
+
+@router.post(
+    "/products/{product_id}/campaigns",
+    response_model=CampaignDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create campaign for product",
+    description="Create a new campaign for a product. Verifies product ownership."
+)
+async def create_product_campaign(
+    product_id: UUID,
+    data: CampaignCreate,
+    brand_id: UUID = Depends(get_current_brand_id),
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+) -> CampaignDetail:
+    """
+    Create a new campaign for a product.
+
+    **Path Parameters:**
+    - `product_id`: Product UUID
+
+    **Request Body:**
+    - `name`: Campaign name (1-100 chars, unique within product)
+    - `seasonal_event`: Seasonal event or marketing initiative (1-100 chars)
+    - `year`: Campaign year (2020-2030)
+    - `duration`: Video duration in seconds (15, 30, 45, or 60)
+    - `scene_configs`: Array of scene configurations (1-10 scenes)
+
+    **Returns:**
+    - CampaignDetail: Created campaign with all details
+
+    **Raises:**
+    - HTTPException 400: Invalid input data
+    - HTTPException 404: Product not found or doesn't belong to brand
+    - HTTPException 409: Campaign name already exists for this product
+    """
+    try:
+        # Verify product belongs to brand
+        verify_perfume_ownership(product_id, brand_id, db)
+
+        # Check campaign name uniqueness within product
+        existing_campaigns, _ = get_campaigns_by_product(db, product_id, page=1, limit=1000)
+        for existing in existing_campaigns:
+            if existing.name == data.name:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Campaign name '{data.name}' already exists for this product"
+                )
+
+        # Convert scene_configs to dict format for database
+        scene_configs_dict = [scene.model_dump() for scene in data.scene_configs]
+
+        # Create campaign
+        logger.info(f"💾 Creating campaign '{data.name}' for product {product_id} (brand {brand_id})")
+        campaign = create_campaign(
+            db=db,
+            user_id=user_id,
+            product_id=product_id,
+            brand_id=brand_id,
+            name=data.name,
+            seasonal_event=data.seasonal_event,
+            year=data.year,
+            duration=data.duration,
+            scene_configs=scene_configs_dict
+        )
+
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found or doesn't belong to brand"
+            )
+
+        logger.info(f"✅ Created campaign {campaign.id} for product {product_id}")
+        return CampaignDetail.model_validate(campaign)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to create campaign: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create campaign: {str(e)}"
+        )

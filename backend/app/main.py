@@ -115,16 +115,17 @@ async def root():
 
 
 # Import and include routers
-from app.api import campaigns, generation, storage, uploads, brands, products, campaigns, editing, providers
+from app.api import campaigns, generation, storage, uploads, brands, products, editing, providers, creatives, admin
 app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])
+app.include_router(creatives.router, prefix="/api/campaigns", tags=["creatives"])
 app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 app.include_router(uploads.router, prefix="/api", tags=["uploads"])
 app.include_router(brands.router, prefix="/api/brands", tags=["brands"])
 app.include_router(products.router, prefix="/api", tags=["products"])
-app.include_router(campaigns.router, prefix="/api", tags=["campaigns"])
 app.include_router(providers.router, tags=["providers"])
 app.include_router(editing.router)  # Already has /api/campaigns prefix
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
 if __name__ == "__main__":

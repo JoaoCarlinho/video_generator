@@ -41,8 +41,10 @@ class Product(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id = Column(UUID(as_uuid=True), ForeignKey('brands.id', ondelete='CASCADE'), nullable=False, index=True)
-    product_type = Column(String(100), nullable=False)
+    product_type = Column(String(100), nullable=False, index=True)
     name = Column(String(200), nullable=False)
+    product_gender = Column(String(20), nullable=True)  # 'masculine', 'feminine', 'unisex', or NULL
+    product_attributes = Column(JSONB, nullable=True)  # Flexible type-specific attributes
     icp_segment = Column(Text, nullable=True)
     image_urls = Column(JSONB, nullable=True)  # Array of S3 product image URLs
 
@@ -70,6 +72,8 @@ class Campaign(Base):
     duration = Column(Integer, nullable=False)  # Duration in seconds: 15, 30, 45, 60
     scene_configs = Column(JSONB, nullable=False)  # Array of scene configuration objects
     status = Column(String(50), default="draft", index=True)  # draft, generating, completed, failed
+    progress = Column(Integer, default=0)  # Progress percentage 0-100
+    error_message = Column(Text, nullable=True)  # Error message if generation failed
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
