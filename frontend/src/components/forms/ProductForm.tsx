@@ -38,8 +38,10 @@ export const ProductForm = ({
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: initialData || {
-      product_type: '',
+      product_type: 'fragrance',
       name: '',
+      product_gender: undefined,
+      product_attributes: undefined,
       icp_segment: '',
       image_files: [],
     },
@@ -48,6 +50,9 @@ export const ProductForm = ({
   // Watch icp_segment for character count
   const icpSegment = watch('icp_segment')
 
+  // Watch product_type to conditionally show gender selector
+  const productType = watch('product_type')
+
   // Update character count
   useState(() => {
     if (icpSegment) setIcpLength(icpSegment.length)
@@ -55,15 +60,32 @@ export const ProductForm = ({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Product Type (Optional) */}
-      <Input
-        label="Product Type"
-        placeholder="e.g., SaaS, Physical Product, Service"
-        {...register('product_type')}
-        error={errors.product_type?.message}
-        helpText="Optional: Category or type of product"
-        disabled={isSubmitting}
-      />
+      {/* Product Type (Required) */}
+      <div className="w-full">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Product Type
+          <span className="text-error-500 ml-1">*</span>
+        </label>
+        <select
+          {...register('product_type')}
+          disabled={isSubmitting}
+          className={cn(
+            'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 transition-all duration-150',
+            'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
+            'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50',
+            'hover:border-gray-300',
+            errors.product_type && 'border-error-500 focus:border-error-500 focus:ring-error-500/20'
+          )}
+        >
+          <option value="fragrance">Fragrance</option>
+          <option value="car">Car/Automotive</option>
+          <option value="watch">Watch/Timepiece</option>
+          <option value="energy">Energy/Utilities</option>
+        </select>
+        {errors.product_type && (
+          <p className="text-error-500 text-xs mt-1">{errors.product_type.message}</p>
+        )}
+      </div>
 
       {/* Product Name (Required) */}
       <Input
@@ -74,6 +96,37 @@ export const ProductForm = ({
         required
         disabled={isSubmitting}
       />
+
+      {/* Product Gender (Conditional - only for fragrances) */}
+      {productType === 'fragrance' && (
+        <div className="w-full">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Fragrance Gender
+          </label>
+          <select
+            {...register('product_gender')}
+            disabled={isSubmitting}
+            className={cn(
+              'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 transition-all duration-150',
+              'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50',
+              'hover:border-gray-300',
+              errors.product_gender && 'border-error-500 focus:border-error-500 focus:ring-error-500/20'
+            )}
+          >
+            <option value="">Select gender (optional)</option>
+            <option value="masculine">Masculine</option>
+            <option value="feminine">Feminine</option>
+            <option value="unisex">Unisex</option>
+          </select>
+          {errors.product_gender && (
+            <p className="text-error-500 text-xs mt-1">{errors.product_gender.message}</p>
+          )}
+          <p className="text-gray-500 text-xs mt-1">
+            Optional: Helps tailor the video style and visual language
+          </p>
+        </div>
+      )}
 
       {/* ICP Segment (Required) */}
       <div className="w-full">

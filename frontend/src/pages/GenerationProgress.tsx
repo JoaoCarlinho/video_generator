@@ -22,14 +22,14 @@ const stepLabels: Record<string, string> = {
 }
 
 export const GenerationProgress = () => {
-  const { campaignId, campaignId } = useParams<{ campaignId?: string; campaignId?: string }>()
+  const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
   const { generateVideo, generateCampaign } = useGeneration()
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
   const hasStartedGenerationRef = useRef(false)
   
-  // Use campaignId if available, otherwise fall back to campaignId (legacy)
-  const id = campaignId || campaignId || ''
+  // Use campaignId if available, otherwise fall back to empty string
+  const id = campaignId || ''
   const isCampaign = !!campaignId
   const storageKey = `generation_started_${id}`
 
@@ -82,8 +82,7 @@ export const GenerationProgress = () => {
   }, [id, isCampaign, generateVideo, generateCampaign, storageKey])
 
   const { progress, isPolling, stopPolling } = useProgressPolling({
-    campaignId: isCampaign ? undefined : id,
-    campaignId: isCampaign ? id : undefined,
+    campaignId: id,
     enabled: true,
     interval: 2000,
     onComplete: async () => {

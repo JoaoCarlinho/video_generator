@@ -10,7 +10,7 @@ export interface Creative {
   brand_name: string
   mood?: string
   duration: number
-  status: 'draft' | 'generating' | 'ready' | 'failed' | 'COMPLETED'
+  status: 'draft' | 'pending' | 'generating' | 'processing' | 'ready' | 'completed' | 'COMPLETED' | 'failed'
   created_at: string
   updated_at: string
   cost_estimate?: number
@@ -53,8 +53,7 @@ interface CreateCreativeInput {
   selected_style?: string
   // WAN 2.5: Video provider selection
   video_provider?: 'replicate' | 'ecs'
-  // Phase 9: Product-specific fields (optional, for backward compatibility)
-  product_name?: string
+  // Phase 9: Product-specific fields
   product_gender?: 'masculine' | 'feminine' | 'unisex'
   // Phase 3: Multi-variation support
   num_variations?: 1 | 2 | 3 // Number of video variations (1-3)

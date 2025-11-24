@@ -5,7 +5,6 @@ import { VideoPlayer } from '@/components/PageComponents/VideoPlayer'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useCampaigns } from '@/hooks/useCampaigns'
-import { useCampaigns } from '@/hooks/useCampaigns'
 import { useGeneration } from '@/hooks/useGeneration'
 import { api } from '@/services/api'
 import { ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react'
@@ -15,9 +14,8 @@ import { getVideoURL } from '@/services/videoStorage'
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export function VideoSelection() {
-  const { campaignId, campaignId } = useParams<{ campaignId?: string; campaignId?: string }>()
+  const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
-  const { getCampaign } = useCampaigns()
   const { getCampaign } = useCampaigns()
   const { selectVariation } = useGeneration()
   
@@ -37,19 +35,19 @@ export function VideoSelection() {
     campaignData: any,
     variationIndices: number[]
   ) => {
-    if (!campaignData?.campaign_id) {
+    if (!campaignData?.id) {
       throw new Error('Invalid campaign data')
     }
-    
+
     if (variationIndices.length === 0) {
       throw new Error('No variations available for campaign')
     }
-    
+
     const blobUrls: string[] = []
     try {
       for (const variationIndex of variationIndices) {
         const response = await api.get(
-          `/api/generation/campaigns/${campaignData.campaign_id}/stream/9:16`,
+          `/api/generation/campaigns/${campaignData.id}/stream/9:16`,
           {
             responseType: 'blob',
             params: { variation_index: variationIndex },
@@ -223,7 +221,7 @@ export function VideoSelection() {
     }
 
     loadCampaign()
-  }, [id, isCampaign, getCampaign, getCampaign, navigate])
+  }, [id, isCampaign, getCampaign, navigate])
 
   useEffect(() => {
     return () => {

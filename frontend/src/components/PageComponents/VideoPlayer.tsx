@@ -58,8 +58,8 @@ export const VideoPlayer = ({
     }
   }
 
-  const handleTimeUpdate = (e?: Event) => {
-    const video = e ? (e.target as HTMLVideoElement) : videoRef.current
+  const handleTimeUpdate = (e?: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e ? e.currentTarget : videoRef.current
     if (video) {
       setCurrentTime(video.currentTime)
     }
@@ -205,7 +205,7 @@ export const VideoPlayer = ({
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={() => setIsPlaying(false)}
-              onError={(e) => {
+              onError={(e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
                 console.error('❌ Video loading error:', e)
                 console.error('❌ Video URL:', videoUrl)
                 console.error('❌ Video URL type:', typeof videoUrl)

@@ -3,7 +3,6 @@ import { useGeneration, type GenerationProgress } from './useGeneration'
 
 interface UseProgressPollingOptions {
   campaignId?: string
-  campaignId?: string
   enabled?: boolean
   interval?: number
   onComplete?: () => void
@@ -12,15 +11,15 @@ interface UseProgressPollingOptions {
 
 export const useProgressPolling = ({
   campaignId,
-  campaignId,
   enabled = true,
   interval = 2000,
   onComplete,
   onError,
 }: UseProgressPollingOptions) => {
   const { getProgress, getCampaignProgress } = useGeneration()
-  const id = campaignId || campaignId || ''
-  const isCampaign = !!campaignId
+  // Guard against undefined/null/string "undefined" - convert to empty string
+  const id = campaignId && campaignId !== 'undefined' ? campaignId : ''
+  const isCampaign = !!id
   const [progress, setProgress] = useState<GenerationProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [isPolling, setIsPolling] = useState(false)

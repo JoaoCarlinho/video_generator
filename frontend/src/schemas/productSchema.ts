@@ -18,6 +18,14 @@ export const productSchema = z.object({
     .max(200, 'Product name must not exceed 200 characters')
     .trim(),
 
+  product_gender: z
+    .enum(['masculine', 'feminine', 'unisex'])
+    .optional(),
+
+  product_attributes: z
+    .record(z.string(), z.any())
+    .optional(),
+
   icp_segment: z
     .string()
     .min(1, 'ICP/target segment is required')

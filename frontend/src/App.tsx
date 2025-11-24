@@ -7,9 +7,7 @@ import SignupPage from './pages/Signup'
 import { Dashboard } from './pages/Dashboard'
 import { Landing } from './pages/Landing'
 import { Onboarding } from './pages/Onboarding'
-import { AddProduct } from './pages/AddProduct'
 import { CampaignDashboard } from './pages/CampaignDashboard'
-import { CreateCampaign } from './pages/CreateCampaign'
 import { CreateCampaign } from './pages/CreateCampaign'
 import { GenerationProgress } from './pages/GenerationProgress'
 import { VideoResults } from './pages/VideoResults'
@@ -17,6 +15,8 @@ import { BrandOnboarding } from './pages/BrandOnboarding'
 import { ProductManagement } from './pages/ProductManagement'
 import { CampaignCreation } from './pages/CampaignCreation'
 import { VideoSelection } from './pages/VideoSelection'
+import { CreativesList } from './pages/CreativesList'
+import { CreateCreative } from './pages/CreateCreative'
 
 function App() {
   return (
@@ -50,14 +50,6 @@ function App() {
           
           {/* Product Routes */}
           <Route
-            path="/products/add"
-            element={
-              <ProtectedRoute>
-                <AddProduct />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/products/:productId"
             element={
               <ProtectedRoute>
@@ -75,6 +67,38 @@ function App() {
           />
           
           {/* Campaign Routes */}
+          <Route
+            path="/campaigns/:campaignId/creatives"
+            element={
+              <ProtectedRoute>
+                <CreativesList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campaignId/creatives/create"
+            element={
+              <ProtectedRoute>
+                <CreateCreative />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campaignId/creatives/:creativeId/progress"
+            element={
+              <ProtectedRoute>
+                <GenerationProgress />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campaignId/creatives/:creativeId/results"
+            element={
+              <ProtectedRoute>
+                <VideoResults />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/campaigns/:campaignId/progress"
             element={

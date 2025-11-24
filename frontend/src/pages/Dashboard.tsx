@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
-import { ProductCard } from '@/components/ProductCard'
+import { Card } from '@/components/ui/Card'
 import { useAuth } from '@/hooks/useAuth'
 import { useBrand } from '@/hooks/useBrand'
 import { useProducts } from '@/hooks/useProducts'
@@ -21,7 +21,7 @@ export const Dashboard = () => {
   }, [fetchProducts])
 
   const handleAddProduct = () => {
-    navigate('/products/add')
+    navigate(`/brands/${brand?.id}/products`)
   }
 
   const handleViewProduct = (productId: string) => {
@@ -47,15 +47,17 @@ export const Dashboard = () => {
       label: 'Total Products',
       value: products.length,
       icon: Package,
-      gradient: 'from-gold/20 to-gold-silky/10',
-      iconBg: 'bg-gold/20',
+      gradient: 'from-blue-50 to-blue-100',
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-600',
     },
     {
       label: 'Total Campaigns',
       value: stats?.total_campaigns || 0,
       icon: TrendingUp,
-      gradient: 'from-gold-silky/20 to-gold/10',
-      iconBg: 'bg-gold-silky/20',
+      gradient: 'from-primary-50 to-primary-100',
+      iconBg: 'bg-primary-50',
+      iconColor: 'text-primary-600',
     },
   ]
 
@@ -76,48 +78,33 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 flex flex-col">
-      {/* Header */}
-      <Header
-        logo="GenAds"
-        title="Dashboard"
-        actions={
-          <button
-            onClick={() => logout()}
-            className="text-gray-600 hover:text-gray-900 text-sm transition-colors"
-          >
-            Sign Out
-          </button>
-        }
-      />
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-light">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gold/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gold-silky/10 rounded-full blur-3xl"></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-transparent" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-100/40 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-50/30 rounded-full blur-3xl"></div>
       </div>
 
       {/* Navigation Header */}
-      <nav className="relative z-50 border-b border-olive-600/50 backdrop-blur-md bg-olive-950/30 sticky top-0">
+      <nav className="relative z-50 border-b border-gray-200 backdrop-blur-md bg-white/80 sticky top-0">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Link to="/" className="flex items-center gap-2">
-                <div className="p-2 bg-gold rounded-lg shadow-gold">
-                  <Sparkles className="h-5 w-5 text-gold-foreground" />
+                <div className="p-2 bg-primary-500 rounded-lg shadow-md">
+                  <Sparkles className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-gradient-gold">GenAds</span>
+                <span className="text-xl font-bold text-gray-900">GenAds</span>
               </Link>
             </div>
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-2 text-sm text-muted-gray">
+              <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
                 <User className="w-4 h-4" />
                 <span>{user?.email?.split('@')[0]}</span>
               </div>
               <button
                 onClick={() => logout()}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-muted-gray hover:text-gold transition-colors rounded-lg hover:bg-olive-800/50"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-primary-600 transition-colors rounded-lg hover:bg-gray-100"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Sign Out</span>
@@ -138,12 +125,12 @@ export const Dashboard = () => {
           >
             {/* Welcome Section */}
             <motion.div variants={itemVariants} className="space-y-3">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-off-white">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
                 Your Products
               </h1>
-              <p className="text-lg sm:text-xl text-muted-gray max-w-2xl">
+              <p className="text-lg sm:text-xl text-gray-600 max-w-2xl">
                 {brand?.brand_name ? (
-                  <>Manage your product collection for <span className="text-gold font-semibold">{brand.brand_name}</span></>
+                  <>Manage your product collection for <span className="text-primary-600 font-semibold">{brand.brand_name}</span></>
                 ) : (
                   'Create, manage, and track your product collection'
                 )}
@@ -160,20 +147,20 @@ export const Dashboard = () => {
                 return (
                   <motion.div
                     key={stat.label}
-                    className={`relative overflow-hidden bg-olive-800/50 backdrop-blur-sm border border-olive-600 rounded-xl p-6 hover:border-gold/50 transition-all duration-300 hover:shadow-gold group`}
+                    className={`relative overflow-hidden bg-white border border-gray-200 rounded-xl p-6 hover:border-primary-300 transition-all duration-300 hover:shadow-lg group`}
                     whileHover={{ y: -4, scale: 1.02 }}
                     transition={{ duration: 0.2 }}
                   >
                     {/* Gradient overlay */}
                     <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                    
+
                     <div className="relative flex items-center gap-4">
-                      <div className={`p-3 ${stat.iconBg} rounded-lg border border-gold/20 group-hover:border-gold/50 transition-colors`}>
-                        <Icon className="w-6 h-6 text-gold" />
+                      <div className={`p-3 ${stat.iconBg} rounded-lg border border-gray-200 group-hover:border-primary-300 transition-colors`}>
+                        <Icon className={`w-6 h-6 ${stat.iconColor}`} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-muted-gray text-sm font-medium mb-1">{stat.label}</p>
-                        <p className="text-3xl font-bold text-off-white">
+                        <p className="text-gray-600 text-sm font-medium mb-1">{stat.label}</p>
+                        <p className="text-3xl font-bold text-gray-900">
                           {stat.value}
                         </p>
                       </div>
@@ -187,9 +174,9 @@ export const Dashboard = () => {
             <motion.div variants={itemVariants} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">My Campaigns</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">My Products</h2>
                   <p className="text-gray-600 text-sm mt-1">
-                    {products.length} campaign{products.length !== 1 ? 's' : ''}
+                    {products.length} product{products.length !== 1 ? 's' : ''}
                   </p>
                 </div>
                 <Button
@@ -206,7 +193,7 @@ export const Dashboard = () => {
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="aspect-square bg-olive-800/30 rounded-xl border border-olive-600 animate-pulse" />
+                    <div key={i} className="aspect-square bg-gray-100 rounded-xl border border-gray-200 animate-pulse" />
                   ))}
                 </div>
               ) : error ? (
@@ -216,25 +203,25 @@ export const Dashboard = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => fetchProducts()}
-                    className="gap-2"
+                    className="gap-2 mt-4"
                   >
                     Try Again
                   </Button>
                 </div>
               ) : products.length === 0 ? (
-                <motion.div 
+                <motion.div
                   className="text-center py-20 px-4"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5 }}
                 >
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gold/10 rounded-full mb-6">
-                    <Package className="w-10 h-10 text-gold" />
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-50 rounded-full mb-6">
+                    <Package className="w-10 h-10 text-primary-600" />
                   </div>
-                  <h3 className="text-2xl font-bold text-off-white mb-3">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">
                     No products yet
                   </h3>
-                  <p className="text-muted-gray mb-8 max-w-md mx-auto">
+                  <p className="text-gray-600 mb-8 max-w-md mx-auto">
                     Add your first product to start creating ad campaigns
                   </p>
                   <Button
@@ -255,10 +242,15 @@ export const Dashboard = () => {
                 >
                   {products.map((product) => (
                     <motion.div key={product.product_id} variants={itemVariants}>
-                      <ProductCard
-                        product={product}
+                      <Card
+                        className="cursor-pointer hover:shadow-lg transition-shadow bg-white border-gray-200"
                         onClick={() => handleViewProduct(product.product_id)}
-                      />
+                      >
+                        <div className="p-4">
+                          <h3 className="text-lg font-semibold text-gray-900">{product.product_name}</h3>
+                          <p className="text-sm text-gray-600 mt-2">{product.product_gender}</p>
+                        </div>
+                      </Card>
                     </motion.div>
                   ))}
                 </motion.div>

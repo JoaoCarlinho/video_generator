@@ -1,36 +1,46 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from './useAuth'
 import { apiClient } from '@/services/api'
+import type { SceneConfig } from '@/types'
 
 export type CampaignStatus = 'pending' | 'processing' | 'completed' | 'failed'
-export type VideoStyle = 'gold_luxe' | 'dark_elegance' | 'romantic_floral'
+export type VideoStyle = 'gold_luxe' | 'dark_elegance' | 'romantic_floral' | 'silver_modern' | 'noir_dramatic'
 
 export interface Campaign {
-  campaign_id: string
+  id: string  // Backend returns 'id', not 'campaign_id'
   product_id: string
-  brand_id: string
-  campaign_name: string
-  creative_prompt: string
-  selected_style: VideoStyle
-  target_duration: number
-  num_variations: number
-  selected_variation_index?: number | null
-  status: CampaignStatus
-  progress: number
-  cost: number
-  error_message?: string | null
-  campaign_json: Record<string, any>
+  name: string
+  seasonal_event: string
+  year: number
+  display_name: string
+  duration: number
+  scene_configs: Array<SceneConfig>
+  status: string
   created_at: string
   updated_at: string
+
+  // Legacy fields for backward compatibility
+  campaign_id?: string
+  brand_id?: string
+  campaign_name?: string
+  creative_prompt?: string
+  selected_style?: VideoStyle
+  target_duration?: number
+  num_variations?: number
+  selected_variation_index?: number | null
+  progress?: number
+  cost?: number
+  error_message?: string | null
+  campaign_json?: Record<string, any>
 }
 
 export interface CreateCampaignInput {
   product_id: string
   campaign_name: string
-  creative_prompt: string
-  selected_style: VideoStyle
+  seasonal_event: string
+  year: number
   target_duration: number
-  num_variations?: number
+  scene_configs: SceneConfig[]
 }
 
 export interface PaginatedCampaigns {
@@ -95,14 +105,16 @@ export const useCampaigns = () => {
       setError(null)
 
       try {
-        const response = await apiClient.post<Campaign>('/api/campaigns', {
-          product_id: input.product_id,
-          campaign_name: input.campaign_name,
-          creative_prompt: input.creative_prompt,
-          selected_style: input.selected_style,
-          target_duration: input.target_duration,
-          num_variations: input.num_variations || 1,
-        })
+        const response = await apiClient.post<Campaign>(
+          `/api/products/${input.product_id}/campaigns`,
+          {
+            name: input.campaign_name,
+            seasonal_event: input.seasonal_event,
+            year: input.year,
+            duration: input.target_duration,
+            scene_configs: input.scene_configs
+          }
+        )
 
         setCampaigns((prev) => [response.data, ...prev])
         return response.data

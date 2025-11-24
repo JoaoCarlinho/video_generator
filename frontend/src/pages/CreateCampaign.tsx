@@ -6,7 +6,7 @@ import { Input } from '@/components/ui'
 import { useCampaigns, type VideoStyle } from '@/hooks/useCampaigns'
 import { useProducts } from '@/hooks/useProducts'
 import { useAuth } from '@/hooks/useAuth'
-import { ArrowLeft, Sparkles, LogOut, CheckCircle, Clock, Sparkles as SparklesIcon, Check } from 'lucide-react'
+import { ArrowLeft, Sparkles, LogOut, CheckCircle, Sparkles as SparklesIcon, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Slider } from '@/components/ui/slider'
 
@@ -82,17 +82,37 @@ export const CreateCampaign = () => {
     setIsSubmitting(true)
 
     try {
+      // NOTE: This is a simplified campaign creation form
+      // For full campaign configuration with scenes, use CampaignCreation page
+      const currentYear = new Date().getFullYear()
+
+      // Create a default scene configuration based on duration
+      const numScenes = Math.ceil(targetDuration / 15) // One scene per 15 seconds
+      const defaultScenes = Array.from({ length: numScenes }, (_, i) => ({
+        scene_number: i + 1,
+        creative_vision: creativePrompt,
+        reference_images: ['', '', ''],
+        cinematography: {
+          camera_aspect: 'POV',
+          lighting: 'natural',
+          mood: 'energetic',
+          transition: 'fade',
+          environment: 'bright',
+          setting: 'residential'
+        }
+      }))
+
       const campaign = await createCampaign({
         product_id: productId,
         campaign_name: campaignName,
-        creative_prompt: creativePrompt,
-        selected_style: selectedStyle,
+        seasonal_event: 'General Campaign',
+        year: currentYear,
         target_duration: targetDuration,
-        num_variations: numVariations,
+        scene_configs: defaultScenes
       })
-      
+
       // Redirect to campaign progress page
-      navigate(`/campaigns/${campaign.campaign_id}/progress`)
+      navigate(`/campaigns/${campaign.id}/progress`)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to create campaign. Please try again.')
     } finally {
@@ -194,7 +214,7 @@ export const CreateCampaign = () => {
                   onChange={(e) => setCampaignName(e.target.value)}
                   placeholder="e.g., Summer Collection 2024, Holiday Launch"
                   required
-                  className="bg-slate-800 border-slate-700 text-off-white"
+                  className="bg-olive-800/30 border-olive-600 text-off-white"
                 />
               </div>
 
@@ -209,7 +229,7 @@ export const CreateCampaign = () => {
                   placeholder="Describe the vision for your ad campaign. What mood, atmosphere, or story should the video convey? (10-2000 characters)"
                   required
                   rows={6}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-off-white placeholder-muted-gray focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 bg-olive-800/30 border border-olive-600 rounded-lg text-off-white placeholder-muted-gray focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
                 />
                 <p className="text-xs text-muted-gray mt-1">
                   {creativePrompt.length} / 2000 characters

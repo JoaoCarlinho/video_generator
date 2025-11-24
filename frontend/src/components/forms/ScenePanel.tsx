@@ -130,7 +130,7 @@ export function ScenePanel({
               onChange={(e) => handleCreativeVisionChange(e.target.value)}
               placeholder="e.g., Energetic professional in modern kitchen preparing morning smoothie. Natural lighting streams through large windows. Camera follows subject's fluid movements as they blend ingredients. Product prominently featured on marble countertop..."
               rows={6}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-vertical ${
+              className={`w-full px-3 py-2 bg-white text-gray-900 placeholder:text-gray-400 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-vertical ${
                 errors.creative_vision ? 'border-red-500' : 'border-gray-300'
               }`}
             />

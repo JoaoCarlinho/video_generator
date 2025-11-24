@@ -38,21 +38,8 @@ export const CampaignDashboard = () => {
   }
 
   const handleCampaignClick = (campaignId: string) => {
-    const campaign = campaigns.find((c) => c.campaign_id === campaignId)
-    if (!campaign) return
-
-    // Navigate based on campaign status
-    if (campaign.status === 'completed') {
-      navigate(`/campaigns/${campaignId}/results`)
-    } else if (campaign.status === 'processing') {
-      navigate(`/campaigns/${campaignId}/progress`)
-    } else if (campaign.status === 'failed') {
-      // Show error or allow retry
-      navigate(`/campaigns/${campaignId}/results`)
-    } else {
-      // Pending - show progress or results
-      navigate(`/campaigns/${campaignId}/progress`)
-    }
+    // Navigate to creatives list for this campaign
+    navigate(`/campaigns/${campaignId}/creatives`)
   }
 
   const handleDeleteCampaign = async (campaignId: string, e: React.MouseEvent) => {
@@ -218,14 +205,14 @@ export const CampaignDashboard = () => {
                   animate="visible"
                 >
                   {campaigns.map((campaign) => (
-                    <motion.div key={campaign.campaign_id} variants={itemVariants} className="relative group">
+                    <motion.div key={campaign.id} variants={itemVariants} className="relative group">
                       <CampaignCard
                         campaign={campaign}
-                        onClick={() => handleCampaignClick(campaign.campaign_id)}
+                        onClick={() => handleCampaignClick(campaign.id)}
                       />
                       {/* Delete button on hover */}
                       <button
-                        onClick={(e) => handleDeleteCampaign(campaign.campaign_id, e)}
+                        onClick={(e) => handleDeleteCampaign(campaign.id, e)}
                         className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-white"
                         title="Delete campaign"
                       >

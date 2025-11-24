@@ -81,6 +81,8 @@ export const ProductManagement = () => {
       const productData = {
         product_type: data.product_type || undefined,
         name: data.name,
+        product_gender: data.product_gender || undefined,
+        product_attributes: data.product_attributes || undefined,
         icp_segment: data.icp_segment,
         image_urls: imageUrls,
       }

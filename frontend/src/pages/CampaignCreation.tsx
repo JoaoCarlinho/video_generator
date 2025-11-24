@@ -21,6 +21,9 @@ import { api } from '../services/api'
 import axios from 'axios'
 import type { SceneConfig, Cinematography, Campaign } from '../types'
 
+// Type for creating campaigns (omits auto-generated fields)
+type CreateCampaignData = Omit<Campaign, 'id' | 'product_id' | 'display_name' | 'status' | 'created_at' | 'updated_at'>
+
 // Default cinematography values
 const DEFAULT_CINEMATOGRAPHY: Cinematography = {
   camera_aspect: 'POV',
@@ -205,7 +208,8 @@ export function CampaignCreation() {
       return // Don't auto-save if required fields are missing
     }
 
-    const campaignData = {
+    // Campaign data for creation/update
+    const campaignData: CreateCampaignData = {
       name: campaignName,
       seasonal_event: seasonalEvent,
       year,
@@ -218,13 +222,13 @@ export function CampaignCreation() {
         // Update existing campaign
         await updateCampaign({
           campaignId: savedCampaignId,
-          data: campaignData,
+          data: campaignData as any,
         }).unwrap()
       } else {
         // Create new campaign
         const result = await createCampaign({
           productId: selectedProductId,
-          data: campaignData,
+          data: campaignData as any,
         }).unwrap()
         setSavedCampaignId(result.id)
       }

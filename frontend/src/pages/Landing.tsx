@@ -14,46 +14,67 @@ const Landing = () => {
       </div>
 
       {/* Header */}
-      <Header
-        logo="GenAds"
-        actions={
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => navigate('/login')}>
-              Sign In
-            </Button>
-            <Button variant="default" onClick={() => navigate('/signup')}>
-              Get Started
-            </Button>
+      <nav className="relative z-10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <Link to="/" className="text-2xl font-bold text-gray-900">
+            GenAds
           </Link>
+          <div className="flex gap-3">
+            <Link to="/login">
+              <Button variant="secondary">
+                Sign In
+              </Button>
+            </Link>
+            <Link to="/signup">
+              <Button variant="default">
+                Get Started
+              </Button>
+            </Link>
+          </div>
         </div>
       </nav>
 
       {/* Main Content */}
       <div className="flex-1">
-        <Container size="lg">
+        <div className="max-w-7xl mx-auto px-6">
           {/* Hero Section */}
-          <HeroSection
-            title="Create Professional Ad Videos In Minutes"
-            subtitle="Generate AI-powered video ads with perfect product consistency. Get horizontal (16:9) format instantly."
-            cta={{
-              text: 'Start Creating',
-              link: '/signup',
-            }}
-            secondaryAction={{
-              text: 'View Demo',
-              onClick: () => {
-                // TODO: Link to demo video
-                console.log('Show demo video')
-              },
-            }}
-          />
+          <motion.section
+            className="py-20 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+              Create Professional Ad Videos In Minutes
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              Generate AI-powered video ads with perfect product consistency. Get horizontal (16:9) format instantly.
+            </p>
+            <div className="flex gap-4 justify-center flex-wrap">
+              <Link to="/signup">
+                <Button size="lg" variant="default">
+                  Start Creating
+                </Button>
+              </Link>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => {
+                  // TODO: Link to demo video
+                  console.log('Show demo video')
+                }}
+              >
+                View Demo
+              </Button>
+            </div>
+          </motion.section>
 
           {/* Demo Cards Section */}
           <motion.section
             className="py-20"
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             viewport={{ once: true, margin: '-100px' }}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -92,9 +113,6 @@ const Landing = () => {
             </div>
           </motion.section>
 
-          {/* Features Section */}
-          <FeaturesSection />
-
           {/* CTA Section */}
           <motion.section
             className="py-20 text-center"
@@ -109,26 +127,28 @@ const Landing = () => {
               Join thousands of creators using GenAds to generate professional video ads
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <Button
-                size="lg"
-                variant="default"
-                onClick={() => navigate('/signup')}
-                className="gap-2"
-              >
-                <Play className="w-5 h-5" />
-                Get Started Free
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                onClick={() => navigate('/login')}
-              >
-                Sign In
-              </Button>
+              <Link to="/signup">
+                <Button
+                  size="lg"
+                  variant="default"
+                  className="gap-2"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Get Started Free
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                >
+                  Sign In
+                </Button>
+              </Link>
             </div>
-          </motion.div>
+          </motion.section>
         </div>
-      </section>
+      </div>
 
       {/* Features Section */}
       <section className="container mx-auto px-4 py-24">

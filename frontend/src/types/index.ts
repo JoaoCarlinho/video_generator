@@ -29,6 +29,8 @@ export interface Product {
   brand_id: string
   product_type?: string
   name: string
+  product_gender?: 'masculine' | 'feminine' | 'unisex'
+  product_attributes?: Record<string, any>
   icp_segment: string
   image_urls?: string[]
   created_at: string
@@ -50,20 +52,6 @@ export interface SceneConfig {
   creative_vision: string
   reference_images: string[]  // Array of 3 S3 URLs
   cinematography: Cinematography
-}
-
-export interface Campaign {
-  id: string
-  product_id: string
-  name: string
-  seasonal_event: string
-  year: number
-  display_name: string
-  duration: number  // 15, 30, 45, or 60 seconds
-  scene_configs: SceneConfig[]
-  status: 'draft' | 'generating' | 'completed' | 'failed'
-  created_at: string
-  updated_at: string
 }
 
 export interface AuthContextType {
@@ -93,20 +81,7 @@ export interface ReferenceImage {
   extractedAt?: string
 }
 
-// Campaign Types
-export interface BrandConfig {
-  name: string
-  description?: string
-}
-
-export interface Scene {
-  id: string
-  name: string
-  prompt: string
-  duration: number
-  productUsage: 'none' | 'static_insert' | 'animated_insert' | 'dominant_center'
-}
-
+// Campaign Types - matches backend database model
 export type AspectRatio = '9:16' | '16:9' | '1:1'
 
 export interface SceneBackground {
@@ -116,23 +91,16 @@ export interface SceneBackground {
 
 export interface Campaign {
   id: string
-  userId: string
-  campaignName: string
-  brief: string
-  brandConfig: BrandConfig
-  targetAudience: string
-  duration: number
-  mood: string[]
-  productImageUrl?: string
-  productImages?: string[]
-  sceneBackgrounds?: SceneBackground[]
-  outputFormats?: AspectRatio[]
-  status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
-  adCampaignJson?: Record<string, any>
-  createdAt: string
-  updatedAt: string
-  num_variations?: number // 1-3
-  selected_variation_index?: number | null // 0-2 or null
+  product_id: string
+  name: string
+  seasonal_event: string
+  year: number
+  display_name: string
+  duration: number  // 15, 30, 45, or 60 seconds
+  scene_configs: SceneConfig[]
+  status: 'draft' | 'generating' | 'completed' | 'failed'
+  created_at: string
+  updated_at: string
 }
 
 export interface CreateCampaignInput {

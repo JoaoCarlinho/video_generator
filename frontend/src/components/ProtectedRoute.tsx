@@ -38,8 +38,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />
   }
 
-  // Redirect to onboarding if not completed (unless skipOnboardingCheck is true)
-  if (!skipOnboardingCheck && (!brand || !brand.onboarding_completed)) {
+  // Redirect to onboarding if no brand exists (unless skipOnboardingCheck is true)
+  // Note: If brand exists, onboarding is complete (brand only created after successful onboarding)
+  if (!skipOnboardingCheck && !brand) {
     return <Navigate to="/onboarding" replace />
   }
 

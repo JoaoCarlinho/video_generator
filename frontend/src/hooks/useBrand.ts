@@ -4,14 +4,20 @@ import { useAuth } from './useAuth'
 import { apiClient } from '@/services/api'
 
 export interface Brand {
-  brand_id: string
+  id: string
   user_id: string
-  brand_name: string
-  brand_logo_url: string
-  brand_guidelines_url: string
-  onboarding_completed: boolean
+  company_name: string
+  brand_name: string | null
+  description: string | null
+  guidelines: string | null
+  logo_urls: Record<string, string> | null
   created_at: string
   updated_at: string
+}
+
+// Helper to get primary logo URL
+export const getBrandLogoUrl = (brand: Brand | null): string | null => {
+  return brand?.logo_urls?.primary || null
 }
 
 export interface BrandStats {

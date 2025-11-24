@@ -82,7 +82,7 @@ export default {
         600: '#2563EB',  // Blue-600
       },
 
-      // Legacy colors (keeping for backward compatibility during migration)
+      // Legacy colors (updated to light theme)
       slate: {
         50: '#f8fafc',
         100: '#f1f5f9',
@@ -91,8 +91,8 @@ export default {
         400: '#94a3b8',
         500: '#64748b',
         600: '#475569',
-        700: '#151924', // Raised surfaces
-        800: '#11141B', // Cards
+        700: '#334155', // Raised surfaces (light)
+        800: '#1e293b', // Cards (light)
         900: '#0f172a',
       },
       // Luxury Gold Accents
@@ -208,23 +208,25 @@ export default {
     
       backgroundColor: (theme) => ({
       ...theme('colors'),
-      gradient: 'linear-gradient(135deg, #111a2e 0%, #1b2742 100%)',
-      'gradient-dark': 'linear-gradient(135deg, #111a2e 0%, #18233d 100%)',
-      'gradient-hero': 'linear-gradient(135deg, #111a2e 0%, #18233d 50%, #1f2d4a 100%)',
-      'gradient-primary': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
-      'gradient-gold': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
-      'gradient-olive': 'linear-gradient(135deg, #07090c 0%, #0f141b 50%, #151b26 100%)',
-      'gradient-silky-gold': 'linear-gradient(135deg, #C9A86A 0%, #B8965A 50%, #A6854A 100%)',
+      gradient: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+      'gradient-light': 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 50%, #e5e7eb 100%)',
+      'gradient-dark': 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+      'gradient-hero': 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%)',
+      'gradient-primary': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+      'gradient-gold': 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+      'gradient-olive': 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 50%, #e5e7eb 100%)',
+      'gradient-silky-gold': 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
     }),
     
     backgroundImage: {
       'gradient-to-br': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
-      'gradient-dark': 'linear-gradient(135deg, #050608 0%, #0B0D10 100%)',
-      'gradient-hero': 'linear-gradient(135deg, #050608 0%, #0B0D10 45%, #11141B 100%)',
-      'gradient-primary': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
-      'gradient-gold': 'linear-gradient(135deg, #F3D9A4 0%, #D4B676 100%)',
-      'gradient-olive': 'linear-gradient(135deg, #1a1f1a 0%, #232823 50%, #2d332d 100%)',
-      'gradient-silky-gold': 'linear-gradient(135deg, #C9A86A 0%, #B8965A 50%, #A6854A 100%)',
+      'gradient-light': 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 50%, #e5e7eb 100%)',
+      'gradient-dark': 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+      'gradient-hero': 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%)',
+      'gradient-primary': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+      'gradient-gold': 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+      'gradient-olive': 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 50%, #e5e7eb 100%)',
+      'gradient-silky-gold': 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
     },
     
     animation: {

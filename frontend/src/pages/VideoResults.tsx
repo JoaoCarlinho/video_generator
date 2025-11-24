@@ -3,12 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Container, Header } from '@/components/layout'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
-import { Button } from '@/components/ui'
 import { VideoPlayer } from '@/components/PageComponents'
 import { SceneSidebar } from '@/components/SceneSidebar'
 import { ToastContainer } from '@/components/ui/Toast'
 import type { ToastProps } from '@/components/ui/Toast'
-import { useCampaigns } from '@/hooks/useCampaigns'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { api } from '@/services/api'
 import { ArrowLeft, Copy, Check, Trash2, Cloud, Lock, Info, HelpCircle } from 'lucide-react'
@@ -147,13 +145,12 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const VideoResults = () => {
-  const { campaignId, campaignId } = useParams<{ campaignId?: string; campaignId?: string }>()
+  const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
-  const { getCampaign } = useCampaigns()
   const { getCampaign, deleteCampaign } = useCampaigns()
 
-  // Use campaignId if available, otherwise fall back to campaignId (legacy)
-  const id = campaignId || campaignId || ''
+  // Use campaignId if available
+  const id = campaignId || ''
   const isCampaign = !!campaignId
 
   const [campaign, setCampaign] = useState<any>(null)
@@ -391,21 +388,21 @@ export const VideoResults = () => {
     variationIndex: number,
     forceReload: boolean = false
   ) => {
-    if (!campaignData?.campaign_id) {
+    if (!campaignData?.id) {
       setError('Invalid campaign data')
       return
     }
     try {
       setIsVideoFetching(true)
-      
+
       // Add cache-busting parameter if forcing reload
       const params: any = { variation_index: variationIndex }
       if (forceReload) {
         params._t = Date.now() // Cache-busting timestamp
       }
-      
+
       const response = await api.get(
-        `/api/generation/campaigns/${campaignData.campaign_id}/stream/${aspectRatio}`,
+        `/api/generation/campaigns/${campaignData.id}/stream/${aspectRatio}`,
         {
           responseType: 'blob',
           params,
@@ -430,11 +427,6 @@ export const VideoResults = () => {
       setIsVideoFetching(false)
     }
   }
-
-  // Video state
-  const [videoUrl, setVideoUrl] = useState<string>('')
-  const [isFinalized, setIsFinalized] = useState(false)
-  const [isFinalizing, setIsFinalizing] = useState(false)
 
   // Load campaign and videos from local storage
   useEffect(() => {
@@ -560,16 +552,6 @@ export const VideoResults = () => {
       loadCampaignAndVideos()
     }
   }, [campaignId, getCampaign, aspect])
-
-  const handleDownload = (aspectRatio: string) => {
-    const videoUrl = campaign.output_videos?.[aspectRatio]
-    if (!videoUrl) {
-      setError('Video URL not available')
-      return
-    if (id) {
-      loadCampaignAndVideos()
-    }
-  }, [id, isCampaign, getCampaign, getCampaign])
 
   useEffect(() => {
     return () => {
@@ -759,39 +741,6 @@ export const VideoResults = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to finalize video'
       setError(message)
-      setIsFinalizing(false)
-    }
-  }
-
-  // Finalize video: mark as finalized
-  const handleFinalizeVideo = async () => {
-    if (!confirm('Finalize this video? This will mark the campaign as complete and ready for sharing.')) {
-      return
-    }
-
-    try {
-      setIsFinalizing(true)
-      setError(null)
-
-      console.log('🚀 Finalizing video...')
-
-      // Call backend finalize endpoint
-      const response = await api.post(`/api/campaigns/${campaignId}/finalize`)
-
-      console.log('✅ Video finalized!')
-
-      // Update local state
-      setIsFinalized(true)
-
-      // Reload campaign
-      const updatedCampaign = await getCampaign(campaignId)
-      setCampaign(updatedCampaign)
-
-      setError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to finalize video'
-      setError(message)
-      console.error('❌ Finalization error:', err)
       setIsFinalizing(false)
     }
   }

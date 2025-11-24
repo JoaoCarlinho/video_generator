@@ -21,6 +21,8 @@ const buttonVariants = cva(
         success: 'bg-emerald-100 text-gray-900 hover:bg-emerald-200 active:bg-emerald-300 shadow-sm hover:shadow-md border border-emerald-200 hover:border-emerald-300',
         // Gradient variant (light blue with dark text)
         gradient: 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-gray-900 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300',
+        // Hero button (prominent call-to-action)
+        hero: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl border border-blue-700 hover:border-blue-800',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

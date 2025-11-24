@@ -73,6 +73,13 @@ export const useGeneration = () => {
 
   // Get generation progress for campaign (legacy)
   const getProgress = useCallback(async (campaignId: string, signal?: AbortSignal) => {
+    // Validate campaignId - guard against undefined/null/string "undefined"
+    if (!campaignId || campaignId === 'undefined' || campaignId === 'null') {
+      const error = new Error('Invalid campaign ID')
+      setError('Invalid campaign ID')
+      throw error
+    }
+
     try {
       const response = await apiClient.get(
         `/api/generation/campaigns/${campaignId}/progress`, // Removed trailing slash to prevent redirect loop
@@ -93,6 +100,13 @@ export const useGeneration = () => {
 
   // Get generation progress for campaign
   const getCampaignProgress = useCallback(async (campaignId: string, signal?: AbortSignal) => {
+    // Validate campaignId - guard against undefined/null/string "undefined"
+    if (!campaignId || campaignId === 'undefined' || campaignId === 'null') {
+      const error = new Error('Invalid campaign ID')
+      setError('Invalid campaign ID')
+      throw error
+    }
+
     try {
       const response = await apiClient.get(
         `/api/generation/campaigns/${campaignId}/progress`,

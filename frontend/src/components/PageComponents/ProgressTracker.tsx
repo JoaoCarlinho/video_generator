@@ -6,6 +6,7 @@ interface ProgressStep {
   id: string
   label: string
   percentage: number
+  description?: string
 }
 
 const defaultSteps: ProgressStep[] = [
@@ -244,37 +245,37 @@ export const ProgressTracker = ({
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Step Content */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <h4 className="text-lg font-semibold text-slate-100">
-                  {currentStep.label}
-                </h4>
+                {/* Step Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h4 className="text-lg font-semibold text-slate-100">
+                      {step.label}
+                    </h4>
+                  </div>
+                  <p className="text-sm text-slate-400 mb-3">
+                    {step.description}
+                  </p>
+
+                  {stepStatus === 'current' && (
+                    <motion.div
+                      className="h-2 bg-slate-800 rounded-full overflow-hidden"
+                      initial={{ width: 0 }}
+                      animate={{ width: '100%' }}
+                    >
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                        initial={{ x: '-100%' }}
+                        animate={{ x: '100%' }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      />
+                    </motion.div>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-slate-400 mb-3">
-                Step {currentStepIndex + 1} of {steps.length}
-              </p>
-
-              {currentStepStatus === 'current' && (
-                <motion.div
-                  className="h-2 bg-slate-800 rounded-full overflow-hidden"
-                  initial={{ width: 0 }}
-                  animate={{ width: '100%' }}
-                >
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                    initial={{ x: '-100%' }}
-                    animate={{ x: '100%' }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  />
-                </motion.div>
-              )}
-            </div>
-          </div>
-        </div>
+            </motion.div>
+          )
+        })}
 
         {/* Expandable Full Step List */}
         <details className="group">

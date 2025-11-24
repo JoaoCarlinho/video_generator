@@ -6,7 +6,7 @@ interface CampaignCardProps {
   id?: string
   title: string
   brief?: string
-  status: 'draft' | 'generating' | 'ready' | 'failed' | 'COMPLETED'
+  status: 'draft' | 'pending' | 'generating' | 'processing' | 'ready' | 'completed' | 'COMPLETED' | 'failed'
   progress?: number
   createdAt?: string
   updatedAt?: string
@@ -32,6 +32,14 @@ const statusConfig: Record<string, {
     border: 'border-olive-600/30',
     glow: 'shadow-olive-600/20',
   },
+  pending: {
+    label: 'Pending',
+    icon: Clock,
+    color: 'text-muted-gray',
+    bg: 'bg-olive-700/20',
+    border: 'border-olive-600/30',
+    glow: 'shadow-olive-600/20',
+  },
   generating: {
     label: 'Generating',
     icon: Loader2,
@@ -40,8 +48,24 @@ const statusConfig: Record<string, {
     border: 'border-gold/30',
     glow: 'shadow-gold/30',
   },
+  processing: {
+    label: 'Processing',
+    icon: Loader2,
+    color: 'text-gold',
+    bg: 'bg-gold/10',
+    border: 'border-gold/30',
+    glow: 'shadow-gold/30',
+  },
   ready: {
     label: 'Ready',
+    icon: CheckCircle2,
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/30',
+    glow: 'shadow-emerald-500/20',
+  },
+  completed: {
+    label: 'Completed',
     icon: CheckCircle2,
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10',
