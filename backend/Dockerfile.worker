@@ -36,6 +36,10 @@ COPY lambda_handler.py .
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 
+# Ensure all files have proper permissions
+RUN chmod -R 755 /app && \
+    find /app -type f -exec chmod 644 {} \;
+
 # Install AWS Lambda Runtime Interface Client
 RUN pip install --no-cache-dir awslambdaric
 
