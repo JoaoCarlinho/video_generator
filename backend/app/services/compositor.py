@@ -1,8 +1,8 @@
-"""Compositor Service - Product bottle compositing onto TikTok vertical videos.
+"""Compositor Service - Product compositing onto TikTok vertical videos.
 
-This service overlays extracted perfume bottle images onto background videos,
+This service overlays extracted product images onto background videos,
 positioning them with TikTok vertical safe zones (15-75% vertical space)
-and perfume-specific scaling based on scene role.
+and product-specific scaling based on scene role.
 """
 
 import logging
@@ -35,7 +35,7 @@ except (ImportError, OSError) as e:
 # ============================================================================
 
 class Compositor:
-    """Composites perfume bottle images onto TikTok vertical background videos."""
+    """Composites product images onto TikTok vertical background videos."""
 
     def __init__(
         self,
@@ -67,11 +67,11 @@ class Compositor:
         variation_index: Optional[int] = None,
     ) -> str:
         """
-        Composite perfume bottle image onto TikTok vertical background video.
+        Composite product image onto TikTok vertical background video.
 
         Args:
             background_video_url: S3 URL or local path of background video
-            product_image_url: S3 URL or local path of extracted perfume bottle PNG
+            product_image_url: S3 URL or local path of extracted product PNG
             campaign_id: Campaign UUID for local path organization
             position: Position preset ("center", "center_upper", "center_lower")
             scale: Optional scale override (0.1 to 1.0). If None, uses scene_role-based scaling
@@ -89,13 +89,13 @@ class Compositor:
         # Use scene role-based scaling if scale not provided
         if scale is None:
             if scene_role:
-                scale = self._get_perfume_scale(scene_role)
+                scale = self._get_product_scale(scene_role)
                 logger.info(f"Using scene role-based scale: {scene_role} → {scale*100:.0f}%")
             else:
-                scale = 0.5  # Default perfume bottle scale
-                logger.info(f"Using default perfume scale: {scale*100:.0f}%")
+                scale = 0.5  # Default product scale
+                logger.info(f"Using default product scale: {scale*100:.0f}%")
         
-        logger.info(f"Compositing perfume bottle onto TikTok vertical video: {position} at {scale*100:.0f}% scale")
+        logger.info(f"Compositing product onto TikTok vertical video: {position} at {scale*100:.0f}% scale")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -275,8 +275,8 @@ class Compositor:
             # Resize product
             product_resized = cv2.resize(product_image, (product_width, product_height))
 
-            # Calculate perfume-specific position (TikTok vertical optimized)
-            x, y = self._calculate_perfume_position(
+            # Calculate product-specific position (TikTok vertical optimized)
+            x, y = self._calculate_product_position(
                 frame_width, frame_height, product_width, product_height, position
             )
 
@@ -307,7 +307,7 @@ class Compositor:
             logger.error(f"Error compositing frames: {e}")
             raise
 
-    def _calculate_perfume_position(
+    def _calculate_product_position(
         self,
         frame_width: int,
         frame_height: int,
@@ -316,7 +316,7 @@ class Compositor:
         position: str,
     ) -> Tuple[int, int]:
         """
-        Calculate perfume bottle position (TikTok vertical optimized).
+        Calculate product position (TikTok vertical optimized).
         
         TikTok vertical safe zones (9:16 aspect ratio):
         - Top 15%: UI elements (avoid)
@@ -348,16 +348,16 @@ class Compositor:
                 safe_top + int(safe_height * 0.3)  # Upper third of safe zone
             ),
             "center_lower": (
-                (frame_width - product_width) // 2,  # Centered horizontally
+                (frame_width - product_width) // 2,  # Centered horizontal dly
                 safe_top + int(safe_height * 0.6)  # Lower third of safe zone
             ),
         }
         
         return positions.get(position, positions["center"])
     
-    def _get_perfume_scale(self, scene_role: str) -> float:
+    def _get_product_scale(self, scene_role: str) -> float:
         """
-        Get optimal perfume bottle scale based on scene role.
+        Get optimal product scale based on scene role.
         
         Args:
             scene_role: Scene role ("hook", "showcase", "cta", "default")

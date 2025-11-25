@@ -100,7 +100,7 @@ async def get_campaign_scenes(
         # Construct S3 URL for scene video
         video_url = get_scene_s3_url(
             brand_id=str(campaign.brand_id),
-            perfume_id=str(campaign.perfume_id),
+            product_id=str(campaign.product_id),
             campaign_id=str(campaign_id),
             variation_index=variation_index,
             scene_index=i
@@ -256,9 +256,9 @@ async def stream_scene_video(
             raise HTTPException(status_code=400, detail="Invalid variation index")
         
         # Construct S3 key for scene video
-        # Format: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{i}/draft/scene_{scene_index+1}_bg.mp4
+        # Format: brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{i}/draft/scene_{scene_index+1}_bg.mp4
         s3_key = (
-            f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/"
+            f"brands/{str(campaign.brand_id)}/products/{str(campaign.product_id)}/campaigns/{str(campaign_id)}/"
             f"variation_{variation_index}/draft/scene_{scene_index+1}_bg.mp4"
         )
         

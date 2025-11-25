@@ -631,8 +631,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 has_logo=has_logo,
                 selected_style=None,  # Campaign model doesn't have selected_style field
                 extracted_style=None,  # Reference image removed in Phase 2
-                perfume_name=product_name,
-                perfume_gender=product.product_gender,
+                product_name=product_name,
+                product_gender=product.product_gender,
                 product_type=product.product_type,
             )
 

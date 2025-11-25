@@ -82,7 +82,7 @@ class SceneEditPipeline:
             scene_duration = scene.get('duration', 4)
             
             style_spec = campaign_json.get('style_spec', {})
-            perfume_name = campaign_json.get('perfume_name', 'Product')
+            product_name = campaign_json.get('product_name', 'Product')
             
             logger.info(f"Scene {self.scene_index}: role={scene_role}, duration={scene_duration}s")
             
@@ -94,7 +94,7 @@ class SceneEditPipeline:
                 edit_instruction=self.edit_instruction,
                 style_spec=style_spec,
                 scene_role=scene_role,
-                perfume_name=perfume_name
+                product_name=product_name
             )
             
             modified_prompt = result['modified_prompt']
@@ -129,7 +129,7 @@ class SceneEditPipeline:
             # Upload to S3 (replaces old scene video)
             s3_result = await upload_draft_video(
                 brand_id=str(self.campaign.brand_id),
-                perfume_id=str(self.campaign.perfume_id),
+                product_id=str(self.campaign.product_id),
                 campaign_id=str(self.campaign_id),
                 variation_index=self.campaign.selected_variation_index or 0,
                 scene_index=self.scene_index + 1,  # 1-based
@@ -150,7 +150,7 @@ class SceneEditPipeline:
                     # Use existing scene from S3
                     scene_s3_url = get_scene_s3_url(
                         brand_id=str(self.campaign.brand_id),
-                        perfume_id=str(self.campaign.perfume_id),
+                        product_id=str(self.campaign.product_id),
                         campaign_id=str(self.campaign_id),
                         variation_index=self.campaign.selected_variation_index or 0,
                         scene_index=i
@@ -188,7 +188,7 @@ class SceneEditPipeline:
                 from app.utils.s3_utils import get_audio_s3_url
                 audio_url = get_audio_s3_url(
                     brand_id=str(self.campaign.brand_id),
-                    perfume_id=str(self.campaign.perfume_id),
+                    product_id=str(self.campaign.product_id),
                     campaign_id=str(self.campaign_id),
                     variation_index=self.campaign.selected_variation_index or 0
                 )
@@ -207,7 +207,7 @@ class SceneEditPipeline:
             # STEP 7: Upload new final video (replaces old)
             final_result = await upload_final_video(
                 brand_id=str(self.campaign.brand_id),
-                perfume_id=str(self.campaign.perfume_id),
+                product_id=str(self.campaign.product_id),
                 campaign_id=str(self.campaign_id),
                 variation_index=self.campaign.selected_variation_index or 0,
                 file_path=final_video_path
