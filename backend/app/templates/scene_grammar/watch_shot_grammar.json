@@ -41,6 +41,35 @@
       "llm_instruction": "Extreme macro of watch face showing intricate details and craftsmanship. Duration: 4-8 seconds."
     },
 
+    "family_farewell": {
+      "id": "family_farewell",
+      "display_name": "Family Farewell Moment",
+      "description": "Wealthy, well-manicured man hugging family before heading to work with Movado watch clearly visible",
+      "duration_range": [4, 7],
+      "priority": 2,
+      "variations": [
+        "embrace_with_watch_visible",
+        "warm_goodbye_gesture",
+        "affectionate_family_moment",
+        "morning_departure"
+      ],
+      "camera_movements": [
+        "slow_pan",
+        "gentle_zoom",
+        "follow_embrace"
+      ],
+      "lighting_keywords": [
+        "bright morning light",
+        "warm family ambiance",
+        "elegant home setting",
+        "natural daylight"
+      ],
+      "recommended_position": "lifestyle",
+      "recommended_scale": 0.7,
+      "use_product": true,
+      "llm_instruction": "Bright, elegant scene showing revered man hugging family before work with Movado watch clearly visible. Duration: 4-7 seconds."
+    },
+
     "case_craftsmanship": {
       "id": "case_craftsmanship",
       "display_name": "Case & Finishing Detail",
@@ -100,6 +129,35 @@
       "llm_instruction": "Show bracelet or strap craftsmanship and movement. Duration: 3-5 seconds."
     },
 
+    "office_departure": {
+      "id": "office_departure",
+      "display_name": "Office Departure with Colleagues",
+      "description": "Man leaving work with colleagues following him, laughing at his jokes, watch visible",
+      "duration_range": [4, 7],
+      "priority": 2,
+      "variations": [
+        "walking_with_entourage",
+        "charismatic_exit",
+        "colleagues_following",
+        "leadership_moment"
+      ],
+      "camera_movements": [
+        "walking_follow",
+        "slow_pan_with_group",
+        "tracking_shot"
+      ],
+      "lighting_keywords": [
+        "bright office lighting",
+        "professional atmosphere",
+        "clear elegant setting",
+        "corporate elegance"
+      ],
+      "recommended_position": "lifestyle",
+      "recommended_scale": 0.7,
+      "use_product": true,
+      "llm_instruction": "Elegant scene of man leaving office with colleagues following and laughing, Movado watch visible. Duration: 4-7 seconds."
+    },
+
     "wrist_lifestyle": {
       "id": "wrist_lifestyle",
       "display_name": "On-Wrist Lifestyle",
@@ -128,6 +186,35 @@
       "recommended_scale": 0.8,
       "use_product": true,
       "llm_instruction": "Elegant lifestyle shot showing watch on wrist in context. Duration: 4-7 seconds."
+    },
+
+    "tennis_winning_shot": {
+      "id": "tennis_winning_shot",
+      "display_name": "Tennis Court Victory",
+      "description": "Fit man hitting winning shot on tennis court with Movado watch on racket hand",
+      "duration_range": [4, 7],
+      "priority": 2,
+      "variations": [
+        "powerful_serve",
+        "winning_backhand",
+        "victory_moment",
+        "athletic_prowess"
+      ],
+      "camera_movements": [
+        "action_follow",
+        "slow_motion_swing",
+        "dynamic_tracking"
+      ],
+      "lighting_keywords": [
+        "bright athletic lighting",
+        "outdoor tennis court",
+        "clear sunny day",
+        "athletic elegance"
+      ],
+      "recommended_position": "lifestyle",
+      "recommended_scale": 0.7,
+      "use_product": true,
+      "llm_instruction": "Elegant action scene showing fit man hitting winning tennis shot with Movado watch visible on racket hand. Duration: 4-7 seconds."
     },
 
     "heritage_story": {
@@ -159,6 +246,35 @@
       "llm_instruction": "Show watchmaking heritage or mechanical movement. Duration: 3-6 seconds."
     },
 
+    "evening_dresser_moment": {
+      "id": "evening_dresser_moment",
+      "display_name": "Intimate Evening Dresser Scene",
+      "description": "Man setting Movado watch on dresser while wife waits in bed, intimate bedroom setting",
+      "duration_range": [4, 7],
+      "priority": 2,
+      "variations": [
+        "placing_watch_gently",
+        "dresser_closeup",
+        "intimate_evening_ritual",
+        "end_of_day_moment"
+      ],
+      "camera_movements": [
+        "slow_zoom_on_watch",
+        "gentle_pan",
+        "intimate_closeup"
+      ],
+      "lighting_keywords": [
+        "warm bedroom lighting",
+        "soft elegant ambiance",
+        "intimate atmosphere",
+        "romantic evening glow"
+      ],
+      "recommended_position": "detail",
+      "recommended_scale": 0.8,
+      "use_product": true,
+      "llm_instruction": "Elegant intimate scene of man setting Movado watch on dresser in bedroom setting. Duration: 4-7 seconds."
+    },
+
     "finale_branding": {
       "id": "finale_branding",
       "display_name": "Final Branding Shot",
@@ -183,5 +299,86 @@
       "use_product": true,
       "llm_instruction": "Final elegant presentation with brand identity. Duration: 2-4 seconds."
     }
-  }
+  },
+
+  "scene_flow_rules": {
+    "first_scene_must_be": [
+      "macro_face_detail",
+      "wrist_lifestyle",
+      "family_farewell"
+    ],
+    "first_scene_explanation": "Grab attention with watch face detail, lifestyle context, or compelling narrative moment",
+    "last_scene_must_be": [
+      "finale_branding"
+    ],
+    "last_scene_explanation": "Always end with clean branding moment showing watch and brand identity",
+    "max_consecutive_same_type": 2,
+    "max_consecutive_explanation": "Avoid using the same shot type more than twice in a row to maintain pacing",
+    "product_visibility_rules": {
+      "minimum_product_scenes": 2,
+      "maximum_product_scenes": 5,
+      "must_show_product_in": [
+        "intro_or_second",
+        "final"
+      ],
+      "explanation": "Watch must be visible in at least 2 scenes (typically first or early) and always in final scene"
+    }
+  },
+
+  "pacing_guidelines": {
+    "15_30_seconds": {
+      "scene_count": 3,
+      "avg_scene_duration": [5, 10],
+      "breakdown": [
+        "Hook - watch face detail (4-6s)",
+        "Lifestyle or craftsmanship (5-7s)",
+        "Final brand moment (3-5s)"
+      ]
+    },
+    "31_45_seconds": {
+      "scene_count": 4,
+      "avg_scene_duration": [7, 11],
+      "breakdown": [
+        "Hook - watch detail (4-6s)",
+        "Craftsmanship detail (5-7s)",
+        "Lifestyle context (5-8s)",
+        "Final brand moment (4-6s)"
+      ]
+    },
+    "46_60_seconds": {
+      "scene_count": 5,
+      "avg_scene_duration": [9, 12],
+      "breakdown": [
+        "Hook - watch face macro (4-6s)",
+        "Case or bracelet detail (5-7s)",
+        "Lifestyle on-wrist (5-8s)",
+        "Heritage or movement (4-6s)",
+        "Final brand moment (4-6s)"
+      ]
+    }
+  },
+
+  "text_overlay_rules": {
+    "max_text_blocks": 3,
+    "max_text_blocks_explanation": "Never more than 3 text elements to avoid clutter",
+    "allowed_positions": [
+      "top",
+      "center",
+      "bottom"
+    ],
+    "font_style": [
+      "serif_luxury",
+      "sans_minimal"
+    ],
+    "serif_luxury_example": "Playfair Display - elegant, high-end",
+    "sans_minimal_example": "Montserrat - clean, modern luxury",
+    "max_words_per_block": 6,
+    "required_text_scenes": [
+      "finale_branding"
+    ],
+    "text_animation": "fade_in_out",
+    "text_duration": [2, 4]
+  },
+
+  "llm_prompt_template": "You are a luxury timepiece video director. Create a TikTok vertical video scene plan (9:16) constrained by watch shot grammar.\n\nREQUIREMENTS:\n1. Use ONLY these shot types: macro_face_detail, family_farewell, case_craftsmanship, bracelet_movement, office_departure, wrist_lifestyle, tennis_winning_shot, heritage_story, evening_dresser_moment, finale_branding\n2. First scene MUST be: macro_face_detail OR wrist_lifestyle OR family_farewell\n3. Last scene MUST be: finale_branding\n4. Total scenes: {scene_count}\n5. Each scene: 3-8 seconds duration\n6. Watch visible in 2-5 scenes total\n7. No generic content - ALWAYS luxury watch-specific\n8. Lifestyle scenes (family_farewell, office_departure, tennis_winning_shot, evening_dresser_moment) show wealthy, revered, well-manicured man\n\nGenerate concise, vivid scene descriptions that follow this grammar. Output valid JSON."
 }

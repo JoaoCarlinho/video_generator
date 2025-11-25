@@ -36,18 +36,35 @@ class ProductExtractor:
 
     def __init__(
         self,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
+        aws_access_key_id: Optional[str],
+        aws_secret_access_key: Optional[str],
         s3_bucket_name: str,
         aws_region: str = "us-east-1",
     ):
-        """Initialize with AWS S3 credentials."""
-        self.s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=aws_region,
-        )
+        """Initialize with AWS S3 credentials.
+
+        If credentials are not provided, boto3 will use the default credential chain
+        (e.g., Lambda IAM role, EC2 instance profile, environment variables).
+        """
+        import os
+
+        # Debug logging
+        logger.info(f"ProductExtractor init - AWS_EXECUTION_ENV={os.environ.get('AWS_EXECUTION_ENV')}")
+        logger.info(f"ProductExtractor init - aws_access_key_id={aws_access_key_id}")
+        logger.info(f"ProductExtractor init - aws_secret_access_key={'***' if aws_secret_access_key else None}")
+
+        # Build boto3 client kwargs
+        client_kwargs = {"service_name": "s3", "region_name": aws_region}
+
+        # Only add credentials if they're provided and non-empty
+        if aws_access_key_id and aws_secret_access_key:
+            logger.info("ProductExtractor init - Using explicit credentials")
+            client_kwargs["aws_access_key_id"] = aws_access_key_id
+            client_kwargs["aws_secret_access_key"] = aws_secret_access_key
+        else:
+            logger.info("ProductExtractor init - Using default credential chain (IAM role)")
+
+        self.s3_client = boto3.client(**client_kwargs)
         self.s3_bucket_name = s3_bucket_name
         self.aws_region = aws_region
 
@@ -115,14 +132,13 @@ class ProductExtractor:
             # Check if it's an S3 URL (format: https://bucket.s3.region.amazonaws.com/key)
             if 's3.amazonaws.com' in parsed_url.netloc or '.s3.' in parsed_url.netloc:
                 from app.utils.s3_utils import parse_s3_url
-                
-                # Parse S3 URL to get bucket and key
+
                 # Parse S3 URL to get bucket and key
                 try:
                     bucket_name, s3_key = parse_s3_url(url_or_path)
-                    
+
                     logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
-                    
+
                     # Download from S3 using credentials
                     try:
                         response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
@@ -135,11 +151,14 @@ class ProductExtractor:
                 except ValueError as e:
                     logger.error(f"Failed to parse S3 URL: {e}")
                     return None
+            else:
                 # Regular HTTP(S) URL - use aiohttp
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url_or_path, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status == 200:
-                            return await resp.read()
+                            image_data = await resp.read()
+                            logger.info(f"✅ Downloaded {len(image_data)} bytes from HTTP URL")
+                            return image_data
                         else:
                             logger.error(f"Failed to download image: HTTP {resp.status}")
                             return None

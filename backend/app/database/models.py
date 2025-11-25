@@ -71,6 +71,7 @@ class Campaign(Base):
     year = Column(Integer, nullable=False)
     duration = Column(Integer, nullable=False)  # Duration in seconds: 15, 30, 45, 60
     scene_configs = Column(JSONB, nullable=False)  # Array of scene configuration objects
+    num_variations = Column(Integer, default=1, nullable=False)  # Number of video variations to generate (1-3)
     status = Column(String(50), default="draft", index=True)  # draft, generating, completed, failed
     progress = Column(Integer, default=0)  # Progress percentage 0-100
     error_message = Column(Text, nullable=True)  # Error message if generation failed

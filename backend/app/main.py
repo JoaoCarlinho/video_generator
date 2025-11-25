@@ -66,11 +66,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.error(f"Validation error on {request.method} {request.url.path}:")
     for error in errors:
         logger.error(f"  Field: {error.get('loc')}, Error: {error.get('msg')}, Type: {error.get('type')}")
-    
+
+    # Clean errors to make them JSON serializable
+    # Remove 'ctx' field which may contain non-serializable objects like ValueError
+    cleaned_errors = []
+    for error in errors:
+        cleaned_error = {
+            "loc": error.get("loc"),
+            "msg": error.get("msg"),
+            "type": error.get("type"),
+        }
+        if "input" in error:
+            cleaned_error["input"] = error.get("input")
+        cleaned_errors.append(cleaned_error)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": errors,
+            "detail": cleaned_errors,
             "message": "Validation error - check field requirements"
         }
     )

@@ -239,20 +239,32 @@ class GenerationPipeline:
 
             # STEP 1: Extract Product from Product Images
             product_url = None
-            has_product = product.front_image_url is not None
-            
+            has_product = product.image_urls and isinstance(product.image_urls, list) and len(product.image_urls) > 0
+
             if has_product:
                 logger.info("Step 1: Extracting product from product image...")
                 from app.config import settings
+                import os
+
+                # In Lambda, don't pass explicit credentials - let boto3 use IAM role
+                # In local/other environments, use credentials from settings if available
+                is_lambda = os.environ.get('AWS_EXECUTION_ENV') is not None
+
                 extractor = ProductExtractor(
-                    aws_access_key_id=settings.aws_access_key_id,
-                    aws_secret_access_key=settings.aws_secret_access_key,
+                    aws_access_key_id=None if is_lambda else settings.aws_access_key_id,
+                    aws_secret_access_key=None if is_lambda else settings.aws_secret_access_key,
                     s3_bucket_name=settings.s3_bucket_name,
                     aws_region=settings.aws_region,
                 )
-                product_url = await extractor.extract_product_for_campaign(campaign, product)
+                # Use first image from image_urls array
+                front_image_url = product.image_urls[0]
+                logger.info(f"Extracting product from image: {front_image_url}")
+                product_url = await extractor.extract_product(
+                    image_url=front_image_url,
+                    campaign_id=str(campaign.id)
+                )
             else:
-                logger.info("Step 1: Skipping product extraction (no product front image)")
+                logger.info("Step 1: Skipping product extraction (no product images)")
 
             # STEP 2: Plan Scenes (with multi-variation support)
             planning_start = 15 if has_product else 10
@@ -333,10 +345,9 @@ class GenerationPipeline:
             
             return {
                 "status": "COMPLETED",
-                "local_video_paths": local_video_paths,
                 "storage_size": storage_size,
                 "storage_size_formatted": format_storage_size(storage_size),
-                "message": "Videos ready for preview. Videos stored in local storage.",
+                "message": "Videos ready for preview. Videos stored in S3.",
                 "total_cost": float(self.total_cost),
                 "cost_breakdown": {k: float(v) for k, v in self.step_costs.items()},
                 "campaign_id": str(self.campaign_id),
@@ -473,9 +484,9 @@ class GenerationPipeline:
                             
                         # Upload to S3
                         result = await upload_draft_video(
-                            brand_id=str(self.brand.brand_id),
-                            product_id=str(self.product.product_id),
-                            campaign_id=str(self.campaign.campaign_id),
+                            brand_id=str(self.brand.id),
+                            product_id=str(self.product.id),
+                            campaign_id=str(self.campaign.id),
                             variation_index=variation_index,
                             scene_index=i+1,  # 1-based index
                             file_path=temp_path
@@ -521,12 +532,12 @@ class GenerationPipeline:
             brand_colors = []
             
             # Check if product/logo are available
-            has_product = product.front_image_url is not None
-            has_logo = brand.brand_logo_url is not None
-            
+            has_product = product.image_urls is not None and len(product.image_urls) > 0
+            has_logo = brand.logo_urls is not None and len(brand.logo_urls) > 0 if brand.logo_urls else False
+
             # Extract Brand Guidelines from brand table (required in B2B SaaS)
             extracted_guidelines = None
-            guidelines_url = brand.brand_guidelines_url
+            guidelines_url = brand.guidelines  # Text field containing guidelines URL or content
             if guidelines_url:
                 logger.info("Extracting brand guidelines from document...")
                 try:
@@ -572,8 +583,9 @@ class GenerationPipeline:
                 logger.info(f"Merged brand colors from guidelines: {brand_colors}")
             
             # Build creative prompt (reference image removed in Phase 2 B2B SaaS)
-            creative_prompt = campaign.creative_prompt
-            
+            # Campaign model doesn't have creative_prompt field - generate from campaign data
+            creative_prompt = f"Create a {campaign.seasonal_event} campaign video for {product_name}. Campaign: {campaign.name}"
+
             # Add brand guidelines context to creative prompt
             if extracted_guidelines:
                 guideline_text = f"""
@@ -614,13 +626,13 @@ BRAND GUIDELINES (extracted from guidelines document):
                 brand_colors=brand_colors,
                 brand_guidelines=brand_guidelines_str,
                 target_audience="general consumers",  # Removed feature in Phase 2
-                target_duration=campaign.target_duration,
+                target_duration=campaign.duration,  # Campaign model has 'duration' not 'target_duration'
                 has_product=has_product,
                 has_logo=has_logo,
                 selected_style=None,  # Campaign model doesn't have selected_style field
                 extracted_style=None,  # Reference image removed in Phase 2
-                product_name=product_name,
-                product_gender=product.product_gender,
+                perfume_name=product_name,
+                perfume_gender=product.product_gender,
                 product_type=product.product_type,
             )
 
@@ -633,7 +645,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             
             # PHASE 8: Validate grammar compliance
             from app.services.product_grammar_loader import ProductGrammarLoader
-            from app.config.product_types import get_product_type_config
+            from app.product_config.product_types import get_product_type_config
             from pathlib import Path
 
             # Load product-specific grammar
@@ -695,14 +707,14 @@ BRAND GUIDELINES (extracted from guidelines document):
             )
             
             # Convert StyleSpec from plan to AdCampaign StyleSpec format
+            # The schemas.py StyleSpec expects: lighting, camera_style, texture, mood, color_palette, grade
             style_spec_dict = {
-                'lighting_direction': plan_style_spec.get('lighting_direction') or plan_style_spec.get('lighting', ''),
+                'lighting': plan_style_spec.get('lighting_direction') or plan_style_spec.get('lighting', ''),
                 'camera_style': plan_style_spec.get('camera_style', ''),
-                'texture_materials': plan_style_spec.get('texture_materials') or plan_style_spec.get('texture', ''),
-                'mood_atmosphere': plan_style_spec.get('mood_atmosphere') or plan_style_spec.get('mood', ''),
+                'texture': plan_style_spec.get('texture_materials') or plan_style_spec.get('texture', ''),
+                'mood': plan_style_spec.get('mood_atmosphere') or plan_style_spec.get('mood', ''),
                 'color_palette': plan_style_spec.get('color_palette', []),
-                'grade_postprocessing': plan_style_spec.get('grade_postprocessing', ''),
-                'music_mood': plan_style_spec.get('music_mood', 'uplifting'),
+                'grade': plan_style_spec.get('grade_postprocessing') or plan_style_spec.get('grade', ''),
             }
             ad_campaign.style_spec = StyleSpec(**style_spec_dict)
 
@@ -728,6 +740,22 @@ BRAND GUIDELINES (extracted from guidelines document):
             campaign_json['video_metadata'] = ad_campaign.video_metadata
             campaign_json['product_name'] = product_name
 
+            # Add required video_settings and audio_settings fields
+            campaign_json['video_settings'] = (
+                ad_campaign.video_settings.model_dump()
+                if hasattr(ad_campaign.video_settings, 'model_dump')
+                else ad_campaign.video_settings.dict()
+                if hasattr(ad_campaign.video_settings, 'dict')
+                else ad_campaign.video_settings
+            )
+            campaign_json['audio_settings'] = (
+                ad_campaign.audio_settings.model_dump()
+                if hasattr(ad_campaign.audio_settings, 'model_dump')
+                else ad_campaign.audio_settings.dict()
+                if hasattr(ad_campaign.audio_settings, 'dict')
+                else ad_campaign.audio_settings
+            )
+
             logger.info(f"✅ Built campaign_json for scene planning")
 
             # PHASE 7: Store chosen style in ad_campaign_json
@@ -740,10 +768,10 @@ BRAND GUIDELINES (extracted from guidelines document):
             }
 
             # Save back to database
-            update_campaign_status(
+            update_campaign_json(
                 self.db,
                 self.campaign_id,
-                campaign_json=campaign_json
+                ad_campaign_json=campaign_json
             )
 
             logger.info(f"Planned {len(ad_campaign.scenes)} scenes with style spec")
@@ -789,8 +817,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             # Initialize VideoGenerator with provider
             generator = VideoGenerator(
                 provider=video_provider,
-                api_token=settings.replicate_api_token,
-                ecs_endpoint_url=str(settings.ecs_endpoint_url) if settings.ecs_provider_enabled else None
+                api_token=settings.replicate_api_token
             )
 
             # STORY 3: Build scene background mapping for quick lookup
@@ -826,7 +853,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                         style_spec_dict=ad_campaign.style_spec.dict() if hasattr(ad_campaign.style_spec, 'dict') else (ad_campaign.style_spec if isinstance(ad_campaign.style_spec, dict) else {}),
                         duration=scene.duration,
                         extracted_style=None,  # Reference image removed in Phase 2
-                        style_override=scene.style or chosen_style,
+                        style_override=chosen_style,
                     )
                     tasks.append(task)
                 except Exception as e:
@@ -881,17 +908,14 @@ BRAND GUIDELINES (extracted from guidelines document):
             music_mood = ad_campaign.style_spec.mood if ad_campaign.style_spec else "uplifting"
             if hasattr(ad_campaign.style_spec, 'music_mood'):
                 music_mood = ad_campaign.style_spec.music_mood
-            # Use product gender directly from product table
-            logger.info(f"Using product gender: {product.product_gender}")
-            
+
             # Calculate total duration from scenes
-            total_duration = sum(scene.duration for scene in ad_campaign.scenes) if ad_campaign.scenes else campaign.target_duration
+            total_duration = sum(scene.duration for scene in ad_campaign.scenes) if ad_campaign.scenes else campaign.duration
             
             audio_url = await audio_engine.generate_background_music(
                 mood=music_mood,
                 duration=total_duration,
                 campaign_id=str(self.campaign_id),
-                gender=product.product_gender,  # Use product gender directly
             )
 
             logger.info(f"Generated product audio: {audio_url}")
@@ -1002,32 +1026,22 @@ BRAND GUIDELINES (extracted from guidelines document):
                 aws_region=settings.aws_region,
             )
             
-            # STORY 3 (AC#6): Get campaign from database to retrieve output_formats
-            campaign = get_campaign(self.db, self.campaign_id)
+            # TikTok vertical only (9:16 hardcoded in renderer)
+            logger.info("Rendering TikTok vertical video (9:16)")
 
-            # Use output_formats array if available, fall back to aspect_ratio for backward compat
-            if campaign.output_formats and len(campaign.output_formats) > 0:
-                output_aspect_ratios = campaign.output_formats
-            elif campaign.aspect_ratio:
-                output_aspect_ratios = [campaign.aspect_ratio]
-            else:
-                output_aspect_ratios = ["16:9"]  # Default fallback
-
-            logger.info(f"Rendering {len(output_aspect_ratios)} aspect ratios: {output_aspect_ratios}")
-
-            final_videos = await renderer.render_final_video(
+            final_video = await renderer.render_final_video(
                 scene_video_urls=scene_videos,
                 audio_url=audio_url,
                 campaign_id=str(self.campaign_id),
-                output_aspect_ratios=output_aspect_ratios,
+                variation_index=variation_index,
             )
 
             update_campaign_status(
                 self.db, self.campaign_id, status="processing", progress=100
             )
 
-            logger.info(f"✅ Rendered final TikTok vertical video: {final_video_path}")
-            return final_video_path
+            logger.info(f"✅ Rendered final TikTok vertical video: {final_video}")
+            return final_video
 
         except Exception as e:
             logger.error(f"Final rendering failed: {e}")
@@ -1173,12 +1187,12 @@ BRAND GUIDELINES (extracted from guidelines document):
             brand_colors = []
             
             # Check if product/logo are available
-            has_product = product.front_image_url is not None
-            has_logo = brand.brand_logo_url is not None
-            
+            has_product = product.image_urls is not None and len(product.image_urls) > 0
+            has_logo = brand.logo_urls is not None and len(brand.logo_urls) > 0 if brand.logo_urls else False
+
             # Extract brand guidelines from brand table
             extracted_guidelines = None
-            guidelines_url = brand.brand_guidelines_url
+            guidelines_url = brand.guidelines  # Text field containing guidelines URL or content
             if guidelines_url:
                 try:
                     from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
@@ -1207,8 +1221,9 @@ BRAND GUIDELINES (extracted from guidelines document):
                 brand_colors = list(set(brand_colors))
             
             # Build creative prompt (reference image removed in Phase 2)
-            creative_prompt = campaign.creative_prompt
-            
+            # Campaign model doesn't have creative_prompt field - generate from campaign data
+            creative_prompt = f"Create a {campaign.seasonal_event} campaign video for {product_name}. Campaign: {campaign.name}"
+
             # Convert brand guidelines dict to string format for scene planner
             brand_guidelines_str = None
             if extracted_guidelines:
@@ -1235,7 +1250,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 brand_colors=brand_colors,
                 brand_guidelines=brand_guidelines_str,
                 target_audience="general consumers",  # Removed feature
-                target_duration=campaign.target_duration,
+                target_duration=campaign.duration,  # Campaign model has 'duration' not 'target_duration'
                 has_product=has_product,
                 has_logo=has_logo,
                 selected_style=None,  # Campaign model doesn't have selected_style field
@@ -1386,6 +1401,8 @@ BRAND GUIDELINES (extracted from guidelines document):
                 style_spec=ad_campaign.style_spec,
                 product_asset=ad_campaign.product_asset,
                 video_metadata=ad_campaign.video_metadata,
+                video_settings=ad_campaign.video_settings,
+                audio_settings=ad_campaign.audio_settings,
             )
             
             # VEO S3 MIGRATION: Simplified 5-step pipeline (removed compositor + text overlay)
@@ -1406,13 +1423,13 @@ BRAND GUIDELINES (extracted from guidelines document):
             
             # STEP 2: Generate Audio (formerly step 5)
             # Audio engine saves locally, returns local path
-            audio_local_path = await self._generate_audio(campaign, perfume, variation_ad_campaign, progress_start=video_start + 45)
+            audio_local_path = await self._generate_audio(campaign, product, variation_ad_campaign, progress_start=video_start + 45)
             
             # Upload audio to S3 (Draft)
             audio_url_result = await upload_draft_music(
-                brand_id=str(self.brand.brand_id),
-                product_id=str(self.product.product_id),
-                campaign_id=str(self.campaign.campaign_id),
+                brand_id=str(self.brand.id),
+                product_id=str(self.product.id),
+                campaign_id=str(self.campaign.id),
                 variation_index=var_idx,
                 file_path=audio_local_path
             )
@@ -1485,7 +1502,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.error(f"❌ Failed to save {aspect_ratio} video locally: {e}")
             raise
 
-    def _build_ad__from_campaign(
+    def _build_ad_campaign_from_campaign(
         self,
         campaign: Any,
         product: Any,
@@ -1506,59 +1523,148 @@ BRAND GUIDELINES (extracted from guidelines document):
             AdCampaign: Built AdCampaign schema object
         """
         # Build brand dict from brand table
+        # logo_urls is stored as a dict with "primary" key, not an array
+        logo_url = None
+        if brand.logo_urls:
+            if isinstance(brand.logo_urls, dict):
+                logo_url = brand.logo_urls.get("primary")
+            elif isinstance(brand.logo_urls, list) and len(brand.logo_urls) > 0:
+                logo_url = brand.logo_urls[0]
+
         brand_dict = {
             "name": brand.brand_name,
-            "logo_url": brand.brand_logo_url,
-            "guidelines_url": brand.brand_guidelines_url,
+            "logo_url": logo_url,
+            "guidelines_url": brand.guidelines,
             "description": ""  # Not stored in brand table (extracted from guidelines)
         }
         
-        # Build product asset from product images (use front image as primary)
+        # Build product asset from product images (use first image as primary)
+        # image_urls is stored as a list of URL strings
+        primary_image_url = None
+        if product.image_urls and isinstance(product.image_urls, list) and len(product.image_urls) > 0:
+            primary_image_url = product.image_urls[0]
+
+        # Build angles dict from available images
+        angles = {}
+        if product.image_urls and isinstance(product.image_urls, list):
+            angle_names = ["front", "back", "top", "left", "right"]
+            for i, url in enumerate(product.image_urls[:5]):  # Max 5 angles
+                angles[angle_names[i]] = url
+
         product_asset = {
-            "original_url": product.front_image_url,
+            "original_url": primary_image_url,
             "extracted_url": None,  # Will be set after extraction
-            "angles": {
-                "front": product.front_image_url,
-                "back": product.back_image_url,
-                "top": product.top_image_url,
-                "left": product.left_image_url,
-                "right": product.right_image_url,
-            }
+            "angles": angles
         }
         
         # Build AdCampaign from campaign data
         # Note: style_spec will be populated during scene planning, but we need to provide defaults here
         # to satisfy AdCampaign validation. These defaults will be replaced during planning.
-        default_style_spec = campaign_json.get("style_spec", {})
-        if not default_style_spec or not isinstance(default_style_spec, dict):
-            # Provide minimal defaults - these will be replaced during scene planning
-            default_style_spec = {
-                "lighting_direction": "",
-                "camera_style": "",
-                "texture_materials": "",
-                "mood_atmosphere": "",
-                "color_palette": [],
-                "grade_postprocessing": "",
-                "music_mood": "uplifting",
+        default_style_spec = {
+            "lighting": "natural soft",
+            "camera_style": "smooth cinematic",
+            "mood": "professional uplifting",
+            "color_palette": [],
+            "texture": "clean modern",
+            "grade": "commercial"
+        }
+
+        # Generate creative prompt from campaign name and seasonal event
+        # Campaign model doesn't have creative_prompt field - it was removed in B2B SaaS refactor
+        creative_prompt = f"Create a {campaign.seasonal_event} campaign video for {product.name}. Campaign: {campaign.name}"
+
+        # Build video and audio settings with defaults
+        video_settings = {
+            "aspect_ratio": "16:9",
+            "resolution": "1080p",
+            "fps": 30,
+            "codec": "h264"
+        }
+
+        audio_settings = {
+            "include_music": True,
+            "music_volume": -6.0,
+            "enable_voiceover": False
+        }
+
+        # Process scenes from campaign_json to ensure all required fields are present
+        scenes = []
+        for scene_config in campaign_json.get("scenes", []):
+            # Extract cinematography data if available (it's a nested dict)
+            cinematography = scene_config.get("cinematography", {})
+
+            # Build description from creative_vision (primary) or generate from cinematography
+            description = scene_config.get("creative_vision")
+            if not description:
+                # Fallback: Generate description from cinematography fields
+                mood = cinematography.get("mood", "professional")
+                setting = cinematography.get("setting", "minimal background")
+                environment = cinematography.get("environment", "bright")
+                description = f"{mood.capitalize()} {environment} scene with {setting}"
+
+            # Build background_prompt from cinematography if not provided
+            background_prompt = scene_config.get("background_prompt")
+            if not background_prompt:
+                setting = cinematography.get("setting", "minimal background")
+                environment = cinematography.get("environment", "bright")
+                lighting = cinematography.get("lighting", "natural")
+                background_prompt = f"{environment.capitalize()} {setting} with {lighting} lighting"
+
+            # Extract camera movement from cinematography
+            camera_movement = scene_config.get("camera_movement")
+            if not camera_movement:
+                camera_aspect = cinematography.get("camera_aspect", "static")
+                # Map camera_aspect to camera_movement
+                aspect_to_movement = {
+                    "POV": "pov",
+                    "near_birds_eye": "overhead",
+                    "satellite": "orbit",
+                    "follow": "tracking"
+                }
+                camera_movement = aspect_to_movement.get(camera_aspect, "static")
+
+            # Extract transition from cinematography
+            transition = scene_config.get("transition_to_next")
+            if not transition:
+                transition = cinematography.get("transition", "cut")
+
+            scene = {
+                "id": scene_config.get("id", f"scene_{scene_config.get('scene_number', 1)}"),
+                "role": scene_config.get("role", "showcase"),
+                "duration": scene_config.get("duration", 5.0),
+                "description": description,
+                "background_prompt": background_prompt,
+                "background_type": scene_config.get("background_type", "ai_generated"),
+                "use_product": scene_config.get("use_product", True),
+                "use_logo": scene_config.get("use_logo", False),
+                "product_usage": scene_config.get("product_usage", "static_insert"),
+                "camera_movement": camera_movement,
+                "transition_to_next": transition,
+                "overlay": scene_config.get("overlay"),
+                "custom_background_url": scene_config.get("custom_background_url")
             }
-        
+            scenes.append(scene)
+
         ad_campaign_dict = {
-            "creative_prompt": campaign.creative_prompt,
+            "creative_prompt": creative_prompt,
             "brand": brand_dict,
             "target_audience": "general consumers",  # Not stored in campaign (removed feature)
-            "target_duration": campaign.target_duration,
-            "product_name": product.name,
-            "product_gender": product.product_gender,
+            "target_duration": campaign.duration,  # Campaign model has 'duration' not 'target_duration'
             "product_asset": product_asset,
-            "scenes": campaign_json.get("scenes", []),
+            "scenes": scenes,
             "style_spec": default_style_spec,
-            "video_metadata": campaign_json.get("video_metadata", {}),
-            "selectedStyle": {
-                "id": None,  # Campaign model doesn't have selected_style field
-                "source": "user_selected"
+            "video_settings": video_settings,
+            "audio_settings": audio_settings,
+            "video_metadata": {
+                "product_name": product.name,
+                "product_gender": product.product_gender,
+                "selectedStyle": {
+                    "id": None,
+                    "source": "user_selected"
+                }
             }
         }
-        
+
         return AdCampaign(**ad_campaign_dict)
 
     async def _update_campaign_variations(self, num_variations: int, final_videos: List[str]) -> None:

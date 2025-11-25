@@ -31,12 +31,28 @@ class Renderer:
         aws_region: str = "us-east-1",
     ):
         """Initialize with AWS S3 credentials."""
-        self.s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=aws_region,
-        )
+        # In Lambda, use IAM role credentials
+        import os
+        is_lambda = os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is not None
+
+        if is_lambda:
+            # Use IAM role (no explicit credentials)
+            logger.debug("🔑 Lambda environment - using IAM execution role")
+            self.s3_client = boto3.client("s3", region_name=aws_region)
+        elif aws_access_key_id and aws_secret_access_key:
+            # Use explicit credentials (local dev)
+            logger.debug("🔑 Using explicit AWS credentials")
+            self.s3_client = boto3.client(
+                "s3",
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region_name=aws_region,
+            )
+        else:
+            # Fall back to default credential chain
+            logger.debug("🔑 Using default AWS credential chain")
+            self.s3_client = boto3.client("s3", region_name=aws_region)
+
         self.s3_bucket_name = s3_bucket_name
         self.aws_region = aws_region
 

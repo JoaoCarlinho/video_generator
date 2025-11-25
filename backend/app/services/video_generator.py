@@ -24,6 +24,7 @@ VEO S3 READINESS:
 
 import logging
 import os
+import time
 import requests
 import asyncio
 from typing import Optional, Dict, Any, List
@@ -89,6 +90,7 @@ class VideoGenerator:
                     "Replicate API token not provided. "
                     "Set REPLICATE_API_TOKEN environment variable or pass api_token parameter."
                 )
+            self.api_token = token  # Store api_token for direct API calls
             self.provider = ReplicateVideoProvider(replicate_api_token=token)
             logger.info("✅ VideoGenerator initialized with Replicate provider")
 
@@ -277,7 +279,7 @@ s
                 REPLICATE_API_URL,
                 headers=headers,
                 json=payload,
-                timeout=120  # Increased timeout for "Prefer: wait"
+                timeout=600  # Extended timeout for slow API responses
             )
             response.raise_for_status()
             return response.json()
@@ -285,7 +287,7 @@ s
             logger.error(f"Failed to create prediction: {e}")
             raise
 
-    async def _poll_prediction(self, prediction_id: str, max_wait: int = 300) -> Optional[dict]:
+    async def _poll_prediction(self, prediction_id: str, max_wait: int = 600) -> Optional[dict]:
         """Poll prediction until it completes."""
         headers = {"Authorization": f"Bearer {self.api_token}"}
         
@@ -304,7 +306,7 @@ s
                 response = requests.get(
                     poll_url,
                     headers=headers,
-                    timeout=10
+                    timeout=30
                 )
                 response.raise_for_status()
                 prediction = response.json()

@@ -1,8 +1,8 @@
 """
 S3 utilities for file uploads and management.
-Handles brand assets, perfume images, and campaign video uploads.
+Handles brand assets, product images, and campaign video uploads.
 
-Phase 2: Updated for B2B SaaS hierarchy (brands → perfumes → campaigns)
+Phase 2: Updated for B2B SaaS hierarchy (brands → products → campaigns)
 """
 
 import logging
@@ -32,7 +32,15 @@ def get_s3_client():
     - In Lambda/EC2: Uses IAM role credentials automatically
     - In local dev: Uses explicit AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
     """
-    # If explicit credentials are provided, use them
+    # In Lambda, ALWAYS use IAM role (never explicit credentials)
+    # Lambda sets AWS_LAMBDA_FUNCTION_NAME environment variable
+    is_lambda = os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is not None
+
+    if is_lambda:
+        logger.debug("🔑 Lambda environment detected - using IAM execution role")
+        return boto3.client("s3", region_name=settings.aws_region)
+
+    # If explicit credentials are provided, use them (local dev)
     if settings.aws_access_key_id and settings.aws_secret_access_key:
         logger.debug("🔑 Using explicit AWS credentials from environment")
         return boto3.client(
@@ -333,7 +341,7 @@ def download_from_s3(s3_url: str, output_path: str) -> None:
 
 # ============================================================================
 # PHASE 2: B2B SaaS S3 Hierarchy Functions
-# New hierarchy: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/
+# New hierarchy: brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/
 # ============================================================================
 
 def get_brand_s3_path(brand_id: str) -> str:
@@ -349,33 +357,33 @@ def get_brand_s3_path(brand_id: str) -> str:
     return f"brands/{brand_id}/"
 
 
-def get_perfume_s3_path(brand_id: str, perfume_id: str) -> str:
+def get_product_s3_path(brand_id: str, product_id: str) -> str:
     """
-    Get S3 path prefix for perfume folder.
+    Get S3 path prefix for product folder.
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     
     **Returns:**
-    - str: S3 path prefix (e.g., "brands/{brand_id}/perfumes/{perfume_id}/")
+    - str: S3 path prefix (e.g., "brands/{brand_id}/products/{product_id}/")
     """
-    return f"brands/{brand_id}/perfumes/{perfume_id}/"
+    return f"brands/{brand_id}/products/{product_id}/"
 
 
-def get_campaign_s3_path(brand_id: str, perfume_id: str, campaign_id: str) -> str:
+def get_campaign_s3_path(brand_id: str, product_id: str, campaign_id: str) -> str:
     """
     Get S3 path prefix for campaign folder.
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     
     **Returns:**
-    - str: S3 path prefix (e.g., "brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/")
+    - str: S3 path prefix (e.g., "brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/")
     """
-    return f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+    return f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/"
 
 
 async def upload_brand_logo(
@@ -536,19 +544,19 @@ async def upload_brand_guidelines(
         raise RuntimeError(f"Failed to upload brand guidelines: {str(e)}")
 
 
-async def upload_perfume_image(
+async def upload_product_image(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     angle: str,
     file_content: bytes,
     filename: str
 ) -> dict:
     """
-    Upload perfume product image to S3.
+    Upload product product image to S3.
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     - angle: Image angle ("front", "back", "top", "left", "right")
     - file_content: File bytes to upload
     - filename: Original filename (used to determine extension)
@@ -556,7 +564,7 @@ async def upload_perfume_image(
     **Returns:**
     - dict: {
         "url": "https://...",
-        "s3_key": "brands/{brand_id}/perfumes/{perfume_id}/{angle}.png",
+        "s3_key": "brands/{brand_id}/products/{product_id}/{angle}.png",
         "size_bytes": 12345,
         "filename": "front.png"
       }
@@ -578,13 +586,13 @@ async def upload_perfume_image(
         if file_ext not in [".png", ".jpg", ".jpeg", ".webp"]:
             file_ext = ".png"
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/{angle}{file_ext}"
+        s3_key = f"brands/{brand_id}/products/{product_id}/{angle}{file_ext}"
         
         # Prepare S3 tags
         tags = {
-            "type": "perfume_image",
+            "type": "product_image",
             "brand_id": brand_id,
-            "perfume_id": perfume_id,
+            "product_id": product_id,
             "angle": angle,
             "lifecycle": "permanent"
         }
@@ -601,7 +609,7 @@ async def upload_perfume_image(
         
         s3_url = get_s3_file_url(s3_key)
         
-        logger.info(f"✅ Uploaded perfume image ({angle}): {s3_key}")
+        logger.info(f"✅ Uploaded product image ({angle}): {s3_key}")
         
         return {
             "url": s3_url,
@@ -611,13 +619,13 @@ async def upload_perfume_image(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to upload perfume image: {e}")
-        raise RuntimeError(f"Failed to upload perfume image: {str(e)}")
+        logger.error(f"❌ Failed to upload product image: {e}")
+        raise RuntimeError(f"Failed to upload product image: {str(e)}")
 
 
 async def upload_draft_video(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int,
     scene_index: int,
@@ -625,10 +633,10 @@ async def upload_draft_video(
 ) -> dict:
     """
     Upload draft scene video to S3.
-    
+
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - scene_index: Scene index (1-4)
@@ -657,14 +665,14 @@ async def upload_draft_video(
         if scene_index < 1 or scene_index > 4:
             raise ValueError("scene_index must be between 1 and 4")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/scene_{scene_index}_bg.mp4"
+        s3_key = f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/scene_{scene_index}_bg.mp4"
         
         # Prepare S3 tags
         tags = {
             "type": "campaign_video",
             "subtype": "draft",
             "brand_id": brand_id,
-            "perfume_id": perfume_id,
+            "product_id": product_id,
             "campaign_id": campaign_id,
             "variation_index": str(variation_index),
             "lifecycle": "30days"
@@ -700,7 +708,7 @@ async def upload_draft_video(
 
 async def upload_draft_music(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int,
     file_path: str
@@ -710,7 +718,7 @@ async def upload_draft_music(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - file_path: Local file path to upload
@@ -734,14 +742,14 @@ async def upload_draft_music(
         if variation_index not in [0, 1, 2]:
             raise ValueError("variation_index must be 0, 1, or 2")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/music.mp3"
+        s3_key = f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/music.mp3"
         
         # Prepare S3 tags
         tags = {
             "type": "campaign_video",
             "subtype": "draft",
             "brand_id": brand_id,
-            "perfume_id": perfume_id,
+            "product_id": product_id,
             "campaign_id": campaign_id,
             "variation_index": str(variation_index),
             "lifecycle": "30days"
@@ -777,7 +785,7 @@ async def upload_draft_music(
 
 async def upload_final_video(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int,
     file_path: str
@@ -787,7 +795,7 @@ async def upload_final_video(
     
     **Arguments:**
     - brand_id: Brand UUID (as string)
-    - perfume_id: Product UUID (as string)
+    - product_id: Product UUID (as string)
     - campaign_id: Campaign UUID (as string)
     - variation_index: Variation index (0, 1, or 2)
     - file_path: Local file path to upload
@@ -811,14 +819,14 @@ async def upload_final_video(
         if variation_index not in [0, 1, 2]:
             raise ValueError("variation_index must be 0, 1, or 2")
         
-        s3_key = f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{variation_index}/final/final_video.mp4"
+        s3_key = f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{variation_index}/final/final_video.mp4"
         
         # Prepare S3 tags
         tags = {
             "type": "campaign_video",
             "subtype": "final",
             "brand_id": brand_id,
-            "perfume_id": perfume_id,
+            "product_id": product_id,
             "campaign_id": campaign_id,
             "variation_index": str(variation_index),
             "lifecycle": "90days"
@@ -1213,7 +1221,7 @@ async def get_campaign_folder_stats(campaign_id: str) -> dict:
 
 def get_scene_s3_url(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int,
     scene_index: int  # 0-based
@@ -1223,7 +1231,7 @@ def get_scene_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Product UUID string
+    - product_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     - scene_index: Scene index (0-based)
@@ -1235,7 +1243,7 @@ def get_scene_s3_url(
         raise RuntimeError("S3_BUCKET_NAME not configured in .env")
     
     s3_key = (
-        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/"
         f"variation_{variation_index}/draft/scene_{scene_index+1}_bg.mp4"
     )
     
@@ -1244,7 +1252,7 @@ def get_scene_s3_url(
 
 def get_final_video_s3_url(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int
 ) -> str:
@@ -1253,7 +1261,7 @@ def get_final_video_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Product UUID string
+    - product_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     
@@ -1264,7 +1272,7 @@ def get_final_video_s3_url(
         raise RuntimeError("S3_BUCKET_NAME not configured in .env")
     
     s3_key = (
-        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/"
         f"variation_{variation_index}/final/final_video.mp4"
     )
     
@@ -1273,7 +1281,7 @@ def get_final_video_s3_url(
 
 def get_audio_s3_url(
     brand_id: str,
-    perfume_id: str,
+    product_id: str,
     campaign_id: str,
     variation_index: int
 ) -> str:
@@ -1282,7 +1290,7 @@ def get_audio_s3_url(
     
     **Arguments:**
     - brand_id: Brand UUID string
-    - perfume_id: Product UUID string
+    - product_id: Product UUID string
     - campaign_id: Campaign UUID string
     - variation_index: Variation index (0, 1, 2)
     
@@ -1293,7 +1301,7 @@ def get_audio_s3_url(
         raise RuntimeError("S3_BUCKET_NAME not configured in .env")
     
     s3_key = (
-        f"brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/"
+        f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/"
         f"variation_{variation_index}/draft/music.mp3"
     )
     

@@ -963,7 +963,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 else:
                     # 3 retries failed - use predefined template
                     logger.error("❌ Grammar violations after 3 retries. Using fallback template.")
-                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
+                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
                     logger.info("📝 Fallback template scene scripts:")
                     for i, scene in enumerate(fallback_scenes):
                         logger.info(f"   Scene {i+1} script: {scene.get('background_prompt', 'MISSING')}")
@@ -991,7 +991,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                     )
                 else:
                     logger.error("Fallback to template due to scene count mismatch")
-                    return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
+                    return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
             
             logger.info(f"✅ Generated {len(scenes)} {product_type} scenes (grammar validated)")
             return scenes
@@ -1017,7 +1017,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 )
             else:
                 logger.error("Fallback to template due to LLM error")
-                return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_colors)
+                return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
 
     def _get_fallback_template(
         self,
@@ -1483,7 +1483,7 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             # Generate scenes for this variation using existing method
             # Note: product_type and product_config would need to be passed to this method
             # For now, defaulting to fragrance for backward compatibility
-            from app.config.product_types import get_product_type_config
+            from app.product_config.product_types import get_product_type_config
             product_config = get_product_type_config("fragrance")
 
             scenes_json = await self._generate_product_scenes_with_grammar(
