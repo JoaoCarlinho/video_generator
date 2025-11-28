@@ -47,6 +47,7 @@ output/
 *.jpeg
 
 # Environment (we'll use env_file instead)
+.env
 .env.local
 .env.*.local
 

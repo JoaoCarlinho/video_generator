@@ -22,7 +22,7 @@ class VideoStyle(Enum):
     ROMANTIC_FLORAL = "romantic_floral"
 
 
-# Complete style configurations for all 3 perfume styles
+# Complete style configurations for all 3 product styles
 STYLE_CONFIGS = {
     VideoStyle.GOLD_LUXE: {
         'display_name': 'Gold Luxe',
@@ -38,7 +38,7 @@ STYLE_CONFIGS = {
         'examples': ['Chanel', 'Dior', 'Tom Ford'],
         'keywords': ['luxury', 'gold', 'warm', 'opulent'],
         'music_mood': 'luxurious',
-        'best_for': ['High-end perfumes', 'Premium fragrances', 'Luxury brands'],
+        'best_for': ['High-end luxury products', 'Premium brands', 'Sophisticated aesthetics'],
         'priority_weight': 1.0  # User selection weight
     },
     
@@ -56,7 +56,7 @@ STYLE_CONFIGS = {
         'examples': ['Yves Saint Laurent', 'Versace', 'Armani'],
         'keywords': ['dark', 'elegant', 'mysterious', 'dramatic'],
         'music_mood': 'dramatic',
-        'best_for': ['Masculine fragrances', 'Exclusive perfumes', 'Evening scents'],
+        'best_for': ['Bold products', 'Exclusive luxury items', 'Evening/nighttime aesthetics'],
         'priority_weight': 1.0
     },
     
@@ -74,7 +74,7 @@ STYLE_CONFIGS = {
         'examples': ['Marc Jacobs', 'Viktor & Rolf', 'Valentino'],
         'keywords': ['romantic', 'floral', 'feminine', 'delicate'],
         'music_mood': 'calm',
-        'best_for': ['Feminine fragrances', 'Floral perfumes', 'Spring/Summer scents'],
+        'best_for': ['Delicate products', 'Romantic brands', 'Spring/Summer collections'],
         'priority_weight': 1.0
     },
 

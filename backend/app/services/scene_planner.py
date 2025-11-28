@@ -700,7 +700,7 @@ Plan the scene now!"""
         # Get allowed shot type IDs (for validation)
         allowed_shot_ids = self.grammar_loader.get_shot_type_ids()
         
-        logger.info(f"🎬 Generating perfume scenes (attempt {retry_count + 1}/3)")
+        logger.info(f"🎬 Generating {product_type} scenes (attempt {retry_count + 1}/3)")
         logger.info(f"   Shot count: {scene_count}, Duration: {target_duration}s, Style: {chosen_style}")
         
         # Build shot type descriptions for LLM
@@ -851,7 +851,7 @@ Return ONLY valid JSON array with {scene_count} scene objects:
     "shot_variation": "extreme_closeup_cap",
     "role": "hook",
     "duration": 6,
-    "background_prompt": "Cinematic opening that brings USER'S CONCEPT to life with dolly-in camera, volumetric fog, rim lighting, bokeh, and {chosen_style} aesthetic. Describe USER'S vision enhanced with perfume commercial techniques.",
+    "background_prompt": "Cinematic opening that brings USER'S CONCEPT to life with dolly-in camera, volumetric fog, rim lighting, bokeh, and {chosen_style} aesthetic. Describe USER'S vision enhanced with {product_type} commercial techniques.",
     "use_product": true,
     "product_position": "center",
     "product_scale": 0.6,
@@ -1017,44 +1017,164 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 )
             else:
                 logger.error("Fallback to template due to LLM error")
-                return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
+                return self._get_fallback_template(
+                    scene_count, target_duration, chosen_style, product_name,
+                    brand_name, brand_description, brand_colors, product_type
+                )
+
+    # Product-type-specific fallback template configurations
+    FALLBACK_TEMPLATES = {
+        "fragrance": {
+            "hook": {
+                "shot_type": "macro_bottle",
+                "shot_variation": "extreme_closeup_cap",
+                "prompt": "Extreme close-up of luxury perfume bottle, elegant lighting, {style} aesthetic, premium cinematic commercial"
+            },
+            "showcase": {
+                "shot_type": "aesthetic_broll",
+                "shot_variation": "silk_fabric_flowing",
+                "prompt": "Luxurious silk and textures, {style} lighting and mood, premium aesthetic"
+            },
+            "build": {
+                "shot_type": "aesthetic_broll",
+                "shot_variation": "rose_petals_falling",
+                "prompt": "Rose petals in luxury motion, soft lighting, {style} mood"
+            },
+            "atmosphere": {
+                "shot_type": "atmospheric",
+                "shot_variation": "light_rays_through_window",
+                "prompt": "Light rays through premium materials, {style} aesthetic"
+            },
+            "cta": {
+                "shot_type": "brand_moment",
+                "shot_variation": "product_centered_minimal",
+                "prompt": "Clean minimalist studio, perfume bottle centered, {style} aesthetic, premium final moment"
+            }
+        },
+        "watch": {
+            "hook": {
+                "shot_type": "macro_face_detail",
+                "shot_variation": "dial_detail_with_hands_moving",
+                "prompt": "Extreme close-up of luxury watch face, jewelry lighting, {style} aesthetic, premium cinematic commercial"
+            },
+            "showcase": {
+                "shot_type": "wrist_lifestyle",
+                "shot_variation": "business_meeting_gesture",
+                "prompt": "Elegant lifestyle shot showing watch on wrist, {style} lighting and mood, sophisticated aesthetic"
+            },
+            "build": {
+                "shot_type": "case_craftsmanship",
+                "shot_variation": "crown_detail",
+                "prompt": "Close-up of watch case craftsmanship and finishing, {style} mood"
+            },
+            "atmosphere": {
+                "shot_type": "heritage_story",
+                "shot_variation": "movement_through_caseback",
+                "prompt": "Heritage and precision engineering details, {style} aesthetic"
+            },
+            "cta": {
+                "shot_type": "finale_branding",
+                "shot_variation": "watch_with_logo",
+                "prompt": "Clean presentation with watch and brand identity, {style} aesthetic, premium final moment"
+            }
+        },
+        "car": {
+            "hook": {
+                "shot_type": "hero_exterior",
+                "shot_variation": "dramatic_angle",
+                "prompt": "Dynamic exterior shot of vehicle, dramatic lighting, {style} aesthetic, cinematic commercial"
+            },
+            "showcase": {
+                "shot_type": "detail_shots",
+                "shot_variation": "grille_headlights",
+                "prompt": "Close-up of design elements and craftsmanship, {style} lighting and mood"
+            },
+            "build": {
+                "shot_type": "interior_craftsmanship",
+                "shot_variation": "dashboard_technology",
+                "prompt": "Interior luxury and technology details, {style} mood"
+            },
+            "atmosphere": {
+                "shot_type": "driving_dynamics",
+                "shot_variation": "tracking_shot",
+                "prompt": "Dynamic driving sequence showing performance, {style} aesthetic"
+            },
+            "cta": {
+                "shot_type": "brand_finale",
+                "shot_variation": "hero_with_logo",
+                "prompt": "Final hero shot with brand identity, {style} aesthetic, premium final moment"
+            }
+        },
+        "energy": {
+            "hook": {
+                "shot_type": "impact_opening",
+                "shot_variation": "sunrise_solar",
+                "prompt": "Clean energy visual opening, modern lighting, {style} aesthetic, inspiring commercial"
+            },
+            "showcase": {
+                "shot_type": "benefit_showcase",
+                "shot_variation": "home_powered",
+                "prompt": "Homes and businesses powered by clean energy, {style} lighting and mood"
+            },
+            "build": {
+                "shot_type": "technology_detail",
+                "shot_variation": "solar_panel_closeup",
+                "prompt": "Clean energy technology in detail, {style} mood"
+            },
+            "atmosphere": {
+                "shot_type": "environmental_impact",
+                "shot_variation": "nature_preservation",
+                "prompt": "Environmental benefits and sustainability, {style} aesthetic"
+            },
+            "cta": {
+                "shot_type": "brand_promise",
+                "shot_variation": "future_focused",
+                "prompt": "Future-focused brand moment, {style} aesthetic, premium final moment"
+            }
+        }
+    }
 
     def _get_fallback_template(
         self,
         scene_count: int,
         target_duration: int,
         style: str,
-        perfume_name: str,
+        product_name: str,
         brand_name: str,
         brand_description: Optional[str],
         brand_colors: List[str],
+        product_type: str = "fragrance",
     ) -> List[Dict[str, Any]]:
         """
         Return predefined scene template as fallback when LLM fails grammar validation.
-        
-        Template structure is perfume-appropriate and follows shot grammar rules.
+
+        Template structure is product-type-appropriate and follows shot grammar rules.
+        Supports: fragrance, watch, car, energy product types.
         """
-        logger.info(f"🎬 Using fallback template: {scene_count} scenes, {style} style")
-        
+        logger.info(f"🎬 Using fallback template: {scene_count} scenes, {style} style, {product_type} product type")
+
         color = brand_colors[0] if brand_colors else "#FFFFFF"
-        
+
+        # Get product-specific templates, fallback to fragrance if unknown
+        templates = self.FALLBACK_TEMPLATES.get(product_type, self.FALLBACK_TEMPLATES["fragrance"])
+
         # Template for 3 scenes (15-30s)
         if scene_count <= 3:
             return [
                 {
                     "scene_id": 0,
-                    "shot_type": "macro_bottle",
-                    "shot_variation": "extreme_closeup_cap",
+                    "shot_type": templates["hook"]["shot_type"],
+                    "shot_variation": templates["hook"]["shot_variation"],
                     "role": "hook",
                     "duration": max(3, min(8, target_duration // 3)),
-                    "background_prompt": f"Extreme close-up of luxury perfume bottle, elegant lighting, {style} aesthetic, premium cinematic commercial",
+                    "background_prompt": templates["hook"]["prompt"].format(style=style),
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.6,
                     "camera_movement": "slow_zoom_in",
                     "transition_to_next": "fade",
                     "overlay": {
-                        "text": perfume_name,
+                        "text": product_name,
                         "position": "bottom",
                         "duration": 2.0,
                         "font_size": 48,
@@ -1064,11 +1184,11 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 },
                 {
                     "scene_id": 1,
-                    "shot_type": "aesthetic_broll",
-                    "shot_variation": "silk_fabric_flowing",
+                    "shot_type": templates["showcase"]["shot_type"],
+                    "shot_variation": templates["showcase"]["shot_variation"],
                     "role": "showcase",
                     "duration": max(3, min(8, target_duration // 3)),
-                    "background_prompt": f"Luxurious silk and textures, {style} lighting and mood, premium aesthetic",
+                    "background_prompt": templates["showcase"]["prompt"].format(style=style),
                     "use_product": False,
                     "camera_movement": "slow_zoom_in",
                     "transition_to_next": "fade",
@@ -1076,18 +1196,18 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 },
                 {
                     "scene_id": 2,
-                    "shot_type": "brand_moment",
-                    "shot_variation": "product_centered_minimal",
+                    "shot_type": templates["cta"]["shot_type"],
+                    "shot_variation": templates["cta"]["shot_variation"],
                     "role": "cta",
                     "duration": max(3, min(8, target_duration // 3 + 2)),
-                    "background_prompt": f"Clean minimalist studio, perfume bottle centered, {style} aesthetic, premium final moment",
+                    "background_prompt": templates["cta"]["prompt"].format(style=style),
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.5,
                     "camera_movement": "slow_zoom_out",
                     "transition_to_next": "fade",
                     "overlay": {
-                        "text": f"{perfume_name}\n{brand_name}",
+                        "text": f"{product_name}\n{brand_name}",
                         "position": "bottom",
                         "duration": 3.0,
                         "font_size": 48,
@@ -1096,24 +1216,24 @@ Follow user's vision FIRST, grammar rules SECOND."""
                     }
                 }
             ]
-        
+
         # Template for 4-5 scenes (30-60s)
         else:
             return [
                 {
                     "scene_id": 0,
-                    "shot_type": "macro_bottle",
-                    "shot_variation": "spray_mist_macro",
+                    "shot_type": templates["hook"]["shot_type"],
+                    "shot_variation": templates["hook"]["shot_variation"],
                     "role": "hook",
                     "duration": 5,
-                    "background_prompt": f"Product spray mist in macro, golden particles, {style} lighting, cinematic premium",
+                    "background_prompt": templates["hook"]["prompt"].format(style=style),
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.5,
                     "camera_movement": "static",
                     "transition_to_next": "fade",
                     "overlay": {
-                        "text": perfume_name,
+                        "text": product_name,
                         "position": "bottom",
                         "duration": 2.0,
                         "font_size": 48,
@@ -1123,11 +1243,11 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 },
                 {
                     "scene_id": 1,
-                    "shot_type": "aesthetic_broll",
-                    "shot_variation": "rose_petals_falling",
+                    "shot_type": templates["build"]["shot_type"],
+                    "shot_variation": templates["build"]["shot_variation"],
                     "role": "build",
                     "duration": 6,
-                    "background_prompt": f"Rose petals in luxury motion, soft lighting, {style} mood",
+                    "background_prompt": templates["build"]["prompt"].format(style=style),
                     "use_product": False,
                     "camera_movement": "slow_pan_right",
                     "transition_to_next": "fade",
@@ -1135,11 +1255,11 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 },
                 {
                     "scene_id": 2,
-                    "shot_type": "atmospheric",  # Use ID, not dictionary key
-                    "shot_variation": "light_rays_through_window",
+                    "shot_type": templates["atmosphere"]["shot_type"],
+                    "shot_variation": templates["atmosphere"]["shot_variation"],
                     "role": "showcase",
                     "duration": 6,
-                    "background_prompt": f"Light rays through premium materials, {style} aesthetic",
+                    "background_prompt": templates["atmosphere"]["prompt"].format(style=style),
                     "use_product": False,
                     "camera_movement": "slow_zoom_in",
                     "transition_to_next": "fade",
@@ -1147,18 +1267,18 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 },
                 {
                     "scene_id": 3,
-                    "shot_type": "brand_moment",
-                    "shot_variation": "bottle_with_tagline",
+                    "shot_type": templates["cta"]["shot_type"],
+                    "shot_variation": templates["cta"]["shot_variation"],
                     "role": "cta",
                     "duration": 7,
-                    "background_prompt": f"Product bottle hero shot with elegant background, {style} premium aesthetic",
+                    "background_prompt": templates["cta"]["prompt"].format(style=style),
                     "use_product": True,
                     "product_position": "center",
                     "product_scale": 0.5,
                     "camera_movement": "slow_zoom_out",
                     "transition_to_next": "fade",
                     "overlay": {
-                        "text": f"{perfume_name}\n{brand_name}",
+                        "text": f"{product_name}\n{brand_name}",
                         "position": "bottom",
                         "duration": 3.0,
                         "font_size": 48,

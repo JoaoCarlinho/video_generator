@@ -1,7 +1,7 @@
 """Pydantic schemas for API validation and serialization."""
 
 from pydantic import BaseModel, Field, validator, field_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -216,7 +216,7 @@ class CreateBrandRequest(BaseModel):
     brand_name: Optional[str] = Field(None, max_length=200, description="Brand name (optional, if different from company name)")
     description: Optional[str] = Field(None, description="Brand description, story, values")
     guidelines: Optional[str] = Field(None, description="Brand guidelines, voice, style notes")
-    logo_urls: Optional[Dict[str, Any]] = Field(None, description="JSONB object with logo URLs array")
+    logo_urls: Optional[Union[Dict[str, Any], List[str]]] = Field(None, description="Logo URLs as dict or list")
 
 
 class UpdateBrandRequest(BaseModel):
@@ -225,7 +225,7 @@ class UpdateBrandRequest(BaseModel):
     brand_name: Optional[str] = Field(None, max_length=200, description="Brand name")
     description: Optional[str] = Field(None, description="Brand description")
     guidelines: Optional[str] = Field(None, description="Brand guidelines")
-    logo_urls: Optional[Dict[str, Any]] = Field(None, description="JSONB object with logo URLs array")
+    logo_urls: Optional[Union[Dict[str, Any], List[str]]] = Field(None, description="Logo URLs as dict or list")
 
 
 class BrandResponse(BaseModel):
@@ -236,7 +236,7 @@ class BrandResponse(BaseModel):
     brand_name: Optional[str]
     description: Optional[str]
     guidelines: Optional[str]
-    logo_urls: Optional[Dict[str, Any]]
+    logo_urls: Optional[Union[Dict[str, Any], List[str]]]
     created_at: datetime
     updated_at: datetime
 

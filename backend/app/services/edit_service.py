@@ -25,18 +25,20 @@ class EditService:
         edit_instruction: str,
         style_spec: Dict[str, Any],
         scene_role: str,
-        perfume_name: str
+        product_name: str,
+        product_type: str = "fragrance"
     ) -> Dict[str, str]:
         """
         Modify scene prompt based on user's edit instruction.
-        
+
         Args:
             original_prompt: Current scene prompt
             edit_instruction: User's edit request (e.g., "make brighter")
             style_spec: Campaign's style specification
             scene_role: Scene role (hook, showcase, cta, etc.)
-            perfume_name: Name of the perfume product
-            
+            product_name: Name of the product
+            product_type: Type of product (fragrance, watch, car, energy)
+
         Returns:
             Dict with:
               - modified_prompt: New prompt with edits applied
@@ -44,7 +46,7 @@ class EditService:
         """
         logger.info(f"Modifying scene prompt - Role: {scene_role}, Edit: '{edit_instruction}'")
         
-        system_prompt = """You are an expert video director editing luxury perfume TikTok ads.
+        system_prompt = f"""You are an expert video director editing luxury {product_type} TikTok ads.
 
 Given an original scene prompt and an edit instruction, modify the prompt to incorporate the changes while maintaining:
 1. The core scene concept and composition
@@ -56,15 +58,15 @@ Given an original scene prompt and an edit instruction, modify the prompt to inc
 IMPORTANT:
 - Apply the edit instruction precisely
 - Keep the same scene structure (duration, role, transitions)
-- Maintain perfume product visibility and placement
+- Maintain {product_type} product visibility and placement
 - Preserve brand visual identity
 - Add specific cinematography details (lighting, camera, movement)
 
 Return a JSON object with:
-{
+{{
   "modified_prompt": "The full modified prompt with changes applied",
   "changes_summary": "Brief 2-3 sentence summary of what changed"
-}"""
+}}"""
         
         user_message = f"""Original Scene Prompt:
 {original_prompt}
@@ -73,7 +75,8 @@ Edit Instruction: {edit_instruction}
 
 Context:
 - Scene Role: {scene_role}
-- Product: {perfume_name}
+- Product: {product_name}
+- Product Type: {product_type}
 - Style Spec:
   - Lighting: {style_spec.get('lighting_direction', 'N/A')}
   - Camera: {style_spec.get('camera_style', 'N/A')}

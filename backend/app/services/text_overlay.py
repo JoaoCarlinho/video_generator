@@ -3,7 +3,7 @@
 This service uses FFmpeg to add animated text overlays to videos with
 support for positioning, animations, and styling.
 
-For luxury perfume ads, use add_perfume_text_overlay() which enforces
+For luxury product ads, use add_product_text_overlay() which enforces
 luxury typography constraints (max 3-4 text blocks, luxury fonts, restricted positions).
 """
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class LuxuryTextPreset:
-    """Luxury typography presets for perfume ads."""
+    """Luxury typography presets for product ads."""
     
     SERIF_LUXURY = {
         "font": "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
@@ -203,13 +203,13 @@ class TextOverlayRenderer:
         logger.info(f"✅ All {len(overlays)} overlays added")
         return current_url
 
-    def _validate_perfume_text(self, text: str, max_words: int = 6) -> bool:
-        """Validate text overlay for perfume ads.
-        
+    def _validate_product_text(self, text: str, max_words: int = 6) -> bool:
+        """Validate text overlay for luxury product ads.
+
         Args:
             text: Text to validate
             max_words: Maximum allowed words (default: 6)
-            
+
         Returns:
             True if valid, False if too long
         """
@@ -221,11 +221,11 @@ class TextOverlayRenderer:
         
         return True
 
-    async def add_perfume_text_overlay(
+    async def add_product_text_overlay(
         self,
         video_url: str,
         text: str,
-        text_type: str,  # 'perfume_name', 'tagline', 'brand_name', 'cta'
+        text_type: str,  # 'product_name', 'tagline', 'brand_name', 'cta'
         position: str = "bottom",
         duration: float = 2.0,
         start_time: float = 0.0,
@@ -234,41 +234,41 @@ class TextOverlayRenderer:
         variation_index: Optional[int] = None,
     ) -> str:
         """
-        Add luxury typography text overlay for perfume ads.
-        
-        Enforces perfume-specific constraints:
+        Add luxury typography text overlay for product ads.
+
+        Enforces luxury product constraints:
         - Max 6 words per text block
         - Luxury fonts (serif for names, sans-serif for taglines)
         - Restricted positions (center/bottom center only)
         - Fade-in/out animations only
-        
+
         Args:
             video_url: URL/path of video to overlay
             text: Text to display
-            text_type: Type of text ('perfume_name', 'tagline', 'brand_name', 'cta')
+            text_type: Type of text ('product_name', 'tagline', 'brand_name', 'cta')
             position: Text position ("center" or "bottom" only)
             duration: How long text displays (seconds, 2-4s recommended)
             start_time: When text appears (seconds into video)
             campaign_id: Campaign UUID for local path
             scene_index: Scene index for unique filenames
-            
+
         Returns:
             Local file path of video with text overlay
         """
-        logger.info(f"Adding luxury perfume text overlay: '{text}' ({text_type}) at {position}")
+        logger.info(f"Adding luxury product text overlay: '{text}' ({text_type}) at {position}")
         
         # Validate text length
-        if not self._validate_perfume_text(text, max_words=6):
+        if not self._validate_product_text(text, max_words=6):
             logger.warning("Text too long, truncating to 6 words...")
             text = " ".join(text.split()[:6])
         
         # Restrict positions to center/bottom only
         if position not in ["center", "bottom"]:
-            logger.warning(f"Position '{position}' not allowed for perfume ads, using 'bottom'")
+            logger.warning(f"Position '{position}' not allowed for luxury product ads, using 'bottom'")
             position = "bottom"
         
         # Get font preset based on text type
-        if text_type in ["perfume_name", "brand_name"]:
+        if text_type in ["product_name", "brand_name"]:
             font_preset = LuxuryTextPreset.SERIF_LUXURY
             font_size = font_preset["font_size"]
         else:  # tagline, cta
@@ -425,7 +425,7 @@ class TextOverlayRenderer:
         """
         Get FFmpeg position expressions for TikTok vertical (9:16).
         
-        For perfume ads, only "center" and "bottom" are allowed.
+        For luxury product ads, only "center" and "bottom" are allowed.
         Other positions fall back to "bottom".
         
         Args:

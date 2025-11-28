@@ -1,7 +1,9 @@
 """Product Shot Grammar Loader.
 
-Loads and validates perfume-specific scene grammar constraints for TikTok vertical videos.
-Ensures LLM-generated scenes follow luxury perfume visual language.
+Loads and validates product-specific scene grammar constraints for TikTok vertical videos.
+Ensures LLM-generated scenes follow the visual language for the selected product type.
+
+Supports product types: fragrance, watch, car, energy
 
 Version: 1.0
 """
@@ -15,22 +17,25 @@ logger = logging.getLogger(__name__)
 
 
 class ProductGrammarLoader:
-    """Loads perfume shot grammar rules and constraints.
-    
-    Manages the perfume_shot_grammar.json file which defines:
-    - Allowed shot types (macro_bottle, aesthetic_broll, atmospheric, human_silhouette, brand_moment)
+    """Loads product shot grammar rules and constraints.
+
+    Manages product-specific shot grammar JSON files which define:
+    - Allowed shot types specific to each product type
     - Scene flow rules (first/last scene requirements)
     - Text overlay constraints
     - Pacing guidelines based on video duration
     - Validation rules for scene plans
+
+    Supports: fragrance, watch, car, energy product types
     """
 
     def __init__(self, grammar_file_path: Optional[str] = None):
         """Initialize loader with grammar file path.
-        
+
         Args:
             grammar_file_path: Optional path to grammar JSON file.
                               Defaults to backend/app/templates/scene_grammar/perfume_shot_grammar.json
+                              For other product types, pass the appropriate grammar file path.
         """
         if grammar_file_path is None:
             # Default path relative to this file
@@ -53,7 +58,8 @@ class ProductGrammarLoader:
                 self.grammar = json.load(f)
             
             version = self.grammar.get("grammar_version", "1.0")
-            logger.info(f"✅ Loaded perfume shot grammar v{version}")
+            product_type = self.grammar.get("product_type", "unknown")
+            logger.info(f"✅ Loaded {product_type} shot grammar v{version}")
             logger.debug(f"   Shot types: {list(self.grammar.get('allowed_shot_types', {}).keys())}")
         except FileNotFoundError:
             logger.error(f"❌ Grammar file not found: {self.grammar_file_path}")
@@ -244,7 +250,7 @@ class ProductGrammarLoader:
         return (len(violations) == 0, violations)
 
     def get_llm_constraint_prompt(self, duration: int) -> str:
-        """Generate LLM constraint prompt enforcing perfume grammar.
+        """Generate LLM constraint prompt enforcing product grammar.
 
         Args:
             duration: Target video duration in seconds

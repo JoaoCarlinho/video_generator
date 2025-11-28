@@ -48,60 +48,73 @@ async def create_new_campaign(
     authorization: str = Header(None)
 ):
     """
-    Create a new luxury perfume TikTok ad campaign.
-    
+    Create a new luxury product TikTok ad campaign.
+
+    Supports multiple product types: fragrance, watch, car, energy.
     Logs request data for debugging validation errors.
-    
+
     **Headers:**
     - Authorization: Bearer {token} (optional in development)
-    
+
     **Request Body:**
     - title: Campaign title (max 200 chars)
-    - creative_prompt: User's creative vision for the perfume ad (20-3000 chars)
+    - creative_prompt: User's creative vision for the product ad (20-3000 chars)
     - target_duration: Target video duration (15-60 seconds for TikTok)
     - brand_name: Brand name (max 100 chars)
     - brand_description: (optional) Brand story, values, personality
     - target_audience: (optional) Target audience description
-    - perfume_name: Product product name (required, e.g., "Noir Élégance")
-    - perfume_gender: Product gender - 'masculine', 'feminine', or 'unisex' (default: 'unisex')
+    - product_name: Product name (required, e.g., "Noir Élégance", "Submariner", "Model S")
+    - product_type: Product type - 'fragrance', 'watch', 'car', or 'energy' (default: 'fragrance')
+    - product_gender: Product gender - 'masculine', 'feminine', or 'unisex' (for fragrances only)
     - logo_url: (optional) S3 URL of uploaded brand logo
-    - product_image_url: (optional) S3 URL of uploaded perfume bottle image
+    - product_image_url: (optional) S3 URL of uploaded product image
     - guidelines_url: (optional) S3 URL of uploaded brand guidelines
-    - selected_style: (optional) Product video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
+    - selected_style: (optional) Video style - 'gold_luxe', 'dark_elegance', or 'romantic_floral'
     - num_variations: (optional) Number of video variations to generate (1-3, default: 1)
-    
-    **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all perfume ads.
-    
+
+    **Note:** Aspect ratio is hardcoded to 9:16 (TikTok vertical, 1080x1920) for all ads.
+
     **Response:** CampaignResponse with newly created campaign
-    
+
     **Errors:**
     - 400: Invalid input (validation errors)
     - 401: Missing or invalid authorization
     - 500: Database error
-    
-    **Example:**
+
+    **Examples:**
     ```json
+    // Fragrance campaign
     {
       "title": "Chanel Noir TikTok Ad",
-      "creative_prompt": "Create a mysterious luxury perfume ad for our new noir fragrance. Start with dramatic bottle reveal, show elegant textures, end with brand moment.",
+      "creative_prompt": "Create a mysterious luxury perfume ad...",
       "target_duration": 30,
       "brand_name": "Chanel",
-      "brand_description": "Luxury French perfume house",
-      "target_audience": "Sophisticated adults 30-50",
-      "perfume_name": "Noir Élégance",
-      "perfume_gender": "masculine",
+      "product_name": "Noir Élégance",
+      "product_type": "fragrance",
+      "product_gender": "masculine",
       "selected_style": "dark_elegance"
+    }
+
+    // Watch campaign
+    {
+      "title": "Movado Bold TikTok Ad",
+      "creative_prompt": "Showcase the precision and elegance of our timepiece...",
+      "target_duration": 30,
+      "brand_name": "Movado",
+      "product_name": "Bold Motion",
+      "product_type": "watch",
+      "selected_style": "gold_luxe"
     }
     ```
     """
     try:
         # Log request data for debugging
-        logger.info(f"Creating campaign with data: title={request.title}, brand_name={request.brand_name}, perfume_name={request.perfume_name}, creative_prompt length={len(request.creative_prompt) if request.creative_prompt else 0}")
+        logger.info(f"Creating campaign with data: title={request.title}, brand_name={request.brand_name}, product_name={request.product_name}, creative_prompt length={len(request.creative_prompt) if request.creative_prompt else 0}")
         
         # Validate required fields
-        if not request.perfume_name or not request.perfume_name.strip():
-            logger.error("perfume_name is required but missing or empty")
-            raise HTTPException(status_code=422, detail="perfume_name is required")
+        if not request.product_name or not request.product_name.strip():
+            logger.error("product_name is required but missing or empty")
+            raise HTTPException(status_code=422, detail="product_name is required")
         
         if not request.creative_prompt or len(request.creative_prompt.strip()) < 20:
             logger.error(f"creative_prompt validation failed: length={len(request.creative_prompt) if request.creative_prompt else 0}")

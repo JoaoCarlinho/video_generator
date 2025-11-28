@@ -429,3 +429,6 @@ product_images/
 *.bak*
 frontend/deployment-status-20251123-023149.txt
 deployment-urls.txt
+backend/list_campaigns.py
+backend/fix_stuck_campaign.py
+backend/delete_all_campaigns.py

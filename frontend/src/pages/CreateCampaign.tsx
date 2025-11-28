@@ -19,12 +19,40 @@ export const CreateCampaign = () => {
 
   const [product, setProduct] = useState<any>(null)
   const [campaignName, setCampaignName] = useState('')
+  const [seasonalEvent, setSeasonalEvent] = useState('')
   const [creativePrompt, setCreativePrompt] = useState('')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('gold_luxe')
   const [targetDuration, setTargetDuration] = useState(30)
   const [numVariations, setNumVariations] = useState<1 | 2 | 3>(1)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Predefined seasonal events
+  const seasonalEventOptions = [
+    'New Year Sale',
+    'Valentine\'s Day',
+    'Spring Collection',
+    'Easter Sale',
+    'Mother\'s Day',
+    'Memorial Day Sale',
+    'Summer Launch',
+    'Father\'s Day',
+    'Independence Day Sale',
+    'Back to School',
+    'Labor Day Sale',
+    'Fall Collection',
+    'Halloween Special',
+    'Black Friday',
+    'Cyber Monday',
+    'Holiday Season',
+    'Christmas Sale',
+    'Year End Clearance',
+    'Product Launch',
+    'Brand Anniversary',
+    'Flash Sale',
+    'Exclusive Drop',
+    'General Campaign'
+  ]
 
   useEffect(() => {
     if (productId) {
@@ -49,6 +77,11 @@ export const CreateCampaign = () => {
   const validateForm = (): boolean => {
     if (!campaignName.trim() || campaignName.length < 2 || campaignName.length > 200) {
       setSubmitError('Campaign name must be between 2 and 200 characters')
+      return false
+    }
+
+    if (!seasonalEvent.trim()) {
+      setSubmitError('Please select a season or event')
       return false
     }
 
@@ -105,7 +138,7 @@ export const CreateCampaign = () => {
       const campaign = await createCampaign({
         product_id: productId,
         campaign_name: campaignName,
-        seasonal_event: 'General Campaign',
+        seasonal_event: seasonalEvent,
         year: currentYear,
         target_duration: targetDuration,
         scene_configs: defaultScenes
@@ -216,6 +249,31 @@ export const CreateCampaign = () => {
                   required
                   className="bg-olive-800/30 border-olive-600 text-off-white"
                 />
+              </div>
+
+              {/* Seasonal Event */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Season / Event <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={seasonalEvent}
+                  onChange={(e) => setSeasonalEvent(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-olive-800/30 border border-olive-600 rounded-lg text-off-white focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent appearance-none cursor-pointer"
+                >
+                  <option value="" disabled className="bg-olive-900 text-muted-gray">
+                    Select a season or event...
+                  </option>
+                  {seasonalEventOptions.map((event) => (
+                    <option key={event} value={event} className="bg-olive-900">
+                      {event}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-gray mt-1">
+                  Choose the marketing season or event this campaign targets
+                </p>
               </div>
 
               {/* Creative Prompt */}
