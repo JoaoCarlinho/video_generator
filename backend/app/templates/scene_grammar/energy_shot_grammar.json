@@ -3,7 +3,7 @@
   "target_platform": "tiktok_vertical",
   "product_type": "energy",
   "duration_range": [15, 60],
-  "scene_count_range": [3, 5],
+  "scene_count_range": [3, 10],
   "target_aspect_ratio": "9:16",
   "target_resolution": "1080x1920",
   "description": "Energy and utilities TikTok vertical video shot grammar. Focuses on innovation, sustainability, and reliability.",

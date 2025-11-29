@@ -3,7 +3,7 @@
   "target_platform": "tiktok_vertical",
   "product_type": "watch",
   "duration_range": [15, 60],
-  "scene_count_range": [3, 5],
+  "scene_count_range": [3, 10],
   "target_aspect_ratio": "9:16",
   "target_resolution": "1080x1920",
   "description": "Luxury watch TikTok vertical video shot grammar. Defines timepiece-specific scenes emphasizing craftsmanship and precision.",
@@ -44,7 +44,7 @@
     "family_farewell": {
       "id": "family_farewell",
       "display_name": "Family Farewell Moment",
-      "description": "Wealthy, well-manicured man hugging family before heading to work with Movado watch clearly visible",
+      "description": "Wealthy, well-manicured man hugging family before heading to work with luxury watch clearly visible",
       "duration_range": [4, 7],
       "priority": 2,
       "variations": [
@@ -67,7 +67,7 @@
       "recommended_position": "lifestyle",
       "recommended_scale": 0.7,
       "use_product": true,
-      "llm_instruction": "Bright, elegant scene showing revered man hugging family before work with Movado watch clearly visible. Duration: 4-7 seconds."
+      "llm_instruction": "Bright, elegant scene showing revered man hugging family before work with the watch clearly visible. Duration: 4-7 seconds."
     },
 
     "case_craftsmanship": {
@@ -155,7 +155,7 @@
       "recommended_position": "lifestyle",
       "recommended_scale": 0.7,
       "use_product": true,
-      "llm_instruction": "Elegant scene of man leaving office with colleagues following and laughing, Movado watch visible. Duration: 4-7 seconds."
+      "llm_instruction": "Elegant scene of man leaving office with colleagues following and laughing, luxury watch visible on wrist. Duration: 4-7 seconds."
     },
 
     "wrist_lifestyle": {
@@ -191,7 +191,7 @@
     "tennis_winning_shot": {
       "id": "tennis_winning_shot",
       "display_name": "Tennis Court Victory",
-      "description": "Fit man hitting winning shot on tennis court with Movado watch on racket hand",
+      "description": "Fit man hitting winning shot on tennis court with luxury watch on wrist",
       "duration_range": [4, 7],
       "priority": 2,
       "variations": [
@@ -214,7 +214,7 @@
       "recommended_position": "lifestyle",
       "recommended_scale": 0.7,
       "use_product": true,
-      "llm_instruction": "Elegant action scene showing fit man hitting winning tennis shot with Movado watch visible on racket hand. Duration: 4-7 seconds."
+      "llm_instruction": "Elegant action scene showing fit man hitting winning tennis shot with luxury watch visible on wrist. Duration: 4-7 seconds."
     },
 
     "heritage_story": {
@@ -249,7 +249,7 @@
     "evening_dresser_moment": {
       "id": "evening_dresser_moment",
       "display_name": "Intimate Evening Dresser Scene",
-      "description": "Man setting Movado watch on dresser while wife waits in bed, intimate bedroom setting",
+      "description": "Man setting luxury watch on dresser while partner waits, intimate bedroom setting",
       "duration_range": [4, 7],
       "priority": 2,
       "variations": [
@@ -272,7 +272,7 @@
       "recommended_position": "detail",
       "recommended_scale": 0.8,
       "use_product": true,
-      "llm_instruction": "Elegant intimate scene of man setting Movado watch on dresser in bedroom setting. Duration: 4-7 seconds."
+      "llm_instruction": "Elegant intimate scene of man setting luxury watch on dresser in bedroom setting. Duration: 4-7 seconds."
     },
 
     "finale_branding": {
@@ -327,33 +327,39 @@
 
   "pacing_guidelines": {
     "15_30_seconds": {
-      "scene_count": 3,
-      "avg_scene_duration": [5, 10],
+      "scene_count": 4,
+      "avg_scene_duration": [5, 8],
       "breakdown": [
-        "Hook - watch face detail (4-6s)",
-        "Lifestyle or craftsmanship (5-7s)",
-        "Final brand moment (3-5s)"
+        "Hook - watch face detail (5-7s)",
+        "Craftsmanship detail (5-7s)",
+        "Lifestyle or heritage (5-7s)",
+        "Final brand moment (4-6s)"
       ]
     },
     "31_45_seconds": {
-      "scene_count": 4,
-      "avg_scene_duration": [7, 11],
+      "scene_count": 6,
+      "avg_scene_duration": [6, 8],
       "breakdown": [
-        "Hook - watch detail (4-6s)",
-        "Craftsmanship detail (5-7s)",
-        "Lifestyle context (5-8s)",
-        "Final brand moment (4-6s)"
+        "Hook - watch detail (6-8s)",
+        "Case craftsmanship (6-8s)",
+        "Lifestyle context (6-8s)",
+        "Heritage or movement (6-8s)",
+        "Additional lifestyle (6-8s)",
+        "Final brand moment (5-7s)"
       ]
     },
     "46_60_seconds": {
-      "scene_count": 5,
-      "avg_scene_duration": [9, 12],
+      "scene_count": 8,
+      "avg_scene_duration": [6, 8],
       "breakdown": [
-        "Hook - watch face macro (4-6s)",
-        "Case or bracelet detail (5-7s)",
-        "Lifestyle on-wrist (5-8s)",
-        "Heritage or movement (4-6s)",
-        "Final brand moment (4-6s)"
+        "Hook - watch face macro (6-8s)",
+        "Case or bracelet detail (6-8s)",
+        "First lifestyle scene (6-8s)",
+        "Craftsmanship detail (6-8s)",
+        "Heritage or movement (6-8s)",
+        "Second lifestyle scene (6-8s)",
+        "Additional detail (6-8s)",
+        "Final brand moment (5-7s)"
       ]
     }
   },

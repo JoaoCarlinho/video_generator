@@ -2,7 +2,7 @@
   "grammar_version": "1.0",
   "target_platform": "tiktok_vertical",
   "duration_range": [15, 60],
-  "scene_count_range": [3, 5],
+  "scene_count_range": [3, 10],
   "target_aspect_ratio": "9:16",
   "target_resolution": "1080x1920",
   "description": "Luxury perfume TikTok vertical video shot grammar. Constrains LLM to only generate perfume-specific scenes with consistent luxury aesthetic.",
@@ -255,32 +255,38 @@
 
   "pacing_guidelines": {
     "15_30_seconds": {
-      "scene_count": 3,
-      "avg_scene_duration": [5, 10],
+      "scene_count": 4,
+      "avg_scene_duration": [5, 8],
       "breakdown": [
-        "Hook (3-5s)",
-        "Product or atmosphere (5-7s)",
-        "Final brand moment (4-5s)"
+        "Hook - bottle/atmosphere (5-7s)",
+        "Product detail (5-7s)",
+        "Luxury texture/B-roll (5-7s)",
+        "Final brand moment (4-6s)"
       ]
     },
     "31_45_seconds": {
-      "scene_count": 4,
-      "avg_scene_duration": [7, 11],
+      "scene_count": 6,
+      "avg_scene_duration": [6, 8],
       "breakdown": [
-        "Hook (3-5s)",
-        "Luxury texture/atmosphere (5-7s)",
-        "Product detail (5-8s)",
+        "Hook - atmosphere (6-8s)",
+        "Product macro shot (6-8s)",
+        "Luxury texture (6-8s)",
+        "Atmospheric B-roll (6-8s)",
+        "Human element (6-8s)",
         "Final brand moment (5-7s)"
       ]
     },
     "46_60_seconds": {
-      "scene_count": 5,
-      "avg_scene_duration": [9, 12],
+      "scene_count": 8,
+      "avg_scene_duration": [6, 8],
       "breakdown": [
-        "Hook atmosphere (3-5s)",
-        "Product macro shot (5-8s)",
-        "Luxury B-roll (5-7s)",
-        "Atmosphere or human (5-7s)",
+        "Hook atmosphere (6-8s)",
+        "Product macro shot (6-8s)",
+        "First luxury B-roll (6-8s)",
+        "Product detail (6-8s)",
+        "Atmospheric texture (6-8s)",
+        "Human element (6-8s)",
+        "Additional atmosphere (6-8s)",
         "Final brand moment (5-7s)"
       ]
     }

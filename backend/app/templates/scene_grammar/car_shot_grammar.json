@@ -3,7 +3,7 @@
   "target_platform": "tiktok_vertical",
   "product_type": "car",
   "duration_range": [15, 60],
-  "scene_count_range": [3, 5],
+  "scene_count_range": [3, 10],
   "target_aspect_ratio": "9:16",
   "target_resolution": "1080x1920",
   "description": "Automotive TikTok vertical video shot grammar. Defines car commercial-specific scenes with dynamic motion and design focus.",
