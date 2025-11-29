@@ -214,7 +214,7 @@ class GenerationPipeline:
             try:
                 local_paths = LocalStorageManager.initialize_campaign_storage(self.campaign_id)
                 self.local_paths = local_paths
-                storage_info = LocalStorageManager.get_campaign_storage_size(self.campaign_id)
+                storage_size = LocalStorageManager.get_campaign_storage_size(self.campaign_id)
                 logger.info(f"Local storage initialized: {self.local_paths}")
             except Exception as e:
                 logger.error(f"Failed to initialize local storage: {e}")
@@ -1257,6 +1257,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 extracted_style=None,  # Reference image removed
                 product_name=product_name,
                 product_gender=product.product_gender,
+                product_type=product.product_type,
             )
             
             logger.info(f"Generated {len(scene_variations)} scene plan variations")

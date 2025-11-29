@@ -574,7 +574,7 @@ async def stream_video(
         if target_variation < 0:
              raise HTTPException(status_code=400, detail="Invalid variation index")
         
-        # Construct path based on hierarchy: brands/{brand_id}/perfumes/{perfume_id}/campaigns/{campaign_id}/variation_{i}/final/final_video.mp4
+        # Construct path based on hierarchy: brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{i}/final/final_video.mp4
         # Note: currently only 9:16 is generated as 'final_video.mp4'
         # In future phases, we might have final_1_1.mp4 etc.
         filename = "final_video.mp4"
@@ -583,8 +583,8 @@ async def stream_video(
             # If other aspect ratios are requested, we check if they exist or fail
             # TODO: Support other aspect ratios in filenames (e.g., final_1_1.mp4)
             pass
-            
-        s3_key = f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/variation_{target_variation}/final/{filename}"
+
+        s3_key = f"brands/{str(campaign.brand_id)}/products/{str(campaign.product_id)}/campaigns/{str(campaign_id)}/variation_{target_variation}/final/{filename}"
         
         logger.info(f"🎬 Streaming video from S3: {s3_key} (variation {target_variation})")
         
@@ -618,7 +618,7 @@ async def stream_video(
             # Fallback: Search for any final video in the campaign folder
             # This handles cases where variation index might be mismatched or path structure slightly different
             try:
-                campaign_prefix = f"brands/{str(campaign.brand_id)}/perfumes/{str(campaign.perfume_id)}/campaigns/{str(campaign_id)}/"
+                campaign_prefix = f"brands/{str(campaign.brand_id)}/products/{str(campaign.product_id)}/campaigns/{str(campaign_id)}/"
                 logger.info(f"🔍 Searching for fallback video in: {campaign_prefix}")
                 
                 objects = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=campaign_prefix)
@@ -747,7 +747,7 @@ async def download_video(
         if aspect_ratio != '9:16':
             pass # Future support
             
-        s3_key = f"brands/{campaign.brand_id}/perfumes/{campaign.perfume_id}/campaigns/{campaign_id}/variation_{target_variation}/final/{filename}"
+        s3_key = f"brands/{campaign.brand_id}/products/{campaign.product_id}/campaigns/{campaign_id}/variation_{target_variation}/final/{filename}"
         
         if not settings.s3_bucket_name:
              raise HTTPException(status_code=500, detail="S3 bucket not configured")

@@ -110,8 +110,8 @@ class ScenePlanner:
         has_logo: bool = False,
         selected_style: Optional[str] = None,
         extracted_style: Optional[Dict[str, Any]] = None,
-        perfume_name: Optional[str] = None,
-        perfume_gender: Optional[str] = None,
+        product_name: Optional[str] = None,
+        product_gender: Optional[str] = None,
         product_type: str = "fragrance",
     ) -> Dict[str, Any]:
         """
@@ -129,8 +129,8 @@ class ScenePlanner:
             has_logo: Whether logo is available
             selected_style: (PHASE 7) User-selected or LLM-inferred style name or None
             extracted_style: Optional extracted style from reference image
-            perfume_name: Product name (e.g., "Noir Élégance" for fragrance, "Model S" for car)
-            perfume_gender: Product gender ('masculine', 'feminine', or 'unisex') - only for product types that support gender
+            product_name: Product name (e.g., "Noir Élégance" for fragrance, "Model S" for car)
+            product_gender: Product gender ('masculine', 'feminine', or 'unisex') - only for product types that support gender
             product_type: Product type ('fragrance', 'car', 'watch', 'energy')
 
         Returns:
@@ -146,12 +146,12 @@ class ScenePlanner:
         grammar_path = base_dir / "templates" / "scene_grammar" / product_config.shot_grammar_file
         self.grammar_loader = ProductGrammarLoader(str(grammar_path))
 
-        # Use perfume_name if provided, otherwise fallback to brand_name
-        actual_product_name = perfume_name or brand_name
+        # Use product_name if provided, otherwise fallback to brand_name
+        actual_product_name = product_name or brand_name
         logger.info(f"Planning video for '{brand_name}' / Product: '{actual_product_name}' (target: {target_duration}s)")
         logger.info(f"Assets available - Product: {has_product}, Logo: {has_logo}")
-        if perfume_gender and product_config.supports_gender:
-            logger.info(f"Product gender: {perfume_gender}")
+        if product_gender and product_config.supports_gender:
+            logger.info(f"Product gender: {product_gender}")
         
         # STEP 1: Derive tone from target audience (Task 2)
         tone = await self._derive_tone_from_audience(
@@ -187,7 +187,7 @@ class ScenePlanner:
             target_audience=target_audience or "general consumers",
             target_duration=target_duration,
             chosen_style=chosen_style,
-            product_gender=perfume_gender,
+            product_gender=product_gender,
             product_type=product_type,
             product_config=product_config,
         )
@@ -1554,17 +1554,18 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
         has_logo: bool,
         selected_style: Optional[str],
         extracted_style: Optional[Dict[str, Any]],
-        perfume_name: Optional[str] = None,
-        perfume_gender: Optional[str] = None,
+        product_name: Optional[str] = None,
+        product_gender: Optional[str] = None,
+        product_type: str = "fragrance",
     ) -> List[List[Dict[str, Any]]]:
         """
         Generate N variations of scene plans with different visual approaches.
-        
+
         Each variation uses a different approach:
         - Variation 0: Cinematic + dramatic lighting + wide shots
         - Variation 1: Minimal + clean + close-up macro
         - Variation 2: Lifestyle + real-world + atmospheric
-        
+
         Args:
             num_variations: Number of variations to generate (1-3)
             creative_prompt: User's creative vision
@@ -1578,9 +1579,10 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             has_logo: Whether logo is available
             selected_style: Selected style name
             extracted_style: Optional extracted style from reference image
-            perfume_name: Product product name
-            perfume_gender: Product gender
-            
+            product_name: Product name
+            product_gender: Product gender
+            product_type: Product type (fragrance, watch, car, etc.)
+
         Returns:
             List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
         """
@@ -1601,23 +1603,21 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
             )
             
             # Generate scenes for this variation using existing method
-            # Note: product_type and product_config would need to be passed to this method
-            # For now, defaulting to fragrance for backward compatibility
             from app.product_config.product_types import get_product_type_config
-            product_config = get_product_type_config("fragrance")
+            product_config = get_product_type_config(product_type)
 
             scenes_json = await self._generate_product_scenes_with_grammar(
                 creative_prompt=variation_prompt,
                 brand_name=brand_name,
-                product_name=perfume_name or brand_name,
+                product_name=product_name or brand_name,
                 brand_description=brand_description,
                 brand_colors=brand_colors,
                 brand_guidelines=brand_guidelines,
                 target_audience=target_audience or "general consumers",
                 target_duration=target_duration,
                 chosen_style=selected_style or "cinematic",
-                product_gender=perfume_gender,
-                product_type="fragrance",
+                product_gender=product_gender,
+                product_type=product_type,
                 product_config=product_config,
             )
             

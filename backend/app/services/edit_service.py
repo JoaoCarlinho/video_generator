@@ -26,7 +26,7 @@ class EditService:
         style_spec: Dict[str, Any],
         scene_role: str,
         product_name: str,
-        product_type: str = "fragrance"
+        product_type: str
     ) -> Dict[str, str]:
         """
         Modify scene prompt based on user's edit instruction.
