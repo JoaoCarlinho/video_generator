@@ -14,9 +14,10 @@ REMOVED STEPS (Veo S3 handles natively):
 - ❌ Compositing (product overlay) - Veo integrates product naturally
 - ❌ Text Overlay Rendering - Veo embeds text in scene
 
-PERFUME-SPECIFIC FEATURES:
+PRODUCT-TYPE-AWARE FEATURES:
 - User-first creative approach (user vision = primary, grammar = secondary)
 - Product shot grammar as visual language library (not strict rules)
+- Supports: fragrance, watch, car, energy product types
 - Product name extraction and storage
 - TikTok vertical optimization (9:16 hardcoded)
 
@@ -42,8 +43,10 @@ from app.database.crud import (
     get_campaign_by_id,
     get_product_by_id,
     get_brand_by_id,
-    update_campaign_status,
+    get_creative_by_id,
     update_campaign_json,
+    update_creative_status,
+    update_creative_json,
 )
 from app.models.schemas import AdCampaign, Scene, StyleSpec
 from app.services.scene_planner import ScenePlanner
@@ -148,14 +151,20 @@ def build_provider_metadata(
 class GenerationPipeline:
     """Main pipeline orchestrator for video generation."""
 
-    def __init__(self, campaign_id: UUID, video_provider: str = "replicate"):
+    def __init__(self, campaign_id: UUID, video_provider: str = "replicate", creative_id: UUID = None):
         """Initialize pipeline for a specific campaign.
-        
+
         Args:
             campaign_id: UUID of the campaign to generate
+            video_provider: Video generation provider ("replicate" or "ecs")
+            creative_id: UUID of the creative - REQUIRED for status updates
         """
+        if creative_id is None:
+            raise ValueError("creative_id is required - all generation jobs must track creative status")
+
         self.campaign_id = campaign_id
         self.video_provider = video_provider
+        self.creative_id = creative_id
         init_db()
 
         if db_connection.SessionLocal is None:
@@ -166,20 +175,22 @@ class GenerationPipeline:
 
         self.db = db_connection.SessionLocal()
         self.step_timings: Dict[str, float] = {}
-        
+        self.total_cost: Decimal = Decimal("0.00")
+        self.step_costs: Dict[str, Decimal] = {}
+
         # Load campaign, product, and brand from database
         self.campaign = get_campaign_by_id(self.db, campaign_id)
         if not self.campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
-        
+
         logger.info(f"🔍 Loaded campaign {self.campaign.id}: product_id={self.campaign.product_id}")
-        
+
         self.product = get_product_by_id(self.db, self.campaign.product_id)
         if not self.product:
             raise ValueError(f"Product {self.campaign.product_id} not found")
-        
+
         logger.info(f"🔍 Loaded product {self.product.id}: brand_id={self.product.brand_id}")
-        
+
         # Load brand through product
         self.brand = get_brand_by_id(self.db, self.product.brand_id)
         if not self.brand:
@@ -187,7 +198,26 @@ class GenerationPipeline:
 
         logger.info(f"🔍 Loaded brand {self.brand.id}: user_id={self.brand.user_id}")
 
-        logger.info(f"✅ Verified IDs: brand={self.brand.id}, product={self.product.id}, campaign={self.campaign.id}")
+        if self.creative_id:
+            logger.info(f"✅ Verified IDs: brand={self.brand.id}, product={self.product.id}, campaign={self.campaign.id}, creative={self.creative_id}")
+        else:
+            logger.info(f"✅ Verified IDs: brand={self.brand.id}, product={self.product.id}, campaign={self.campaign.id}")
+
+    def _update_status(self, status: str, progress: int = 0, error_message: Optional[str] = None):
+        """Update creative status and progress.
+
+        Args:
+            status: Status string (e.g., "processing", "completed", "failed")
+            progress: Progress percentage (0-100)
+            error_message: Optional error message
+        """
+        update_creative_status(
+            self.db,
+            self.creative_id,
+            status=status,
+            progress=progress,
+            error_message=error_message
+        )
 
     async def run(self) -> Dict[str, Any]:
         """Execute the full generation pipeline.
@@ -391,11 +421,9 @@ class GenerationPipeline:
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup storage: {cleanup_error}")
 
-            # Mark campaign as failed
+            # Mark as failed (creative or campaign based on mode)
             error_msg = str(e)[:500]
-            update_campaign_status(
-                self.db,
-                self.campaign_id,
+            self._update_status(
                 status="failed",
                 error_message=error_msg,
             )
@@ -517,9 +545,7 @@ class GenerationPipeline:
     async def _plan_scenes(self, campaign: Any, product: Any, brand: Any, ad_campaign: AdCampaign, progress_start: int = 15) -> Dict[str, Any]:
         """Plan product scenes using LLM with shot grammar constraints."""
         try:
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
+            self._update_status(status="processing", progress=progress_start)
 
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
@@ -582,9 +608,38 @@ class GenerationPipeline:
                 brand_colors = list(set(brand_colors))
                 logger.info(f"Merged brand colors from guidelines: {brand_colors}")
             
-            # Build creative prompt (reference image removed in Phase 2 B2B SaaS)
-            # Campaign model doesn't have creative_prompt field - generate from campaign data
-            creative_prompt = f"Create a {campaign.seasonal_event} campaign video for {product_name}. Campaign: {campaign.name}"
+            # Build creative prompt from user's creative_vision input stored in scene_configs
+            # The frontend stores the user's creative prompt in scene_configs[].creative_vision
+            user_creative_vision = ""
+            if campaign.scene_configs and isinstance(campaign.scene_configs, list) and len(campaign.scene_configs) > 0:
+                # Extract creative_vision from the first scene (all scenes have the same creative_vision from UI)
+                first_scene = campaign.scene_configs[0]
+                if isinstance(first_scene, dict):
+                    user_creative_vision = first_scene.get('creative_vision', '')
+
+            # Build comprehensive creative prompt including:
+            # 1. User's creative vision (key moments and story)
+            # 2. Seasonal event context
+            # 3. Product and campaign info
+            if user_creative_vision:
+                creative_prompt = f"""CREATIVE VISION: {user_creative_vision}
+
+CAMPAIGN CONTEXT:
+- Seasonal Event: {campaign.seasonal_event}
+- Campaign Name: {campaign.name}
+- Product: {product_name}
+- Target Duration: {campaign.duration} seconds
+
+INSTRUCTIONS FOR SCENE PLANNING:
+1. Extract key moments/beats from the creative vision above
+2. Create scenes that bring each key moment to life, considering the {campaign.seasonal_event} theme
+3. Ensure the video tells a cohesive story that culminates in showcasing the product
+4. Match the mood and atmosphere described in the creative vision"""
+            else:
+                # Fallback to generic prompt if no creative_vision provided
+                creative_prompt = f"Create a compelling {campaign.seasonal_event} campaign video for {product_name}. Campaign: {campaign.name}. Target duration: {campaign.duration} seconds."
+
+            logger.info(f"📝 Creative prompt built from user input: {len(user_creative_vision)} chars of creative vision")
 
             # Add brand guidelines context to creative prompt
             if extracted_guidelines:
@@ -794,9 +849,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         generation_start = datetime.utcnow()
 
         try:
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
+            self._update_status(status="processing", progress=progress_start)
 
             from app.config import settings
 
@@ -891,9 +944,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     async def _generate_audio(self, campaign: Any, product: Any, ad_campaign: AdCampaign, progress_start: int = 75) -> str:
         """Generate luxury product background music using MusicGen."""
         try:
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
+            self._update_status(status="processing", progress=progress_start)
 
             from app.config import settings
             audio_engine = AudioEngine(
@@ -1014,9 +1065,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> str:
         """Render final TikTok vertical video (9:16 only)."""
         try:
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
+            self._update_status(status="processing", progress=progress_start)
 
             from app.config import settings
             renderer = Renderer(
@@ -1036,9 +1085,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 variation_index=variation_index,
             )
 
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=100
-            )
+            self._update_status(status="processing", progress=100)
 
             logger.info(f"✅ Rendered final TikTok vertical video: {final_video}")
             return final_video
@@ -1173,9 +1220,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
         """
         try:
-            update_campaign_status(
-                self.db, self.campaign_id, status="processing", progress=progress_start
-            )
+            self._update_status(status="processing", progress=progress_start)
             
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
@@ -1714,13 +1759,16 @@ BRAND GUIDELINES (extracted from guidelines document):
             if "local_video_path" in campaign_json:
                 del campaign_json["local_video_path"]
             
-            # Update campaign status to completed
-            update_campaign_status(
+            # Save campaign_json with variationPaths to database
+            update_campaign_json(
                 self.db,
                 self.campaign_id,
-                status="completed",
-                progress=100
+                ad_campaign_json=campaign_json
             )
+            logger.info(f"✅ Persisted campaign_json with variationPaths to database")
+
+            # Update creative status to completed
+            self._update_status(status="completed", progress=100)
 
             # Verify the update was successful
             updated_campaign = get_campaign_by_id(self.db, self.campaign_id)
@@ -1737,15 +1785,228 @@ BRAND GUIDELINES (extracted from guidelines document):
 
 def generate_video(campaign_id: str, video_provider: str = "replicate") -> Dict[str, Any]:
     """
-    RQ job function for video generation.
+    DEPRECATED: Use generate_video_for_creative() instead.
 
-    This is the entry point called by RQ worker.
-    Runs in a forked child process on macOS.
+    This legacy function was for campaign-level generation via RQ workers.
+    All generation jobs now use creative-level status tracking.
 
     Args:
         campaign_id: String UUID of campaign to generate
         video_provider: Video generation provider ("replicate" or "ecs")
-        
+
+    Returns:
+        Dict with error status
+    """
+    logger.error(
+        f"DEPRECATED: generate_video() called for campaign {campaign_id}. "
+        "Use generate_video_for_creative() with a creative_id instead."
+    )
+    return {
+        "status": "FAILED",
+        "campaign_id": campaign_id,
+        "error": "DEPRECATED: Use generate_video_for_creative() with creative_id instead",
+    }
+
+
+class CreativeGenerationPipeline:
+    """Pipeline orchestrator for creative-level video generation.
+
+    This class wraps GenerationPipeline but updates CREATIVE status
+    instead of CAMPAIGN status. This is the primary pipeline used for
+    creative-level generation jobs from the SQS queue.
+    """
+
+    def __init__(self, creative_id: UUID, video_provider: str = "replicate"):
+        """Initialize pipeline for a specific creative.
+
+        Args:
+            creative_id: UUID of the creative to generate
+            video_provider: Video generation provider ("replicate" or "ecs")
+        """
+        self.creative_id = creative_id
+        self.video_provider = video_provider
+        init_db()
+
+        if db_connection.SessionLocal is None:
+            raise RuntimeError(
+                "Database not initialized. "
+                "Check DATABASE_URL environment variable and database connectivity."
+            )
+
+        self.db = db_connection.SessionLocal()
+
+        # Load creative with its related campaign, product, and brand
+        self.creative = get_creative_by_id(self.db, creative_id)
+        if not self.creative:
+            raise ValueError(f"Creative {creative_id} not found")
+
+        logger.info(f"🔍 Loaded creative {self.creative.id}: campaign_id={self.creative.campaign_id}")
+
+        # Get campaign from creative's relationship (eagerly loaded by get_creative_by_id)
+        self.campaign = self.creative.campaign
+        if not self.campaign:
+            raise ValueError(f"Campaign for creative {creative_id} not found")
+
+        logger.info(f"🔍 Loaded campaign {self.campaign.id}: product_id={self.campaign.product_id}")
+
+        # Get product from campaign's relationship
+        self.product = self.campaign.product
+        if not self.product:
+            raise ValueError(f"Product {self.campaign.product_id} not found")
+
+        logger.info(f"🔍 Loaded product {self.product.id}: brand_id={self.product.brand_id}")
+
+        # Get brand from product's relationship
+        self.brand = self.product.brand
+        if not self.brand:
+            raise ValueError(f"Brand {self.product.brand_id} not found")
+
+        logger.info(f"🔍 Loaded brand {self.brand.id}: user_id={self.brand.user_id}")
+        logger.info(f"✅ Verified IDs: brand={self.brand.id}, product={self.product.id}, campaign={self.campaign.id}, creative={self.creative.id}")
+
+    def _update_creative_status(self, status: str, progress: int = 0, error_message: Optional[str] = None):
+        """Update creative status and progress in the database."""
+        update_creative_status(
+            self.db,
+            self.creative_id,
+            status=status,
+            progress=progress,
+            error_message=error_message
+        )
+
+    async def run(self) -> Dict[str, Any]:
+        """Execute the full generation pipeline for a creative.
+
+        This method wraps the campaign-level GenerationPipeline but updates
+        creative status throughout the process.
+
+        Returns:
+            Dict with pipeline results including final video URLs and timings
+
+        Raises:
+            Exception: If any critical step fails
+        """
+        pipeline_start = time.time()
+
+        try:
+            # Mark creative as processing
+            self._update_creative_status("processing", progress=5)
+
+            logger.info(f"Starting creative generation pipeline for creative {self.creative_id}")
+
+            # Create the underlying campaign pipeline with creative_id for status tracking
+            campaign_pipeline = GenerationPipeline(
+                self.campaign.id,
+                video_provider=self.video_provider,
+                creative_id=self.creative_id
+            )
+
+            # Run the campaign pipeline
+            # We'll intercept progress updates by polling status changes
+            result = await self._run_with_creative_status_updates(campaign_pipeline)
+
+            if result.get("status") == "COMPLETED":
+                # Mark creative as completed
+                self._update_creative_status("completed", progress=100)
+
+                # Store video URLs in creative's ad_creative_json
+                if "video_urls" in result or "variationPaths" in result:
+                    creative_json = self.creative.ad_creative_json or {}
+                    if "video_urls" in result:
+                        creative_json["video_urls"] = result["video_urls"]
+                    # Get variationPaths from campaign if available
+                    if self.campaign.campaign_json and "variationPaths" in self.campaign.campaign_json:
+                        creative_json["variationPaths"] = self.campaign.campaign_json["variationPaths"]
+                    update_creative_json(self.db, self.creative_id, creative_json)
+
+                logger.info(f"✅ Creative {self.creative_id} generation completed successfully")
+            else:
+                error_msg = result.get("error", "Unknown error")
+                self._update_creative_status("failed", error_message=error_msg)
+                logger.error(f"❌ Creative {self.creative_id} generation failed: {error_msg}")
+
+            return result
+
+        except Exception as e:
+            total_elapsed = time.time() - pipeline_start
+            error_msg = str(e)[:500]
+            logger.error(f"Creative pipeline failed after {total_elapsed:.1f}s: {e}", exc_info=True)
+
+            # Mark creative as failed
+            self._update_creative_status("failed", error_message=error_msg)
+
+            return {
+                "status": "FAILED",
+                "creative_id": str(self.creative_id),
+                "error": error_msg,
+                "timing_seconds": total_elapsed,
+            }
+
+    async def _run_with_creative_status_updates(self, campaign_pipeline: GenerationPipeline) -> Dict[str, Any]:
+        """Run the campaign pipeline while updating creative status.
+
+        This method runs the campaign pipeline's run() method but intercepts
+        progress updates by periodically checking and syncing creative status.
+
+        Args:
+            campaign_pipeline: The underlying GenerationPipeline instance
+
+        Returns:
+            Dict with pipeline results
+        """
+        # Define a progress sync task that runs in parallel
+        async def sync_progress():
+            """Sync campaign progress to creative every few seconds."""
+            last_progress = 0
+            while True:
+                try:
+                    # Get latest campaign status
+                    campaign = get_campaign_by_id(self.db, self.campaign.id)
+                    if campaign and campaign.progress != last_progress:
+                        last_progress = campaign.progress
+                        # Update creative with same progress
+                        self._update_creative_status("processing", progress=last_progress)
+                        logger.debug(f"Synced progress to creative: {last_progress}%")
+
+                    # Check if campaign is done
+                    if campaign and campaign.status in ["completed", "failed"]:
+                        break
+
+                    await asyncio.sleep(2)  # Sync every 2 seconds
+                except Exception as e:
+                    logger.warning(f"Progress sync error (continuing): {e}")
+                    await asyncio.sleep(5)
+
+        # Run pipeline and progress sync in parallel
+        pipeline_task = asyncio.create_task(campaign_pipeline.run())
+        sync_task = asyncio.create_task(sync_progress())
+
+        try:
+            # Wait for pipeline to complete
+            result = await pipeline_task
+        finally:
+            # Cancel sync task
+            sync_task.cancel()
+            try:
+                await sync_task
+            except asyncio.CancelledError:
+                pass
+
+        return result
+
+
+def generate_video_for_creative(creative_id: str, video_provider: str = "replicate") -> Dict[str, Any]:
+    """
+    SQS job function for creative-level video generation.
+
+    This is the primary entry point called by AWS Lambda when processing SQS messages.
+    It generates a video for a specific creative and updates the creative's status
+    throughout the process.
+
+    Args:
+        creative_id: String UUID of creative to generate
+        video_provider: Video generation provider ("replicate" or "ecs")
+
     Returns:
         Dict with generation results
     """
@@ -1758,12 +2019,12 @@ def generate_video(campaign_id: str, video_provider: str = "replicate") -> Dict[
         # This ensures we don't reuse connections from parent
         from app.database.connection import init_db
         init_db()
-        
-        logger.info(f"Starting generation pipeline for campaign {campaign_id}")
-        campaign_uuid = UUID(campaign_id)
-        pipeline = GenerationPipeline(campaign_uuid)
-        
-        # Handle event loop properly for RQ
+
+        logger.info(f"Starting creative generation pipeline for creative {creative_id}")
+        creative_uuid = UUID(creative_id)
+        pipeline = CreativeGenerationPipeline(creative_uuid, video_provider=video_provider)
+
+        # Handle event loop properly for Lambda/RQ
         try:
             loop = asyncio.get_event_loop()
             if loop.is_closed():
@@ -1772,17 +2033,27 @@ def generate_video(campaign_id: str, video_provider: str = "replicate") -> Dict[
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
+
         result = loop.run_until_complete(pipeline.run())
         return result
     except KeyboardInterrupt:
-        logger.warning(f"Generation interrupted for campaign {campaign_id}")
+        logger.warning(f"Generation interrupted for creative {creative_id}")
         raise
     except Exception as e:
-        logger.error(f"RQ job failed for campaign {campaign_id}: {e}", exc_info=True)
+        logger.error(f"Job failed for creative {creative_id}: {e}", exc_info=True)
+
+        # Try to update creative status to failed
+        try:
+            init_db()
+            if db_connection.SessionLocal:
+                db = db_connection.SessionLocal()
+                update_creative_status(db, UUID(creative_id), status="failed", error_message=str(e)[:500])
+        except Exception as status_error:
+            logger.warning(f"Could not update creative status: {status_error}")
+
         return {
             "status": "FAILED",
-            "campaign_id": campaign_id,
+            "creative_id": creative_id,
             "error": str(e),
         }
 

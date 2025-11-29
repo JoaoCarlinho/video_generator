@@ -61,7 +61,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     # Import here to avoid cold start issues
     try:
-        from app.jobs.generation_pipeline import generate_video
+        from app.jobs.generation_pipeline import generate_video_for_creative
         from app.database.connection import init_db
         logger.info("✅ Successfully imported dependencies")
     except ImportError as e:
@@ -98,37 +98,37 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 raise ValueError(f"Invalid JSON in message body: {e}")
 
             job_id = body.get('job_id')
-            campaign_id = body.get('campaign_id')
+            creative_id = body.get('creative_id')
             function = body.get('function', 'unknown')
 
             # Extract provider with backward-compatible default
             video_provider = body.get('video_provider', 'replicate')
 
             logger.info(f"Job ID: {job_id}")
-            logger.info(f"Campaign ID: {campaign_id}")
+            logger.info(f"Creative ID: {creative_id}")
             logger.info(f"Function: {function}")
-            logger.info(f"Job {campaign_id}: Using provider {video_provider}")
+            logger.info(f"Job {creative_id}: Using provider {video_provider}")
 
             # Validate message
-            if not campaign_id:
-                raise ValueError("Missing campaign_id in message body")
+            if not creative_id:
+                raise ValueError("Missing creative_id in message body")
 
             if function != 'generate_video':
                 raise ValueError(f"Unknown function: {function}")
 
             # Process the video generation job
-            logger.info(f"🎬 Starting video generation for campaign {campaign_id} with provider {video_provider}")
+            logger.info(f"🎬 Starting video generation for creative {creative_id} with provider {video_provider}")
 
             # Call the generation pipeline with provider parameter
-            generate_video(campaign_id, video_provider=video_provider)
+            generate_video_for_creative(creative_id, video_provider=video_provider)
 
-            logger.info(f"✅ Job {campaign_id} completed with provider: {video_provider}")
+            logger.info(f"✅ Job {creative_id} completed with provider: {video_provider}")
             success_count += 1
 
             results.append({
                 'messageId': record_id,
                 'jobId': job_id,
-                'campaignId': campaign_id,
+                'creativeId': creative_id,
                 'provider': video_provider,
                 'status': 'success'
             })
@@ -140,13 +140,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             # Include provider in error log if available
             provider_info = f" with provider {video_provider}" if 'video_provider' in locals() else ""
-            logger.error(f"❌ Job {campaign_id} failed{provider_info}: {error_msg}")
+            logger.error(f"❌ Job {creative_id} failed{provider_info}: {error_msg}")
             logger.error(f"Traceback:\n{error_trace}")
 
             results.append({
                 'messageId': record_id,
                 'jobId': job_id if 'job_id' in locals() else None,
-                'campaignId': campaign_id if 'campaign_id' in locals() else None,
+                'creativeId': creative_id if 'creative_id' in locals() else None,
                 'provider': video_provider if 'video_provider' in locals() else None,
                 'status': 'failed',
                 'error': error_msg
@@ -199,7 +199,7 @@ if __name__ == "__main__":
             'receiptHandle': 'test-receipt-handle',
             'body': json.dumps({
                 'job_id': 'test-job-456',
-                'campaign_id': '00000000-0000-0000-0000-000000000001',
+                'creative_id': '00000000-0000-0000-0000-000000000001',
                 'function': 'generate_video',
                 'video_provider': 'ecs',
                 'enqueued_at': 1234567890
@@ -218,7 +218,7 @@ if __name__ == "__main__":
             'receiptHandle': 'test-receipt-handle',
             'body': json.dumps({
                 'job_id': 'test-job-457',
-                'campaign_id': '00000000-0000-0000-0000-000000000002',
+                'creative_id': '00000000-0000-0000-0000-000000000002',
                 'function': 'generate_video',
                 'video_provider': 'replicate',
                 'enqueued_at': 1234567890
@@ -237,7 +237,7 @@ if __name__ == "__main__":
             'receiptHandle': 'test-receipt-handle',
             'body': json.dumps({
                 'job_id': 'test-job-458',
-                'campaign_id': '00000000-0000-0000-0000-000000000003',
+                'creative_id': '00000000-0000-0000-0000-000000000003',
                 'function': 'generate_video',
                 'enqueued_at': 1234567890
             }),
