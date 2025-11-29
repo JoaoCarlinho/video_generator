@@ -155,6 +155,77 @@ async def create_product_endpoint(
         )
 
 
+@router.post(
+    "/brands/{brand_id}/products/json",
+    response_model=ProductResponse,
+    status_code=201
+)
+async def create_product_json_endpoint(
+    brand_id: UUID,
+    request: CreateProductRequest,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    """
+    Create a new product with JSON body and pre-uploaded image URLs.
+
+    Use this endpoint when images have already been uploaded to S3 via presigned URLs.
+
+    **Path Parameters:**
+    - brand_id: UUID of the brand to associate product with
+
+    **Request Body (JSON):**
+    - product_type: Type of product (fragrance, car, watch, energy)
+    - name: Product name (required)
+    - product_gender: Gender (masculine/feminine/unisex, optional)
+    - product_attributes: Type-specific attributes (optional)
+    - icp_segment: Target audience description (optional)
+    - image_urls: Array of S3 image URLs (required, max 10)
+
+    **Response:** ProductResponse with created product data
+    """
+    try:
+        # Get authenticated user
+        user_id = get_current_user_id(authorization)
+
+        # Validate we have at least one image
+        if not request.image_urls or len(request.image_urls) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one product image URL is required"
+            )
+
+        # Create product (validates brand ownership)
+        product = create_product(
+            db=db,
+            user_id=user_id,
+            brand_id=brand_id,
+            product_type=request.product_type,
+            name=request.name,
+            product_gender=request.product_gender,
+            icp_segment=request.icp_segment,
+            image_urls=request.image_urls
+        )
+
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Brand {brand_id} not found or not owned by user"
+            )
+
+        logger.info(f"✅ Created product {product.id} (JSON) for brand {brand_id}")
+        return product
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to create product (JSON): {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create product: {str(e)}"
+        )
+
+
 @router.get("/brands/{brand_id}/products", response_model=List[ProductResponse])
 async def list_brand_products_endpoint(
     brand_id: UUID,

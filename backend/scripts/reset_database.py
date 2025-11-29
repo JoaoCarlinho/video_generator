@@ -25,13 +25,21 @@ def reset_database():
             logger.error("❌ Failed to initialize database engine")
             return
 
-        logger.info("🗑️  Dropping all tables...")
-        Base.metadata.drop_all(bind=db_conn.engine)
-        logger.info("✅ All tables dropped successfully")
+        # Filter out tables in 'auth' schema (managed by Supabase)
+        tables_to_drop = [table for table in Base.metadata.sorted_tables
+                        if table.schema != 'auth']
 
-        logger.info("🔨 Creating all tables from models...")
-        Base.metadata.create_all(bind=db_conn.engine)
-        logger.info("✅ All tables created successfully")
+        logger.info(f"🗑️  Dropping {len(tables_to_drop)} tables (excluding auth schema)...")
+        for table in reversed(tables_to_drop):  # Drop in reverse order for FK constraints
+            logger.info(f"   Dropping {table.name}...")
+            table.drop(bind=db_conn.engine, checkfirst=True)
+        logger.info("✅ Tables dropped successfully")
+
+        logger.info("🔨 Creating tables from models...")
+        tables_to_create = [table for table in Base.metadata.sorted_tables
+                          if table.schema != 'auth']
+        Base.metadata.create_all(bind=db_conn.engine, tables=tables_to_create)
+        logger.info(f"✅ {len(tables_to_create)} tables created successfully")
 
         logger.info("🎉 Database reset complete!")
 

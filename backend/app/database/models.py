@@ -76,6 +76,11 @@ class Campaign(Base):
     progress = Column(Integer, default=0)  # Progress percentage 0-100
     error_message = Column(Text, nullable=True)  # Error message if generation failed
 
+    # Manual editing fields
+    manual_editing_done = Column(Boolean, default=False, nullable=False)  # True after manual edit export
+    selected_variation_index = Column(Integer, default=0, nullable=True)  # Which variation is being edited
+    campaign_json = Column(JSONB, nullable=True)  # Stores scene configs, video URLs, edit history
+
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
