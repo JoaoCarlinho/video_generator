@@ -1,6 +1,33 @@
 @import "tailwindcss";
 
-/* 
+/* Custom theme colors for Tailwind v4 */
+@theme {
+  /* Charcoal - dark grays for dark theme surfaces */
+  --color-charcoal-600: #4a5568;
+  --color-charcoal-700: #374151;
+  --color-charcoal-800: #1f2937;
+  --color-charcoal-900: #111827;
+  --color-charcoal-950: #0a0a0f;
+
+  /* Olive - muted green-gray tones */
+  --color-olive-600: #4a5d4f;
+  --color-olive-700: #3a4d3f;
+  --color-olive-800: #2a3d2f;
+  --color-olive-900: #1a2d1f;
+  --color-olive-950: #0a1d0f;
+
+  /* Gold - luxury accent colors */
+  --color-gold: #F3D9A4;
+  --color-gold-dark: #D4B676;
+  --color-gold-foreground: #1a1a1a;
+  --color-gold-silky: #C9A86A;
+
+  /* Off-white and muted gray for text */
+  --color-off-white: #E5E7EB;
+  --color-muted-gray: #9CA3AF;
+}
+
+/*
   Note: Tailwind v4 with @import "tailwindcss" automatically includes:
   - @tailwind base (includes Preflight CSS reset)
   - @tailwind components 

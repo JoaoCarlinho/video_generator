@@ -306,7 +306,10 @@ export const CreateCampaign = () => {
                       <button
                         key={style.value}
                         type="button"
-                        onClick={() => setSelectedStyle(style.value)}
+                        onClick={() => {
+                          console.log('🎨 Style button clicked:', style.value)
+                          setSelectedStyle(style.value)
+                        }}
                         className={`p-4 rounded-lg border-2 transition-all duration-200 text-left ${
                           isSelected
                             ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
@@ -361,7 +364,10 @@ export const CreateCampaign = () => {
                       <button
                         key={num}
                         type="button"
-                        onClick={() => setNumVariations(num)}
+                        onClick={() => {
+                          console.log('🔘 Variation button clicked:', num)
+                          setNumVariations(num)
+                        }}
                         className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all duration-200 ${
                           isSelected
                             ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'

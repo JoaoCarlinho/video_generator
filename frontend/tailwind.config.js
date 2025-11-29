@@ -12,6 +12,30 @@ export default {
   safelist: [
     'bg-gradient-light',
     'bg-gradient-light-subtle',
+    // Charcoal classes for dark theme buttons
+    'border-charcoal-600',
+    'border-charcoal-700',
+    'border-charcoal-800',
+    'bg-charcoal-600',
+    'bg-charcoal-700',
+    'bg-charcoal-800',
+    'bg-charcoal-800/40',
+    'bg-charcoal-900',
+    'bg-charcoal-900/40',
+    'bg-charcoal-900/60',
+    'hover:border-charcoal-600',
+    'hover:bg-charcoal-800/60',
+    // Gold classes for selected states
+    'border-gold',
+    'bg-gold',
+    'bg-gold/10',
+    'bg-gold/90',
+    'text-gold',
+    'text-gold-foreground',
+    'hover:bg-gold/90',
+    // Olive classes
+    'bg-olive-800/30',
+    'border-olive-600',
   ],
   
   // Theme configuration
@@ -103,6 +127,22 @@ export default {
         silky: '#C9A86A', // Silky gold - darker, more muted
         silkyLight: '#E8D4A8', // Light silky gold
         silkyDark: '#B8965A', // Dark silky gold
+      },
+      // Charcoal - dark grays for dark theme surfaces
+      charcoal: {
+        600: '#4a5568',
+        700: '#374151',
+        800: '#1f2937',
+        900: '#111827',
+        950: '#0a0a0f',
+      },
+      // Olive - muted green-gray tones for accents
+      olive: {
+        600: '#4a5d4f',
+        700: '#3a4d3f',
+        800: '#2a3d2f',
+        900: '#1a2d1f',
+        950: '#0a1d0f',
       },
       // Neutral Accents
       neutral: {

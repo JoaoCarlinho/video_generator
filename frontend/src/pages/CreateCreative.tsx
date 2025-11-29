@@ -257,7 +257,10 @@ export const CreateCreative = () => {
                     <button
                       key={num}
                       type="button"
-                      onClick={() => setNumVariations(num as 1 | 2 | 3)}
+                      onClick={() => {
+                        console.log('🔘 Creative variation button clicked:', num)
+                        setNumVariations(num as 1 | 2 | 3)
+                      }}
                       className={`flex-1 py-3 rounded-lg border-2 font-semibold transition-all ${
                         numVariations === num
                           ? 'border-gold bg-gold/10 text-gold'
