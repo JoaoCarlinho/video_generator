@@ -5,7 +5,6 @@ import { Button } from '@/components/ui'
 import { useProgressPolling } from '@/hooks/useProgressPolling'
 import { useGeneration } from '@/hooks/useGeneration'
 import { ArrowLeft, Sparkles, CheckCircle2, Loader2, Video, Zap, Clock } from 'lucide-react'
-import { storeVideo, formatBytes, getStorageUsage } from '@/services/videoStorage'
 import { api } from '@/services/api'
 
 const stepLabels: Record<string, string> = {
@@ -22,22 +21,36 @@ const stepLabels: Record<string, string> = {
 }
 
 export const GenerationProgress = () => {
-  const { campaignId } = useParams<{ campaignId?: string }>()
+  const { campaignId, creativeId } = useParams<{ campaignId?: string; creativeId?: string }>()
   const navigate = useNavigate()
-  const { generateVideo, generateCampaign } = useGeneration()
+  const { generateVideo, generateCampaign, generateCreative } = useGeneration()
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
+  const [generationTriggered, setGenerationTriggered] = useState(false)
   const hasStartedGenerationRef = useRef(false)
-  
+
   // Use campaignId if available, otherwise fall back to empty string
   const id = campaignId || ''
-  const isCampaign = !!campaignId
-  const storageKey = `generation_started_${id}`
+  // Use creative-level generation when creativeId is present (preferred)
+  const useCreativeGeneration = !!creativeId
+  // Use creativeId in storage key to allow multiple creatives per campaign
+  const storageKey = creativeId
+    ? `generation_started_creative_${creativeId}`
+    : `generation_started_${id}`
 
   // Start generation job when component mounts
   useEffect(() => {
     const alreadyStarted = hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true'
-    
-    if (!id || alreadyStarted) {
+
+    // Need either creativeId (for creative generation) or campaignId (for legacy campaign generation)
+    const generationId = useCreativeGeneration ? creativeId : id
+
+    // If generation was already started (e.g., page refresh), enable polling immediately
+    if (alreadyStarted && generationId) {
+      setGenerationTriggered(true)
+      return
+    }
+
+    if (!generationId) {
       return
     }
 
@@ -47,19 +60,30 @@ export const GenerationProgress = () => {
       if (!isMounted || hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true') {
         return
       }
-      
+
       try {
         hasStartedGenerationRef.current = true
         sessionStorage.setItem(storageKey, 'true')
         setIsStartingGeneration(true)
-        console.log(`🚀 Starting generation for ${isCampaign ? 'campaign' : 'campaign'}:`, id)
-        
-        const result = isCampaign 
-          ? await generateCampaign(id)
-          : await generateVideo(id)
-        
-        if (isMounted) {
-          console.log('✅ Generation queued:', result)
+
+        // Use creative-level generation when creativeId is present (preferred approach)
+        // Creative status is independent - no need to reset anything
+        if (useCreativeGeneration && creativeId) {
+          console.log(`🚀 Starting generation for creative:`, creativeId)
+          const result = await generateCreative(creativeId)
+          if (isMounted) {
+            console.log('✅ Creative generation queued:', result)
+            // Mark generation as triggered so polling can start with fresh data
+            setGenerationTriggered(true)
+          }
+        } else {
+          // Legacy: campaign-level generation (deprecated)
+          console.log(`🚀 Starting generation for campaign:`, id)
+          const result = await generateCampaign(id)
+          if (isMounted) {
+            console.log('✅ Campaign generation queued:', result)
+            setGenerationTriggered(true)
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -73,109 +97,50 @@ export const GenerationProgress = () => {
         }
       }
     }
-    
+
     startGenerationIfNeeded()
-    
+
     return () => {
       isMounted = false
     }
-  }, [id, isCampaign, generateVideo, generateCampaign, storageKey])
+  }, [id, creativeId, useCreativeGeneration, generateVideo, generateCampaign, generateCreative, storageKey])
 
+  // Use creative-level progress polling - only start AFTER generation has been triggered
+  // This prevents showing stale data (e.g., 100% from a previous completed run)
   const { progress, isPolling, stopPolling } = useProgressPolling({
-    campaignId: id,
-    enabled: true,
+    creativeId: creativeId || '',
+    enabled: !!creativeId && generationTriggered,
     interval: 2000,
     onComplete: async () => {
       sessionStorage.removeItem(storageKey)
-      
+
       try {
-        if (isCampaign) {
-          // Campaign-based flow
-          console.log('📥 Campaign generation complete, navigating to results...')
-          
-          try {
-            const campaignResponse = await api.get(`/api/campaigns/${id}`)
-            const campaign = campaignResponse.data
-            const numVariations = campaign.num_variations || 1
-            
-            console.log(`🎬 Number of variations: ${numVariations}`)
-            
-            // For campaigns, videos are stored in S3, not local storage
-            // Navigate directly to results page
-            setTimeout(() => {
-              if (numVariations > 1) {
-                // Multiple variations - go to selection page
-                console.log(`🎯 Routing to selection page for ${numVariations} variations`)
-                navigate(`/campaigns/${id}/select`)
-              } else {
-                // Single variation - go directly to results
-                console.log(`🎯 Routing to results page (single variation)`)
-                navigate(`/campaigns/${id}/results`)
-              }
-            }, 1000)
-          } catch (err) {
-            console.error('⚠️ Failed to fetch campaign:', err)
-            // Fallback: navigate to results page
-            setTimeout(() => {
-              navigate(`/campaigns/${id}/results`)
-            }, 1000)
-          }
-        } else {
-          // Legacy campaign-based flow
-        console.log('📥 Downloading video to local storage...')
-        
-          const campaignResponse = await api.get(`/api/campaigns/${id}`)
+        console.log('📥 Generation complete, navigating to results...')
+
+        // Fetch campaign to get num_variations for routing decision
+        const campaignResponse = await api.get(`/api/campaigns/${id}`)
         const campaign = campaignResponse.data
-        const campaignAspectRatio = campaign.aspect_ratio || '9:16'
         const numVariations = campaign.num_variations || 1
-        
-        console.log(`📐 Campaign aspect ratio: ${campaignAspectRatio}`)
+
         console.log(`🎬 Number of variations: ${numVariations}`)
-        
-        // For single variation, download video to local storage
-        // For multiple variations, videos are already stored locally by the pipeline
-        if (numVariations === 1) {
-          try {
-              const response = await api.get(`/api/local-generation/campaigns/${id}/preview`, {
-              responseType: 'blob'
-            })
-            
-            if (response.data) {
-                await storeVideo(id, campaignAspectRatio as '9:16' | '1:1' | '16:9', response.data, false)
-              console.log(`✅ Downloaded video from local storage`)
-            }
-          } catch (err) {
-            console.error(`⚠️ Failed to download video:`, err)
-          }
-        } else {
-          console.log(`📹 Multiple variations generated - skipping single video download`)
-        }
-        
-          const usage = await getStorageUsage(id)
-        console.log(`📊 Total local storage used: ${formatBytes(usage)}`)
-        
-        // Route based on number of variations
+
+        // Navigate to appropriate page
         setTimeout(() => {
           if (numVariations > 1) {
             // Multiple variations - go to selection page
             console.log(`🎯 Routing to selection page for ${numVariations} variations`)
-              navigate(`/campaigns/${id}/select`)
+            navigate(`/campaigns/${id}/select`)
           } else {
             // Single variation - go directly to results
             console.log(`🎯 Routing to results page (single variation)`)
-              navigate(`/campaigns/${id}/results`)
+            navigate(`/campaigns/${id}/results`)
           }
         }, 1000)
-        }
       } catch (err) {
-        console.error('⚠️ Failed to download video to local storage:', err)
+        console.error('⚠️ Failed to fetch campaign:', err)
         // Fallback: navigate to results page
         setTimeout(() => {
-          if (isCampaign) {
-            navigate(`/campaigns/${id}/results`)
-          } else {
-            navigate(`/campaigns/${id}/results`)
-          }
+          navigate(`/campaigns/${id}/results`)
         }, 1000)
       }
     },

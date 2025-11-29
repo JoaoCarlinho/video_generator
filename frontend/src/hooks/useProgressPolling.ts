@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGeneration, type GenerationProgress } from './useGeneration'
 
 interface UseProgressPollingOptions {
-  campaignId?: string
+  campaignId?: string // Kept for backwards compatibility but not used
+  creativeId: string // Required: creative-level progress polling
   enabled?: boolean
   interval?: number
   onComplete?: () => void
@@ -10,16 +11,15 @@ interface UseProgressPollingOptions {
 }
 
 export const useProgressPolling = ({
-  campaignId,
+  creativeId,
   enabled = true,
   interval = 2000,
   onComplete,
   onError,
 }: UseProgressPollingOptions) => {
-  const { getProgress, getCampaignProgress } = useGeneration()
+  const { getCreativeProgress } = useGeneration()
   // Guard against undefined/null/string "undefined" - convert to empty string
-  const id = campaignId && campaignId !== 'undefined' ? campaignId : ''
-  const isCampaign = !!id
+  const cId = creativeId && creativeId !== 'undefined' ? creativeId : ''
   const [progress, setProgress] = useState<GenerationProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
@@ -39,7 +39,7 @@ export const useProgressPolling = ({
   }, [onComplete, onError])
 
   const poll = useCallback(async () => {
-    if (!enabled || !id) return
+    if (!enabled || !cId) return
 
     // Cancel any pending request
     if (abortControllerRef.current) {
@@ -51,9 +51,8 @@ export const useProgressPolling = ({
 
     try {
       setLoading(true)
-      const data = isCampaign
-        ? await getCampaignProgress(id, abortControllerRef.current.signal)
-        : await getProgress(id, abortControllerRef.current.signal)
+      // Use creative-level progress polling
+      const data = await getCreativeProgress(cId, abortControllerRef.current.signal)
       
       // Reset error counter on success
       consecutiveErrorsRef.current = 0
@@ -116,11 +115,11 @@ export const useProgressPolling = ({
       setLoading(false)
       abortControllerRef.current = null
     }
-  }, [id, enabled, isCampaign, getProgress, getCampaignProgress])
+  }, [cId, enabled, getCreativeProgress])
 
-  // Start polling on mount or when id changes
+  // Start polling on mount or when creativeId changes
   useEffect(() => {
-    if (!enabled || !id) {
+    if (!enabled || !cId) {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
         pollIntervalRef.current = null
@@ -154,7 +153,7 @@ export const useProgressPolling = ({
       }
       setIsPolling(false)
     }
-  }, [id, enabled, interval, poll]) // Added poll to dependencies
+  }, [cId, enabled, interval, poll])
 
   // Manual stop polling
   const stopPolling = useCallback(() => {

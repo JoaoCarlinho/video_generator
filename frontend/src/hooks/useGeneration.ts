@@ -153,22 +153,6 @@ export const useGeneration = () => {
     }
   }, [])
 
-  // Reset campaign
-  const resetCampaign = useCallback(async (campaignId: string) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      await apiClient.post(`/api/generation/campaigns/${campaignId}/reset/`)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to reset campaign'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   // Select variation (Phase 4: Multi-variation feature)
   const selectVariation = useCallback(async (campaignId: string, variationIndex: number) => {
     setLoading(true)
@@ -189,16 +173,83 @@ export const useGeneration = () => {
     }
   }, [])
 
+  // Trigger generation for a creative (preferred over campaign-level)
+  const generateCreative = useCallback(async (creativeId: string) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await apiClient.post(
+        `/api/generation/creatives/${creativeId}/generate`
+      )
+      return response.data
+    } catch (err: any) {
+      // 409 Conflict means generation already started - treat as success
+      if (err?.response?.status === 409) {
+        console.log('✅ Creative generation already in progress (409)')
+        return { message: 'Generation already in progress' }
+      }
+
+      const message = err instanceof Error ? err.message : 'Failed to generate creative'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Get generation progress for a creative
+  const getCreativeProgress = useCallback(async (creativeId: string, signal?: AbortSignal) => {
+    if (!creativeId || creativeId === 'undefined' || creativeId === 'null') {
+      const error = new Error('Invalid creative ID')
+      setError('Invalid creative ID')
+      throw error
+    }
+
+    try {
+      const response = await apiClient.get(
+        `/api/generation/creatives/${creativeId}/progress`,
+        { signal, timeout: 10000 }
+      )
+      return response.data as GenerationProgress
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || err?.message === 'canceled') {
+        throw { silent: true, message: 'canceled' }
+      }
+      const message = err instanceof Error ? err.message : 'Failed to fetch creative progress'
+      setError(message)
+      throw err
+    }
+  }, [])
+
+  // Cancel creative generation
+  const cancelCreativeGeneration = useCallback(async (creativeId: string) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      await apiClient.post(`/api/generation/creatives/${creativeId}/cancel`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to cancel creative generation'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return {
     loading,
     error,
     generateVideo,
     generateCampaign,
+    generateCreative,
     getProgress,
     getCampaignProgress,
+    getCreativeProgress,
     getJobStatus,
     cancelGeneration,
-    resetCampaign,
+    cancelCreativeGeneration,
     selectVariation,
   }
 }
