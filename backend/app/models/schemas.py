@@ -403,6 +403,8 @@ class CampaignResponse(BaseModel):
     duration: int
     scene_configs: List[Dict[str, Any]]
     status: str
+    progress: int = 0
+    campaign_json: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

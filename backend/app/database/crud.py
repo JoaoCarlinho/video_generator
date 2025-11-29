@@ -1,6 +1,6 @@
 """Database CRUD operations for campaigns, brands, products, and campaigns."""
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from app.database.models import Campaign, Brand, Product, Creative, AuthUser  # AuthUser needed for FK resolution
 from app.models.schemas import (
@@ -484,12 +484,12 @@ def update_campaign_json(
         if not campaign:
             return None
 
-        campaign.ad_campaign_json = ad_campaign_json
+        campaign.campaign_json = ad_campaign_json
 
         db.commit()
         db.refresh(campaign)
 
-        logger.info(f"✅ Updated campaign {campaign_id} configuration")
+        logger.info(f"✅ Updated campaign {campaign_id} campaign_json")
         return campaign
     except Exception as e:
         db.rollback()
@@ -1438,7 +1438,10 @@ def get_campaign_by_id(
         Campaign: Campaign object if found, None otherwise
     """
     try:
-        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        # Eagerly load product and its brand to avoid lazy loading issues
+        campaign = db.query(Campaign).options(
+            joinedload(Campaign.product).joinedload(Product.brand)
+        ).filter(Campaign.id == campaign_id).first()
 
         if campaign:
             logger.debug(f"✅ Found campaign {campaign_id}")
@@ -1651,16 +1654,32 @@ def create_creative(
 
 def get_creative_by_id(db: Session, creative_id: UUID) -> Optional[Creative]:
     """
-    Get a creative by ID.
-    
+    Get a creative by ID with eagerly loaded relationships.
+
+    Eagerly loads the campaign, product, and brand relationships
+    to avoid lazy loading issues in background jobs.
+
     Args:
         db: Database session
         creative_id: ID of the creative
-    
+
     Returns:
         Creative: Creative object if found, None otherwise
     """
-    return db.query(Creative).filter(Creative.id == creative_id).first()
+    try:
+        creative = db.query(Creative).options(
+            joinedload(Creative.campaign).joinedload(Campaign.product).joinedload(Product.brand)
+        ).filter(Creative.id == creative_id).first()
+
+        if creative:
+            logger.debug(f"✅ Found creative {creative_id}")
+        else:
+            logger.warning(f"⚠️ Creative {creative_id} not found")
+
+        return creative
+    except Exception as e:
+        logger.error(f"❌ Failed to get creative {creative_id}: {e}")
+        return None
 
 
 def get_creatives_for_campaign(
@@ -1746,6 +1765,93 @@ def update_creative(
         raise
 
 
+def update_creative_status(
+    db: Session,
+    creative_id: UUID,
+    status: str,
+    progress: int = 0,
+    error_message: Optional[str] = None
+) -> Optional[Creative]:
+    """
+    Update creative status and progress.
+
+    Args:
+        db: Database session
+        creative_id: ID of the creative
+        status: New status (e.g., "processing", "completed", "failed")
+        progress: Progress percentage (0-100)
+        error_message: Optional error message
+
+    Returns:
+        Creative: Updated creative object
+    """
+    if db is None:
+        logger.warning(f"⚠️ Database session is None - skipping status update for creative {creative_id}")
+        return None
+
+    try:
+        creative = db.query(Creative).filter(Creative.id == creative_id).first()
+
+        if not creative:
+            logger.warning(f"⚠️ Creative {creative_id} not found for status update")
+            return None
+
+        creative.status = status
+        creative.progress = max(0, min(100, progress))  # Clamp 0-100
+        if error_message:
+            creative.error_message = error_message
+
+        db.commit()
+        db.refresh(creative)
+
+        logger.info(f"✅ Updated creative {creative_id} status to {status} ({progress}%)")
+        return creative
+    except Exception as e:
+        try:
+            db.rollback()
+        except:
+            pass
+        logger.error(f"❌ Failed to update status for creative {creative_id}: {e}")
+        logger.warning(f"⚠️ Database error updating creative status - continuing with in-memory state")
+        return None
+
+
+def update_creative_json(
+    db: Session,
+    creative_id: UUID,
+    ad_creative_json: Dict[str, Any]
+) -> Optional[Creative]:
+    """
+    Update the ad_creative_json configuration for a creative.
+
+    Args:
+        db: Database session
+        creative_id: ID of the creative
+        ad_creative_json: New configuration JSON
+
+    Returns:
+        Creative: Updated creative object
+    """
+    try:
+        creative = db.query(Creative).filter(Creative.id == creative_id).first()
+
+        if not creative:
+            logger.warning(f"⚠️ Creative {creative_id} not found")
+            return None
+
+        creative.ad_creative_json = ad_creative_json
+
+        db.commit()
+        db.refresh(creative)
+
+        logger.info(f"✅ Updated creative {creative_id} ad_creative_json")
+        return creative
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to update json for creative {creative_id}: {e}")
+        raise
+
+
 def delete_creative(
     db: Session,
     campaign_id: UUID,
@@ -1754,13 +1860,13 @@ def delete_creative(
 ) -> bool:
     """
     Delete a creative.
-    
+
     Args:
         db: Database session
         campaign_id: ID of the parent campaign
         creative_id: ID of the creative to delete
         user_id: ID of the user (for ownership validation)
-    
+
     Returns:
         bool: True if deleted, False if not found or unauthorized
     """

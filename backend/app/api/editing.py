@@ -144,7 +144,7 @@ async def get_campaign_scenes(
     for i, scene in enumerate(scenes):
         # Construct S3 URL for scene video
         video_url = get_scene_s3_url(
-            brand_id=str(campaign.brand_id),
+            brand_id=str(campaign.product.brand_id),
             product_id=str(campaign.product_id),
             campaign_id=str(campaign_id),
             variation_index=variation_index,
@@ -303,7 +303,7 @@ async def stream_scene_video(
         # Construct S3 key for scene video
         # Format: brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{i}/draft/scene_{scene_index+1}_bg.mp4
         s3_key = (
-            f"brands/{str(campaign.brand_id)}/products/{str(campaign.product_id)}/campaigns/{str(campaign_id)}/"
+            f"brands/{str(campaign.product.brand_id)}/products/{str(campaign.product_id)}/campaigns/{str(campaign_id)}/"
             f"variation_{variation_index}/draft/scene_{scene_index+1}_bg.mp4"
         )
         
