@@ -19,7 +19,10 @@ export const productSchema = z.object({
     .trim(),
 
   product_gender: z
-    .enum(['masculine', 'feminine', 'unisex'])
+    .union([
+      z.enum(['masculine', 'feminine', 'unisex']),
+      z.literal('')
+    ])
     .optional(),
 
   product_attributes: z

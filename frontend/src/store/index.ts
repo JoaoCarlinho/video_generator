@@ -8,6 +8,7 @@ import { api } from './api'
 import authReducer from './slices/authSlice'
 import brandsReducer from './slices/brandsSlice'
 import productsReducer from './slices/productsSlice'
+import editorReducer from './slices/editorSlice'
 
 export const store = configureStore({
   reducer: {
@@ -18,6 +19,7 @@ export const store = configureStore({
     auth: authReducer,
     brands: brandsReducer,
     products: productsReducer,
+    editor: editorReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(api.middleware),

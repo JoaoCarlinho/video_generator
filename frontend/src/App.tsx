@@ -11,6 +11,7 @@ import { CampaignDashboard } from './pages/CampaignDashboard'
 import { CreateCampaign } from './pages/CreateCampaign'
 import { GenerationProgress } from './pages/GenerationProgress'
 import { VideoResults } from './pages/VideoResults'
+import { ManualEditing } from './pages/ManualEditing'
 import { BrandOnboarding } from './pages/BrandOnboarding'
 import { ProductManagement } from './pages/ProductManagement'
 import { CampaignCreation } from './pages/CampaignCreation'
@@ -123,7 +124,15 @@ function App() {
               </ProtectedRoute>
             }
           />
-          
+          <Route
+            path="/campaigns/:campaignId/edit"
+            element={
+              <ProtectedRoute>
+                <ManualEditing />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Legacy Routes (for backward compatibility during migration) */}
           <Route
             path="/create"

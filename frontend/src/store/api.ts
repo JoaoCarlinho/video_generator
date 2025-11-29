@@ -77,7 +77,7 @@ export const api = createApi({
       { brandId: string; data: Omit<Product, 'id' | 'brand_id' | 'created_at' | 'updated_at'> }
     >({
       query: ({ brandId, data }) => ({
-        url: `/api/brands/${brandId}/products`,
+        url: `/api/brands/${brandId}/products/json`,
         method: 'POST',
         body: data,
       }),

@@ -132,7 +132,7 @@ function FailoverNotificationBanner({ metadata, campaignId }: FailoverNotificati
   )
 }
 
-import { Download, Sparkles, CheckCircle2, Play, Loader2, Shuffle } from 'lucide-react'
+import { Download, Sparkles, CheckCircle2, Play, Loader2, Shuffle, Edit } from 'lucide-react'
 import {
   getVideoURL,
   getVideo,
@@ -983,7 +983,20 @@ export const VideoResults = () => {
                         </>
                       )}
                     </Button>
-                    
+
+                    {/* Manual Edit Button - Only show for campaigns that aren't finalized */}
+                    {isCampaign && !campaign?.manual_editing_done && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/campaigns/${id}/edit`)}
+                        className="border-gold/30 text-gold hover:bg-gold/10 hover:border-gold gap-2"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span className="hidden sm:inline">Manual Edit</span>
+                      </Button>
+                    )}
+
                     <Button
                       variant="ghost"
                       size="sm"

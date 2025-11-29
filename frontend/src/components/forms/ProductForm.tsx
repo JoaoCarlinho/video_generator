@@ -58,8 +58,24 @@ export const ProductForm = ({
     if (icpSegment) setIcpLength(icpSegment.length)
   })
 
+  // Debug: Log form errors on submit attempt
+  const onFormSubmit = handleSubmit(
+    (data) => {
+      console.log('✅ Form validation passed, submitting:', data)
+      onSubmit(data)
+    },
+    (errors) => {
+      console.error('❌ Form validation failed:', errors)
+      // Alert user about validation errors
+      const errorMessages = Object.entries(errors)
+        .map(([field, error]) => `${field}: ${error?.message}`)
+        .join('\n')
+      alert(`Form validation failed:\n${errorMessages}`)
+    }
+  )
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={onFormSubmit} className="space-y-6">
       {/* Product Type (Required) */}
       <div className="w-full">
         <label className="block text-sm font-medium text-gray-900 mb-2">
@@ -97,36 +113,34 @@ export const ProductForm = ({
         disabled={isSubmitting}
       />
 
-      {/* Product Gender (Conditional - only for fragrances) */}
-      {productType === 'fragrance' && (
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Fragrance Gender
-          </label>
-          <select
-            {...register('product_gender')}
-            disabled={isSubmitting}
-            className={cn(
-              'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 transition-all duration-150',
-              'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
-              'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50',
-              'hover:border-gray-300',
-              errors.product_gender && 'border-error-500 focus:border-error-500 focus:ring-error-500/20'
-            )}
-          >
-            <option value="">Select gender (optional)</option>
-            <option value="masculine">Masculine</option>
-            <option value="feminine">Feminine</option>
-            <option value="unisex">Unisex</option>
-          </select>
-          {errors.product_gender && (
-            <p className="text-error-500 text-xs mt-1">{errors.product_gender.message}</p>
+      {/* Product Gender (Available for all product types) */}
+      <div className="w-full">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Product Gender / Target Demographic
+        </label>
+        <select
+          {...register('product_gender')}
+          disabled={isSubmitting}
+          className={cn(
+            'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 transition-all duration-150',
+            'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
+            'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50',
+            'hover:border-gray-300',
+            errors.product_gender && 'border-error-500 focus:border-error-500 focus:ring-error-500/20'
           )}
-          <p className="text-gray-500 text-xs mt-1">
-            Optional: Helps tailor the video style and visual language
-          </p>
-        </div>
-      )}
+        >
+          <option value="">Select target demographic (optional)</option>
+          <option value="masculine">Masculine</option>
+          <option value="feminine">Feminine</option>
+          <option value="unisex">Unisex</option>
+        </select>
+        {errors.product_gender && (
+          <p className="text-error-500 text-xs mt-1">{errors.product_gender.message}</p>
+        )}
+        <p className="text-gray-500 text-xs mt-1">
+          Optional: Helps tailor the video style and visual language
+        </p>
+      </div>
 
       {/* ICP Segment (Required) */}
       <div className="w-full">

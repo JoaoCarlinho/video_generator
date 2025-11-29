@@ -127,23 +127,23 @@ export function CampaignCreation() {
   const uploadFileToS3 = async (file: File): Promise<string> => {
     try {
       // Request presigned URL from backend
-      const presignedResponse = await api.post('/api/upload/presigned-url', {
+      const presignedResponse = await api.post('/api/storage/presigned-url', {
         filename: file.name,
         content_type: file.type,
+        asset_type: 'product',  // Reference images for campaigns
       })
 
-      const { presigned_url, s3_key } = presignedResponse.data
+      const { upload_url, file_url } = presignedResponse.data
 
       // Upload file directly to S3
-      await axios.put(presigned_url, file, {
+      await axios.put(upload_url, file, {
         headers: {
           'Content-Type': file.type,
         },
       })
 
-      // Return S3 URL (construct from key)
-      // TODO: Get the actual S3 URL pattern from environment
-      return s3_key
+      // Return the public file URL
+      return file_url
     } catch (error) {
       console.error('S3 upload error:', error)
       throw new Error(`Failed to upload ${file.name}`)
