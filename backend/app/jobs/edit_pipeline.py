@@ -128,7 +128,7 @@ class SceneEditPipeline:
             
             # Upload to S3 (replaces old scene video)
             s3_result = await upload_draft_video(
-                brand_id=str(self.campaign.brand_id),
+                brand_id=str(self.campaign.product.brand_id),
                 product_id=str(self.campaign.product_id),
                 campaign_id=str(self.campaign_id),
                 variation_index=self.campaign.selected_variation_index or 0,
@@ -149,7 +149,7 @@ class SceneEditPipeline:
                 else:
                     # Use existing scene from S3
                     scene_s3_url = get_scene_s3_url(
-                        brand_id=str(self.campaign.brand_id),
+                        brand_id=str(self.campaign.product.brand_id),
                         product_id=str(self.campaign.product_id),
                         campaign_id=str(self.campaign_id),
                         variation_index=self.campaign.selected_variation_index or 0,
@@ -187,7 +187,7 @@ class SceneEditPipeline:
                 # Construct S3 URL for audio file
                 from app.utils.s3_utils import get_audio_s3_url
                 audio_url = get_audio_s3_url(
-                    brand_id=str(self.campaign.brand_id),
+                    brand_id=str(self.campaign.product.brand_id),
                     product_id=str(self.campaign.product_id),
                     campaign_id=str(self.campaign_id),
                     variation_index=self.campaign.selected_variation_index or 0
@@ -206,7 +206,7 @@ class SceneEditPipeline:
             
             # STEP 7: Upload new final video (replaces old)
             final_result = await upload_final_video(
-                brand_id=str(self.campaign.brand_id),
+                brand_id=str(self.campaign.product.brand_id),
                 product_id=str(self.campaign.product_id),
                 campaign_id=str(self.campaign_id),
                 variation_index=self.campaign.selected_variation_index or 0,

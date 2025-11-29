@@ -661,9 +661,9 @@ async def upload_draft_video(
         if variation_index not in [0, 1, 2]:
             raise ValueError("variation_index must be 0, 1, or 2")
         
-        # Validate scene_index
-        if scene_index < 1 or scene_index > 4:
-            raise ValueError("scene_index must be between 1 and 4")
+        # Validate scene_index (supports up to 10 scenes for longer videos)
+        if scene_index < 1 or scene_index > 10:
+            raise ValueError("scene_index must be between 1 and 10")
         
         s3_key = f"brands/{brand_id}/products/{product_id}/campaigns/{campaign_id}/variation_{variation_index}/draft/scene_{scene_index}_bg.mp4"
         
