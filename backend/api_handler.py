@@ -72,9 +72,9 @@ if __name__ == "__main__":
 
     # Test Lambda context (minimal mock)
     class Context:
-        function_name = "adgen-api"
+        function_name = "js-vid-gen-lambda"
         memory_limit_in_mb = 1024
-        invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:adgen-api"
+        invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:js-vid-gen-lambda"
         aws_request_id = "test-request-id"
 
     # Call handler

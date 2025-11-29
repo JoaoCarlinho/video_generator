@@ -31,7 +31,7 @@ RUN pip install --upgrade pip && \
 COPY app/ ./app/
 
 # Expose port for App Runner
-EXPOSE 8080
+EXPOSE 8000
 
 # Run uvicorn server with debug logging
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "900", "--log-level", "debug"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "900", "--log-level", "debug"]
