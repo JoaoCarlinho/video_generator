@@ -289,7 +289,7 @@ class ScenePlanner:
             scene_data = scene.model_dump()
             scene_data['style'] = chosen_style  # Force same style on all scenes
             
-            # CRITICAL: Preserve perfume grammar fields from original scene_dict
+            # CRITICAL: Preserve product grammar fields from original scene_dict
             original_dict = scenes_json[i]
             if 'shot_type' in original_dict:
                 scene_data['shot_type'] = original_dict['shot_type']
@@ -341,7 +341,7 @@ class ScenePlanner:
         has_logo: bool,
         chosen_style: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Generate scene specifications using GPT-4o-mini (legacy method - not used for perfume)."""
+        """Generate scene specifications using GPT-4o-mini (legacy method - not used, kept for reference)."""
 
         # Build context about available assets
         asset_context = []
@@ -815,8 +815,8 @@ Scene Count: {scene_count} scenes
 {f"Gender: {product_gender.upper()}" if product_gender else ""}
 
 MANDATORY STRUCTURE:
-1. FIRST scene: {flow_rules.get('first_scene_must_be', ['macro_bottle', 'atmospheric'])} shot type
-2. LAST scene: {flow_rules.get('last_scene_must_be', ['brand_moment'])} shot type
+1. FIRST scene: {flow_rules.get('first_scene_must_be', product_config.default_first_scenes)} shot type
+2. LAST scene: {flow_rules.get('last_scene_must_be', [product_config.default_last_scene])} shot type
 3. Product appears in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
 4. Final scene includes product name "{product_name}" + brand "{brand_name}"
 5. Total duration: ±{int(target_duration * 0.15)}s from {target_duration}s
@@ -963,7 +963,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 else:
                     # 3 retries failed - use predefined template
                     logger.error("❌ Grammar violations after 3 retries. Using fallback template.")
-                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
+                    fallback_scenes = self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors, product_type)
                     logger.info("📝 Fallback template scene scripts:")
                     for i, scene in enumerate(fallback_scenes):
                         logger.info(f"   Scene {i+1} script: {scene.get('background_prompt', 'MISSING')}")
@@ -991,7 +991,7 @@ Follow user's vision FIRST, grammar rules SECOND."""
                     )
                 else:
                     logger.error("Fallback to template due to scene count mismatch")
-                    return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors)
+                    return self._get_fallback_template(scene_count, target_duration, chosen_style, product_name, brand_name, brand_description, brand_colors, product_type)
             
             logger.info(f"✅ Generated {len(scenes)} {product_type} scenes (grammar validated)")
             return scenes
@@ -1155,138 +1155,108 @@ Follow user's vision FIRST, grammar rules SECOND."""
 
         color = brand_colors[0] if brand_colors else "#FFFFFF"
 
+        # Normalize product type and handle aliases
+        normalized_type = product_type.lower().strip() if product_type else "fragrance"
+        product_type_aliases = {
+            "perfume": "fragrance",
+            "timepiece": "watch",
+            "automobile": "car",
+            "vehicle": "car",
+            "electricity": "energy",
+            "utilities": "energy",
+        }
+        if normalized_type in product_type_aliases:
+            normalized_type = product_type_aliases[normalized_type]
+
         # Get product-specific templates, fallback to fragrance if unknown
-        templates = self.FALLBACK_TEMPLATES.get(product_type, self.FALLBACK_TEMPLATES["fragrance"])
+        if normalized_type not in self.FALLBACK_TEMPLATES:
+            logger.warning(
+                f"⚠️ No fallback template for product_type '{product_type}' - "
+                f"using fragrance template. Supported: {list(self.FALLBACK_TEMPLATES.keys())}"
+            )
+        templates = self.FALLBACK_TEMPLATES.get(normalized_type, self.FALLBACK_TEMPLATES["fragrance"])
 
-        # Template for 3 scenes (15-30s)
-        if scene_count <= 3:
-            return [
-                {
-                    "scene_id": 0,
-                    "shot_type": templates["hook"]["shot_type"],
-                    "shot_variation": templates["hook"]["shot_variation"],
-                    "role": "hook",
-                    "duration": max(3, min(8, target_duration // 3)),
-                    "background_prompt": templates["hook"]["prompt"].format(style=style),
-                    "use_product": True,
-                    "product_position": "center",
-                    "product_scale": 0.6,
-                    "camera_movement": "slow_zoom_in",
-                    "transition_to_next": "fade",
-                    "overlay": {
-                        "text": product_name,
-                        "position": "bottom",
-                        "duration": 2.0,
-                        "font_size": 48,
-                        "color": color,
-                        "animation": "fade_in"
-                    }
-                },
-                {
-                    "scene_id": 1,
-                    "shot_type": templates["showcase"]["shot_type"],
-                    "shot_variation": templates["showcase"]["shot_variation"],
-                    "role": "showcase",
-                    "duration": max(3, min(8, target_duration // 3)),
-                    "background_prompt": templates["showcase"]["prompt"].format(style=style),
-                    "use_product": False,
-                    "camera_movement": "slow_zoom_in",
-                    "transition_to_next": "fade",
-                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
-                },
-                {
-                    "scene_id": 2,
-                    "shot_type": templates["cta"]["shot_type"],
-                    "shot_variation": templates["cta"]["shot_variation"],
-                    "role": "cta",
-                    "duration": max(3, min(8, target_duration // 3 + 2)),
-                    "background_prompt": templates["cta"]["prompt"].format(style=style),
-                    "use_product": True,
-                    "product_position": "center",
-                    "product_scale": 0.5,
-                    "camera_movement": "slow_zoom_out",
-                    "transition_to_next": "fade",
-                    "overlay": {
-                        "text": f"{product_name}\n{brand_name}",
-                        "position": "bottom",
-                        "duration": 3.0,
-                        "font_size": 48,
-                        "color": color,
-                        "animation": "fade_in"
-                    }
-                }
-            ]
+        # Calculate average scene duration based on target
+        avg_duration = max(5, min(8, target_duration // scene_count))
 
-        # Template for 4-5 scenes (30-60s)
-        else:
-            return [
-                {
-                    "scene_id": 0,
-                    "shot_type": templates["hook"]["shot_type"],
-                    "shot_variation": templates["hook"]["shot_variation"],
-                    "role": "hook",
-                    "duration": 5,
-                    "background_prompt": templates["hook"]["prompt"].format(style=style),
-                    "use_product": True,
-                    "product_position": "center",
-                    "product_scale": 0.5,
-                    "camera_movement": "static",
-                    "transition_to_next": "fade",
-                    "overlay": {
-                        "text": product_name,
-                        "position": "bottom",
-                        "duration": 2.0,
-                        "font_size": 48,
-                        "color": color,
-                        "animation": "fade_in"
-                    }
-                },
-                {
-                    "scene_id": 1,
-                    "shot_type": templates["build"]["shot_type"],
-                    "shot_variation": templates["build"]["shot_variation"],
-                    "role": "build",
-                    "duration": 6,
-                    "background_prompt": templates["build"]["prompt"].format(style=style),
-                    "use_product": False,
-                    "camera_movement": "slow_pan_right",
-                    "transition_to_next": "fade",
-                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
-                },
-                {
-                    "scene_id": 2,
-                    "shot_type": templates["atmosphere"]["shot_type"],
-                    "shot_variation": templates["atmosphere"]["shot_variation"],
-                    "role": "showcase",
-                    "duration": 6,
-                    "background_prompt": templates["atmosphere"]["prompt"].format(style=style),
-                    "use_product": False,
-                    "camera_movement": "slow_zoom_in",
-                    "transition_to_next": "fade",
-                    "overlay": {"text": "", "position": "bottom", "duration": 0, "font_size": 48, "color": color, "animation": "fade_in"}
-                },
-                {
-                    "scene_id": 3,
-                    "shot_type": templates["cta"]["shot_type"],
-                    "shot_variation": templates["cta"]["shot_variation"],
-                    "role": "cta",
-                    "duration": 7,
-                    "background_prompt": templates["cta"]["prompt"].format(style=style),
-                    "use_product": True,
-                    "product_position": "center",
-                    "product_scale": 0.5,
-                    "camera_movement": "slow_zoom_out",
-                    "transition_to_next": "fade",
-                    "overlay": {
-                        "text": f"{product_name}\n{brand_name}",
-                        "position": "bottom",
-                        "duration": 3.0,
-                        "font_size": 48,
-                        "color": color,
-                        "animation": "fade_in"
-                    }
-                }
-            ]
+        # Empty overlay template for non-text scenes
+        empty_overlay = {
+            "text": "", "position": "bottom", "duration": 0,
+            "font_size": 48, "color": color, "animation": "fade_in"
+        }
+
+        # Build scenes dynamically based on scene_count
+        scenes = []
+
+        # Scene 0: Hook (always first)
+        scenes.append({
+            "scene_id": 0,
+            "shot_type": templates["hook"]["shot_type"],
+            "shot_variation": templates["hook"]["shot_variation"],
+            "role": "hook",
+            "duration": avg_duration,
+            "background_prompt": templates["hook"]["prompt"].format(style=style),
+            "use_product": True,
+            "product_position": "center",
+            "product_scale": 0.6,
+            "camera_movement": "slow_zoom_in",
+            "transition_to_next": "fade",
+            "overlay": {
+                "text": product_name,
+                "position": "bottom",
+                "duration": 2.0,
+                "font_size": 48,
+                "color": color,
+                "animation": "fade_in"
+            }
+        })
+
+        # Middle scenes: alternate between showcase, build, atmosphere
+        middle_scene_types = ["showcase", "build", "atmosphere"]
+        middle_count = scene_count - 2  # Exclude hook and cta
+
+        for i in range(middle_count):
+            scene_type = middle_scene_types[i % len(middle_scene_types)]
+            template = templates.get(scene_type, templates["showcase"])
+            scenes.append({
+                "scene_id": i + 1,
+                "shot_type": template["shot_type"],
+                "shot_variation": template["shot_variation"],
+                "role": scene_type if scene_type != "atmosphere" else "showcase",
+                "duration": avg_duration,
+                "background_prompt": template["prompt"].format(style=style),
+                "use_product": i == 0,  # Show product in first middle scene
+                "product_position": "center" if i == 0 else None,
+                "product_scale": 0.5 if i == 0 else None,
+                "camera_movement": ["slow_zoom_in", "slow_pan_right", "static"][i % 3],
+                "transition_to_next": "fade",
+                "overlay": empty_overlay
+            })
+
+        # Final scene: CTA (always last)
+        scenes.append({
+            "scene_id": scene_count - 1,
+            "shot_type": templates["cta"]["shot_type"],
+            "shot_variation": templates["cta"]["shot_variation"],
+            "role": "cta",
+            "duration": avg_duration,
+            "background_prompt": templates["cta"]["prompt"].format(style=style),
+            "use_product": True,
+            "product_position": "center",
+            "product_scale": 0.5,
+            "camera_movement": "slow_zoom_out",
+            "transition_to_next": "fade",
+            "overlay": {
+                "text": f"{product_name}\n{brand_name}",
+                "position": "bottom",
+                "duration": 3.0,
+                "font_size": 48,
+                "color": color,
+                "animation": "fade_in"
+            }
+        })
+
+        return scenes
 
     async def _llm_choose_style(
         self,

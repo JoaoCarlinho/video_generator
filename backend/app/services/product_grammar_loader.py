@@ -88,21 +88,26 @@ class ProductGrammarLoader:
 
     def get_scene_count_for_duration(self, duration: int) -> int:
         """Determine optimal scene count based on duration.
-        
+
+        With max 8 seconds per scene (enforced by validator), we need:
+        - 15-30s: 4 scenes (avg 5-7.5s each)
+        - 31-45s: 6 scenes (avg 5.5-7.5s each)
+        - 46-60s: 8 scenes (avg 5.5-7.5s each)
+
         Args:
             duration: Video duration in seconds (15-60)
-            
+
         Returns:
-            Recommended number of scenes (3-5)
+            Recommended number of scenes (4-8)
         """
         pacing = self.grammar.get("pacing_guidelines", {})
 
         if duration <= 30:
-            return pacing.get("15_30_seconds", {}).get("scene_count", 3)
+            return pacing.get("15_30_seconds", {}).get("scene_count", 4)
         elif duration <= 45:
-            return pacing.get("31_45_seconds", {}).get("scene_count", 4)
+            return pacing.get("31_45_seconds", {}).get("scene_count", 6)
         else:
-            return pacing.get("46_60_seconds", {}).get("scene_count", 5)
+            return pacing.get("46_60_seconds", {}).get("scene_count", 8)
 
     def get_avg_scene_duration_for_count(self, scene_count: int) -> Tuple[float, float]:
         """Get recommended average scene duration based on scene count.

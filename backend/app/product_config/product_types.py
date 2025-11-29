@@ -29,6 +29,10 @@ class ProductTypeConfig(BaseModel):
     default_lighting: str = "dramatic"
     key_visual_elements: List[str] = []
 
+    # Default scene structure (fallback if grammar file doesn't specify)
+    default_first_scenes: List[str] = ["hook"]  # Allowed first scene shot types
+    default_last_scene: str = "brand_moment"  # Required last scene shot type
+
 
 # Registry of supported product types
 PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
@@ -50,6 +54,8 @@ PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
             "Mist and spray effects",
             "Elegant product reveals"
         ],
+        default_first_scenes=["macro_bottle", "atmospheric"],
+        default_last_scene="brand_moment",
         gender_prompts={
             "masculine": """This is a MASCULINE fragrance. Apply these visual characteristics:
 - Deep, bold tones (navy, charcoal, forest green, burgundy)
@@ -94,6 +100,8 @@ PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
             "Environmental context (roads, cityscapes, nature)",
             "Speed and performance indicators"
         ],
+        default_first_scenes=["hero_exterior", "detail_shots"],
+        default_last_scene="brand_finale",
         gender_prompts=None
     ),
 
@@ -116,6 +124,8 @@ PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
             "On-wrist lifestyle moments",
             "Heritage and craftsmanship storytelling"
         ],
+        default_first_scenes=["macro_face_detail", "wrist_lifestyle", "family_farewell"],
+        default_last_scene="finale_branding",
         gender_prompts=None
     ),
 
@@ -138,8 +148,21 @@ PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
             "Innovation and future-focused imagery",
             "Community and reliability themes"
         ],
+        default_first_scenes=["impact_opening", "technology_detail"],
+        default_last_scene="brand_promise",
         gender_prompts=None
     ),
+}
+
+
+# Aliases for product types (maps alternative names to canonical IDs)
+PRODUCT_TYPE_ALIASES: Dict[str, str] = {
+    "perfume": "fragrance",
+    "timepiece": "watch",
+    "automobile": "car",
+    "vehicle": "car",
+    "electricity": "energy",
+    "utilities": "energy",
 }
 
 
@@ -148,12 +171,30 @@ def get_product_type_config(product_type: str) -> ProductTypeConfig:
     Get configuration for a product type.
 
     Args:
-        product_type: Product type ID (e.g., 'fragrance', 'car', 'watch', 'energy')
+        product_type: Product type ID or alias (e.g., 'fragrance', 'perfume', 'car', 'watch', 'timepiece', 'energy')
 
     Returns:
         ProductTypeConfig for the type, defaults to fragrance if not found
     """
-    return PRODUCT_TYPES.get(product_type.lower(), PRODUCT_TYPES["fragrance"])
+    import logging
+    logger = logging.getLogger(__name__)
+
+    normalized_type = product_type.lower().strip() if product_type else "fragrance"
+
+    # Check for aliases first
+    if normalized_type in PRODUCT_TYPE_ALIASES:
+        canonical_type = PRODUCT_TYPE_ALIASES[normalized_type]
+        logger.debug(f"Mapped product_type alias '{normalized_type}' to '{canonical_type}'")
+        normalized_type = canonical_type
+
+    if normalized_type not in PRODUCT_TYPES:
+        logger.warning(
+            f"⚠️ Unknown product_type '{product_type}' - defaulting to 'fragrance'. "
+            f"Supported types: {list(PRODUCT_TYPES.keys())} (aliases: {list(PRODUCT_TYPE_ALIASES.keys())})"
+        )
+        return PRODUCT_TYPES["fragrance"]
+
+    return PRODUCT_TYPES[normalized_type]
 
 
 def get_all_product_types() -> List[ProductTypeConfig]:
