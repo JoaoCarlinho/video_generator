@@ -176,8 +176,5 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
 
-    # Relationships
-    brands = relationship("Brand", backref="user", foreign_keys="Brand.user_id")
-
     def __repr__(self):
         return f"<User {self.id} - {self.email}>"
