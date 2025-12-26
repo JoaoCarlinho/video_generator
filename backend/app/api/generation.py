@@ -845,20 +845,25 @@ async def get_creative_progress(
         # Verify ownership
         if creative.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        
-        # Map status to readable step
-        step_map = {
-            "pending": "Pending",
-            "processing": "Processing",
-            "completed": "Completed",
-            "failed": "Failed"
-        }
-        
+
+        # Use current_step from DB if available, otherwise fall back to status-based mapping
+        if creative.current_step:
+            current_step = creative.current_step
+        else:
+            # Fallback for older records without current_step
+            step_map = {
+                "pending": "Pending",
+                "processing": "Processing",
+                "completed": "Completed",
+                "failed": "Failed"
+            }
+            current_step = step_map.get(creative.status, creative.status)
+
         return {
             "creative_id": creative.id,
             "status": creative.status,
             "progress": creative.progress,
-            "current_step": step_map.get(creative.status, creative.status),
+            "current_step": current_step,
             "cost_so_far": float(creative.cost),
             "error_message": creative.error_message
         }

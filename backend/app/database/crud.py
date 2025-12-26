@@ -1770,6 +1770,7 @@ def update_creative_status(
     creative_id: UUID,
     status: str,
     progress: int = 0,
+    current_step: Optional[str] = None,
     error_message: Optional[str] = None
 ) -> Optional[Creative]:
     """
@@ -1780,6 +1781,7 @@ def update_creative_status(
         creative_id: ID of the creative
         status: New status (e.g., "processing", "completed", "failed")
         progress: Progress percentage (0-100)
+        current_step: Detailed step description for UI (e.g., "Planning Scenes", "Generating Videos")
         error_message: Optional error message
 
     Returns:
@@ -1798,13 +1800,15 @@ def update_creative_status(
 
         creative.status = status
         creative.progress = max(0, min(100, progress))  # Clamp 0-100
+        if current_step:
+            creative.current_step = current_step
         if error_message:
             creative.error_message = error_message
 
         db.commit()
         db.refresh(creative)
 
-        logger.info(f"✅ Updated creative {creative_id} status to {status} ({progress}%)")
+        logger.info(f"✅ Updated creative {creative_id}: status={status}, progress={progress}%, step={current_step}")
         return creative
     except Exception as e:
         try:

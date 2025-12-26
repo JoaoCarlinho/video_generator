@@ -203,12 +203,13 @@ class GenerationPipeline:
         else:
             logger.info(f"✅ Verified IDs: brand={self.brand.id}, product={self.product.id}, campaign={self.campaign.id}")
 
-    def _update_status(self, status: str, progress: int = 0, error_message: Optional[str] = None):
+    def _update_status(self, status: str, progress: int = 0, current_step: Optional[str] = None, error_message: Optional[str] = None):
         """Update creative status and progress.
 
         Args:
             status: Status string (e.g., "processing", "completed", "failed")
             progress: Progress percentage (0-100)
+            current_step: Detailed step description for UI (e.g., "Planning Scenes", "Generating Videos")
             error_message: Optional error message
         """
         update_creative_status(
@@ -216,6 +217,7 @@ class GenerationPipeline:
             self.creative_id,
             status=status,
             progress=progress,
+            current_step=current_step,
             error_message=error_message
         )
 
@@ -425,6 +427,7 @@ class GenerationPipeline:
             error_msg = str(e)[:500]
             self._update_status(
                 status="failed",
+                current_step="Failed",
                 error_message=error_msg,
             )
 
@@ -545,7 +548,7 @@ class GenerationPipeline:
     async def _plan_scenes(self, campaign: Any, product: Any, brand: Any, ad_campaign: AdCampaign, progress_start: int = 15) -> Dict[str, Any]:
         """Plan product scenes using LLM with shot grammar constraints."""
         try:
-            self._update_status(status="processing", progress=progress_start)
+            self._update_status(status="processing", progress=progress_start, current_step="Planning Scenes")
 
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
@@ -849,7 +852,7 @@ BRAND GUIDELINES (extracted from guidelines document):
         generation_start = datetime.utcnow()
 
         try:
-            self._update_status(status="processing", progress=progress_start)
+            self._update_status(status="processing", progress=progress_start, current_step="Generating Video Scenes")
 
             from app.config import settings
 
@@ -944,7 +947,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     async def _generate_audio(self, campaign: Any, product: Any, ad_campaign: AdCampaign, progress_start: int = 75) -> str:
         """Generate luxury product background music using MusicGen."""
         try:
-            self._update_status(status="processing", progress=progress_start)
+            self._update_status(status="processing", progress=progress_start, current_step="Generating Background Music")
 
             from app.config import settings
             audio_engine = AudioEngine(
@@ -1065,7 +1068,7 @@ BRAND GUIDELINES (extracted from guidelines document):
     ) -> str:
         """Render final TikTok vertical video (9:16 only)."""
         try:
-            self._update_status(status="processing", progress=progress_start)
+            self._update_status(status="processing", progress=progress_start, current_step="Rendering Final Video")
 
             from app.config import settings
             renderer = Renderer(
@@ -1074,7 +1077,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 s3_bucket_name=settings.s3_bucket_name,
                 aws_region=settings.aws_region,
             )
-            
+
             # TikTok vertical only (9:16 hardcoded in renderer)
             logger.info("Rendering TikTok vertical video (9:16)")
 
@@ -1085,7 +1088,7 @@ BRAND GUIDELINES (extracted from guidelines document):
                 variation_index=variation_index,
             )
 
-            self._update_status(status="processing", progress=100)
+            self._update_status(status="processing", progress=100, current_step="Finalizing")
 
             logger.info(f"✅ Rendered final TikTok vertical video: {final_video}")
             return final_video
@@ -1220,8 +1223,8 @@ BRAND GUIDELINES (extracted from guidelines document):
             List of scene plan lists: [[scenes_v1], [scenes_v2], [scenes_v3]]
         """
         try:
-            self._update_status(status="processing", progress=progress_start)
-            
+            self._update_status(status="processing", progress=progress_start, current_step="Planning Scene Variations")
+
             from app.config import settings
             planner = ScenePlanner(api_key=settings.openai_api_key)
             
@@ -1768,7 +1771,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             logger.info(f"✅ Persisted campaign_json with variationPaths to database")
 
             # Update creative status to completed
-            self._update_status(status="completed", progress=100)
+            self._update_status(status="completed", progress=100, current_step="Completed")
 
             # Verify the update was successful
             updated_campaign = get_campaign_by_id(self.db, self.campaign_id)

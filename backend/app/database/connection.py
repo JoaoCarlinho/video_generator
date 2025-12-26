@@ -103,6 +103,9 @@ def init_db():
         Base.metadata.create_all(bind=engine, tables=tables_to_create)
         logger.info(f"✅ Database tables created/verified ({len(tables_to_create)} tables)")
 
+        # Run pending migrations for column additions
+        _run_pending_migrations(engine)
+
         logger.info("✅ Database connection initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}", exc_info=True)
@@ -148,4 +151,36 @@ def test_connection():
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
         return False
+
+
+def _run_pending_migrations(engine):
+    """Run pending database migrations for schema changes.
+
+    This function handles incremental schema changes that SQLAlchemy's
+    create_all() cannot handle (e.g., adding columns to existing tables).
+    """
+    migrations = [
+        # Add current_step column to creatives table for detailed progress tracking
+        {
+            "name": "add_current_step_to_creatives",
+            "check": "SELECT column_name FROM information_schema.columns WHERE table_name='creatives' AND column_name='current_step'",
+            "apply": "ALTER TABLE creatives ADD COLUMN current_step VARCHAR(100)"
+        },
+    ]
+
+    with engine.connect() as conn:
+        for migration in migrations:
+            try:
+                result = conn.execute(text(migration["check"]))
+                exists = result.fetchone() is not None
+
+                if not exists:
+                    conn.execute(text(migration["apply"]))
+                    conn.commit()
+                    logger.info(f"✅ Applied migration: {migration['name']}")
+                else:
+                    logger.debug(f"✓ Migration already applied: {migration['name']}")
+            except Exception as e:
+                logger.warning(f"⚠️ Migration {migration['name']} failed: {e}")
+                # Don't fail startup - the app can still work without this column
 
