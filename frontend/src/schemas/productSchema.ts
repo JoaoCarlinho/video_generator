@@ -4,7 +4,17 @@
 
 import { z } from 'zod'
 
-export const productSchema = z.object({
+// Visual style options for mobile app
+export const appVisualStyleValues = [
+  'modern_minimal',
+  'dark_mode',
+  'vibrant_colorful',
+  'professional_corporate',
+  'playful_friendly',
+] as const
+
+// Base schema without refinements (for type inference)
+const baseProductSchema = z.object({
   product_type: z
     .string()
     .max(100, 'Product type must not exceed 100 characters')
@@ -37,13 +47,74 @@ export const productSchema = z.object({
 
   image_files: z
     .array(z.instanceof(File))
-    .min(1, 'At least 1 product image is required')
-    .max(10, 'Maximum 10 product images allowed'),
+    .max(10, 'Maximum 10 product images allowed')
+    .default([]),
+
+  // Mobile App specific fields
+  app_input_mode: z
+    .enum(['screenshots', 'generated'])
+    .optional(),
+
+  app_description: z
+    .string()
+    .max(2000, 'App description must not exceed 2000 characters')
+    .optional()
+    .or(z.literal('')),
+
+  key_features: z
+    .array(z.string().max(100, 'Each feature must be 100 characters or less'))
+    .max(10, 'Maximum 10 features allowed')
+    .default([]),
+
+  app_visual_style: z
+    .enum(appVisualStyleValues)
+    .optional(),
+
+  screen_recording: z
+    .custom<File | null | undefined>()
+    .optional(),
 })
 
-export type ProductFormData = z.infer<typeof productSchema>
+// Export the type from base schema
+export type ProductFormData = z.infer<typeof baseProductSchema>
 
-// Schema for product update (all fields optional except preserving constraints when provided)
-export const productUpdateSchema = productSchema.partial()
+// Full schema with conditional validations
+export const productSchema = baseProductSchema.superRefine((data, ctx) => {
+  // For mobile_app with screenshots mode, require at least 1 image
+  if (data.product_type === 'mobile_app' && data.app_input_mode === 'screenshots') {
+    if (!data.image_files || data.image_files.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Screenshots required for screenshot mode',
+        path: ['image_files'],
+      })
+    }
+  }
+
+  // For mobile_app with generated mode, require app_description (min 20 chars)
+  if (data.product_type === 'mobile_app' && data.app_input_mode === 'generated') {
+    if (!data.app_description || data.app_description.trim().length < 20) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'App description must be at least 20 characters for generated mode',
+        path: ['app_description'],
+      })
+    }
+  }
+
+  // For non-mobile_app products, require at least 1 image
+  if (data.product_type !== 'mobile_app') {
+    if (!data.image_files || data.image_files.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least 1 product image is required',
+        path: ['image_files'],
+      })
+    }
+  }
+})
+
+// Schema for product update (all fields optional)
+export const productUpdateSchema = baseProductSchema.partial()
 
 export type ProductUpdateData = z.infer<typeof productUpdateSchema>

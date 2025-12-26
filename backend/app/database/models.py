@@ -40,13 +40,25 @@ class Product(Base):
     __tablename__ = "products"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    brand_id = Column(UUID(as_uuid=True), ForeignKey('brands.id', ondelete='CASCADE'), nullable=False, index=True)
+    brand_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey('brands.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
     product_type = Column(String(100), nullable=False, index=True)
     name = Column(String(200), nullable=False)
-    product_gender = Column(String(20), nullable=True)  # 'masculine', 'feminine', 'unisex', or NULL
+    product_gender = Column(String(20), nullable=True)  # masculine, feminine, unisex
     product_attributes = Column(JSONB, nullable=True)  # Flexible type-specific attributes
     icp_segment = Column(Text, nullable=True)
     image_urls = Column(JSONB, nullable=True)  # Array of S3 product image URLs
+
+    # Mobile App specific fields
+    app_input_mode = Column(String(20), nullable=True)  # 'screenshots' or 'generated'
+    app_description = Column(Text, nullable=True)  # App description for UI generation
+    key_features = Column(JSONB, nullable=True)  # Array of key features to showcase
+    app_visual_style = Column(String(50), nullable=True)  # Visual style for generated UI
+    screen_recording_url = Column(Text, nullable=True)  # S3 URL of screen recording
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

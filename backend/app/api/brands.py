@@ -15,10 +15,105 @@ from app.api.auth import get_current_user_id, get_current_brand_id
 from app.models.schemas import BrandDetail, BrandCreate
 from app.utils.s3_utils import upload_brand_logo, upload_brand_guidelines
 from app.config import settings
+from pydantic import BaseModel, Field
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ============================================================================
+# Request Schema for JSON-based brand creation
+# ============================================================================
+
+class CreateBrandJSONRequest(BaseModel):
+    """Request schema for creating a brand via JSON (with pre-uploaded S3 URLs)."""
+    name: str = Field(..., min_length=1, max_length=200, description="Brand/company name")
+    logo_url: Optional[str] = Field(None, description="S3 URL of uploaded logo")
+    brand_guidelines_url: Optional[str] = Field(None, description="S3 URL or text of brand guidelines")
+    primary_color: Optional[str] = Field(None, description="Primary brand color (hex)")
+    secondary_color: Optional[str] = Field(None, description="Secondary brand color (hex)")
+    target_audience: Optional[str] = Field(None, description="Target audience description")
+
+
+# ============================================================================
+# Brand Endpoints
+# ============================================================================
+
+@router.post(
+    "",
+    response_model=BrandDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create brand with JSON data",
+    description="Create a brand using JSON body with pre-uploaded S3 URLs for assets."
+)
+async def create_brand_json(
+    request: CreateBrandJSONRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+) -> BrandDetail:
+    """
+    Create a brand using JSON data with pre-uploaded S3 URLs.
+
+    This endpoint is used when files are uploaded to S3 via presigned URLs first,
+    then the brand is created with the resulting URLs.
+
+    **Request Body:**
+    - `name`: Brand/company name (required)
+    - `logo_url`: S3 URL of uploaded logo (optional)
+    - `brand_guidelines_url`: S3 URL or text of guidelines (optional)
+    - `primary_color`: Primary brand color hex (optional)
+    - `secondary_color`: Secondary brand color hex (optional)
+    - `target_audience`: Target audience description (optional)
+
+    **Returns:**
+    - BrandDetail: Created brand with all details
+
+    **Raises:**
+    - HTTPException 409: User already has a brand
+    - HTTPException 500: Database error
+    """
+    try:
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database not available")
+
+        # Check if user already has a brand
+        existing_brand = crud.get_brand_by_user_id(db, user_id)
+        if existing_brand:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has a brand. Use update endpoint to modify."
+            )
+
+        # Prepare logo_urls dict if logo_url provided
+        logo_urls = None
+        if request.logo_url:
+            logo_urls = {"primary": request.logo_url}
+
+        # Create brand in database
+        logger.info(f"💾 Creating brand for user {user_id}")
+        brand = crud.create_brand(
+            db=db,
+            user_id=user_id,
+            company_name=request.name,
+            brand_name=request.name,
+            description=request.target_audience,
+            guidelines=request.brand_guidelines_url,
+            logo_urls=logo_urls
+        )
+
+        logger.info(f"✅ Brand created with ID: {brand.id}")
+        return BrandDetail.model_validate(brand)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Brand creation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create brand: {str(e)}"
+        )
 
 
 @router.get("/debug/s3-config")
@@ -173,14 +268,14 @@ async def onboard_brand(
 
 @router.get(
     "/me",
-    response_model=BrandDetail | None,
+    response_model=Optional[BrandDetail],
     summary="Get current brand",
     description="Get brand details for the authenticated user. Returns null if onboarding not completed."
 )
 async def get_my_brand(
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
-) -> BrandDetail | None:
+) -> Optional[BrandDetail]:
     """
     Get brand details for the current authenticated user.
 

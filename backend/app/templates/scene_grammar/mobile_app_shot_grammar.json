@@ -1,0 +1,455 @@
+{
+  "grammar_version": "1.0",
+  "target_platform": "tiktok_vertical",
+  "duration_range": [15, 60],
+  "scene_count_range": [3, 10],
+  "target_aspect_ratio": "9:16",
+  "target_resolution": "1080x1920",
+  "description": "Mobile app TikTok vertical video shot grammar. Focuses on UI demonstrations and feature showcases. Shows screen content directly without device frames by default.",
+
+  "allowed_shot_types": {
+    "ui_hero": {
+      "id": "ui_hero",
+      "display_name": "Hero UI Shot",
+      "description": "Full-screen showcase of the app's main interface or key feature",
+      "duration_range": [4, 8],
+      "priority": 1,
+      "variations": [
+        "main_dashboard_view",
+        "key_feature_screen",
+        "home_screen_reveal",
+        "primary_action_screen"
+      ],
+      "camera_movements": [
+        "static",
+        "subtle_zoom_in",
+        "gentle_parallax"
+      ],
+      "lighting_keywords": [
+        "clean ambient",
+        "screen glow",
+        "soft lighting",
+        "even illumination"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.0,
+      "use_product": true,
+      "llm_instruction": "Show the app's main screen or hero feature in full-screen composition. The UI should be clean, modern, and clearly readable. Use subtle motion to draw attention to key elements. Duration: 4-8 seconds."
+    },
+
+    "problem_hook": {
+      "id": "problem_hook",
+      "display_name": "Problem Statement Hook",
+      "description": "Visual representation of the problem the app solves",
+      "duration_range": [3, 6],
+      "priority": 1,
+      "variations": [
+        "frustrated_scenario",
+        "inefficient_process",
+        "before_state",
+        "pain_point_visual"
+      ],
+      "camera_movements": [
+        "static",
+        "slow_zoom_out"
+      ],
+      "lighting_keywords": [
+        "neutral",
+        "slightly desaturated",
+        "ambient"
+      ],
+      "recommended_position": null,
+      "recommended_scale": null,
+      "use_product": false,
+      "llm_instruction": "Create a visual hook showing the problem or frustration the app solves. Could be cluttered interfaces, manual processes, or inefficient workflows. Creates urgency for the solution. Duration: 3-6 seconds."
+    },
+
+    "feature_demo": {
+      "id": "feature_demo",
+      "display_name": "Feature Demonstration",
+      "description": "Showcasing a specific app feature with interaction indicators",
+      "duration_range": [5, 10],
+      "priority": 1,
+      "variations": [
+        "tap_interaction",
+        "swipe_gesture",
+        "form_completion",
+        "data_entry",
+        "menu_navigation",
+        "search_flow",
+        "filter_selection"
+      ],
+      "camera_movements": [
+        "follow_interaction",
+        "subtle_zoom_to_element",
+        "static"
+      ],
+      "interaction_indicators": [
+        "cursor_dot",
+        "tap_ripple",
+        "swipe_trail",
+        "highlight_glow"
+      ],
+      "lighting_keywords": [
+        "clean",
+        "bright",
+        "focused"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.0,
+      "use_product": true,
+      "llm_instruction": "Demonstrate a specific app feature with clear interaction cues (tap indicators, swipe trails). Show the action and its result. The interaction should feel natural and intuitive. Duration: 5-10 seconds."
+    },
+
+    "ui_transition": {
+      "id": "ui_transition",
+      "display_name": "Screen Transition Flow",
+      "description": "Smooth transition between app screens showing navigation",
+      "duration_range": [4, 7],
+      "priority": 2,
+      "variations": [
+        "screen_push",
+        "modal_popup",
+        "tab_switch",
+        "back_navigation",
+        "deep_link_flow"
+      ],
+      "camera_movements": [
+        "follow_transition",
+        "static"
+      ],
+      "lighting_keywords": [
+        "consistent",
+        "clean",
+        "modern"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.0,
+      "use_product": true,
+      "llm_instruction": "Show smooth navigation between 2-3 app screens. Transitions should feel native to mobile platforms (push, modal, tab switches). Demonstrates app depth and user journey. Duration: 4-7 seconds."
+    },
+
+    "feature_highlight": {
+      "id": "feature_highlight",
+      "display_name": "Feature Callout",
+      "description": "Zoomed focus on a specific UI element with annotation",
+      "duration_range": [3, 6],
+      "priority": 2,
+      "variations": [
+        "button_callout",
+        "metric_highlight",
+        "setting_focus",
+        "notification_detail",
+        "icon_explanation"
+      ],
+      "camera_movements": [
+        "zoom_to_element",
+        "static_close"
+      ],
+      "annotation_style": [
+        "subtle_glow",
+        "pointer_arrow",
+        "bracket_highlight"
+      ],
+      "lighting_keywords": [
+        "focused",
+        "highlighted",
+        "clean"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.5,
+      "use_product": true,
+      "llm_instruction": "Zoom into a specific UI element (button, metric, feature) with a subtle visual callout. Helps viewers understand key functionality. Keep text overlays minimal. Duration: 3-6 seconds."
+    },
+
+    "before_after": {
+      "id": "before_after",
+      "display_name": "Before/After Comparison",
+      "description": "Side-by-side or sequential comparison showing app value",
+      "duration_range": [5, 8],
+      "priority": 2,
+      "variations": [
+        "split_screen",
+        "sequential_reveal",
+        "swipe_comparison",
+        "fade_transition"
+      ],
+      "camera_movements": [
+        "static",
+        "subtle_pan"
+      ],
+      "lighting_keywords": [
+        "balanced",
+        "clear contrast",
+        "clean"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.0,
+      "use_product": true,
+      "llm_instruction": "Show before/after or problem/solution comparison. Can be split-screen or sequential. Clearly demonstrates the app's value proposition. Duration: 5-8 seconds."
+    },
+
+    "social_proof": {
+      "id": "social_proof",
+      "display_name": "Social Proof Element",
+      "description": "Ratings, reviews, download counts, or testimonials",
+      "duration_range": [3, 5],
+      "priority": 3,
+      "optional": true,
+      "variations": [
+        "star_rating_display",
+        "review_quote",
+        "download_counter",
+        "user_testimonial",
+        "press_mention"
+      ],
+      "camera_movements": [
+        "static",
+        "gentle_zoom_in"
+      ],
+      "lighting_keywords": [
+        "clean",
+        "trustworthy",
+        "professional"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 1.0,
+      "use_product": false,
+      "llm_instruction": "Display social proof elements: app store ratings, review quotes, download numbers. Use clean typography on simple background. Builds trust. Duration: 3-5 seconds."
+    },
+
+    "lifestyle_context": {
+      "id": "lifestyle_context",
+      "display_name": "Real-World Usage Context",
+      "description": "App being used in real-life scenario (hands optional)",
+      "duration_range": [4, 7],
+      "priority": 3,
+      "optional": true,
+      "ai_decision_factors": [
+        "creative_prompt_emphasizes_real_world_usage",
+        "lifestyle_context_enhances_relatability",
+        "target_audience_benefits_from_context"
+      ],
+      "variations": [
+        "commute_usage",
+        "desk_workspace",
+        "outdoor_activity",
+        "social_situation",
+        "morning_routine"
+      ],
+      "camera_movements": [
+        "subtle_movement",
+        "static"
+      ],
+      "lighting_keywords": [
+        "natural",
+        "warm",
+        "environmental"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.8,
+      "use_product": true,
+      "framing_override": "device_in_context",
+      "llm_instruction": "ONLY use if creative brief emphasizes real-world usage. Show app screen content within a lifestyle context (hands holding phone, desk scene). Subtle depth of field. Duration: 4-7 seconds."
+    },
+
+    "download_cta": {
+      "id": "download_cta",
+      "display_name": "Download Call-to-Action",
+      "description": "Final screen with app name, tagline, and download prompt",
+      "duration_range": [4, 6],
+      "priority": 1,
+      "variations": [
+        "app_icon_centered",
+        "name_with_tagline",
+        "store_badges",
+        "qr_code_option"
+      ],
+      "camera_movements": [
+        "static",
+        "gentle_zoom_out"
+      ],
+      "lighting_keywords": [
+        "clean",
+        "professional",
+        "branded"
+      ],
+      "recommended_position": "center",
+      "recommended_scale": 0.6,
+      "use_product": true,
+      "always_use_text_overlay": true,
+      "text_requirements": {
+        "app_name": "required",
+        "tagline": "optional",
+        "cta_text": "required"
+      },
+      "llm_instruction": "Final CTA screen with app icon/logo, app name, and clear download call-to-action. Clean, professional composition. May include 'Download Free' or 'Try Now' messaging. Duration: 4-6 seconds."
+    }
+  },
+
+  "scene_flow_rules": {
+    "first_scene_must_be": ["ui_hero", "problem_hook"],
+    "first_scene_explanation": "Start with either the hero UI to hook visually, or a problem statement to create urgency",
+    "last_scene_must_be": ["download_cta"],
+    "last_scene_explanation": "Always end with clear download call-to-action",
+    "max_consecutive_same_type": 2,
+    "max_consecutive_explanation": "Avoid using the same shot type more than twice in a row",
+    "screen_visibility_rules": {
+      "minimum_ui_scenes": 2,
+      "maximum_non_ui_scenes": 2,
+      "explanation": "App UI must be visible in majority of scenes"
+    }
+  },
+
+  "text_overlay_rules": {
+    "max_text_blocks": 3,
+    "max_text_blocks_explanation": "Keep text minimal to not compete with UI",
+    "allowed_positions": ["top_safe", "center", "bottom_safe"],
+    "font_style": ["sans_modern", "system_ui"],
+    "sans_modern_example": "Inter, SF Pro - clean, readable",
+    "system_ui_example": "System default - native feel",
+    "max_words_per_block": 5,
+    "required_text_scenes": ["download_cta"],
+    "text_animation": "fade_in_out",
+    "text_duration": [2, 4],
+    "avoid": ["overlapping UI elements", "covering key interactions"]
+  },
+
+  "transition_rules": {
+    "allowed_transitions": ["fade", "cut", "slide"],
+    "preferred_transition": "cut",
+    "final_scene_transition": "fade",
+    "transition_duration": [0.2, 0.4]
+  },
+
+  "pacing_guidelines": {
+    "15_30_seconds": {
+      "scene_count": 4,
+      "avg_scene_duration": [4, 7],
+      "breakdown": [
+        "Hook - hero UI or problem (4-6s)",
+        "Feature demo (5-8s)",
+        "Second feature or highlight (4-6s)",
+        "Download CTA (4-5s)"
+      ]
+    },
+    "31_45_seconds": {
+      "scene_count": 6,
+      "avg_scene_duration": [5, 8],
+      "breakdown": [
+        "Hook - problem statement (4-6s)",
+        "Hero UI reveal (5-7s)",
+        "Feature demo 1 (6-8s)",
+        "Feature demo 2 (6-8s)",
+        "Social proof (3-5s)",
+        "Download CTA (4-6s)"
+      ]
+    },
+    "46_60_seconds": {
+      "scene_count": 8,
+      "avg_scene_duration": [6, 8],
+      "breakdown": [
+        "Hook - problem (4-6s)",
+        "Hero UI solution (5-7s)",
+        "Feature demo 1 (6-8s)",
+        "UI transition flow (5-7s)",
+        "Feature demo 2 (6-8s)",
+        "Feature highlight (4-6s)",
+        "Social proof (3-5s)",
+        "Download CTA (5-6s)"
+      ]
+    }
+  },
+
+  "app_video_themes": {
+    "tech_clean": {
+      "name": "Tech Clean",
+      "description": "Minimalist white/light backgrounds with floating UI",
+      "lighting_style": "Bright, even, shadowless",
+      "color_palette": "White, light grays, accent colors from app",
+      "mood": "Modern, trustworthy, professional"
+    },
+    "dark_mode": {
+      "name": "Dark Mode",
+      "description": "Dark backgrounds optimized for OLED, subtle glows",
+      "lighting_style": "Subtle edge lighting, screen glow",
+      "color_palette": "Dark grays, blacks, vibrant accents",
+      "mood": "Premium, focused, contemporary"
+    },
+    "lifestyle_demo": {
+      "name": "Lifestyle Demo",
+      "description": "Real-world context with natural environments",
+      "lighting_style": "Natural, warm, environmental",
+      "color_palette": "Natural tones with app colors",
+      "mood": "Authentic, relatable, aspirational"
+    },
+    "motion_graphics": {
+      "name": "Motion Graphics",
+      "description": "Animated elements, kinetic typography, dynamic",
+      "lighting_style": "Flat design, no realistic lighting",
+      "color_palette": "Bold, brand-forward colors",
+      "mood": "Energetic, playful, attention-grabbing"
+    }
+  },
+
+  "validation_rules": {
+    "must_include": [
+      "At least one UI screen showing app interface",
+      "Download CTA as final scene",
+      "Clear, readable UI (no blur or distortion)",
+      "Total duration within 15-60 second range"
+    ],
+    "must_exclude": [
+      "Device frames (unless explicitly requested)",
+      "Competitor app references",
+      "Unrealistic UI animations",
+      "Illegible small text"
+    ]
+  },
+
+  "example_scene_plan_30s": {
+    "title": "Example: 30-second mobile app TikTok",
+    "duration": 30,
+    "style": "tech_clean",
+    "scenes": [
+      {
+        "index": 1,
+        "shot_type": "problem_hook",
+        "duration": 5,
+        "prompt": "Frustrated person looking at cluttered, overwhelming task list interface",
+        "use_product": false
+      },
+      {
+        "index": 2,
+        "shot_type": "ui_hero",
+        "duration": 6,
+        "prompt": "Clean, modern task management app dashboard with organized cards",
+        "use_product": true
+      },
+      {
+        "index": 3,
+        "shot_type": "feature_demo",
+        "duration": 7,
+        "prompt": "Finger tapping to create new task, smooth animation as task card appears",
+        "use_product": true
+      },
+      {
+        "index": 4,
+        "shot_type": "feature_highlight",
+        "duration": 5,
+        "prompt": "Zoom to calendar integration feature, subtle glow highlighting sync icon",
+        "use_product": true
+      },
+      {
+        "index": 5,
+        "shot_type": "download_cta",
+        "duration": 5,
+        "prompt": "App icon centered on gradient background with app name and Download Free button",
+        "use_product": true,
+        "text_overlay": ["TaskFlow", "Download Free"]
+      }
+    ]
+  },
+
+  "llm_prompt_template": "You are a mobile app marketing video director. Create a TikTok vertical video scene plan (9:16) constrained by mobile app shot grammar.\n\nREQUIREMENTS:\n1. Use ONLY these shot types: ui_hero, problem_hook, feature_demo, ui_transition, feature_highlight, before_after, social_proof (optional), lifestyle_context (optional), download_cta\n2. First scene MUST be: ui_hero OR problem_hook\n3. Last scene MUST be: download_cta\n4. Total scenes: {scene_count}\n5. Each scene: 3-10 seconds duration\n6. App UI visible in majority of scenes\n7. NO device frames unless explicitly requested\n8. All UI must be sharp and readable\n\nGenerate concise, compelling scene descriptions that showcase the app's value. Output valid JSON."
+}

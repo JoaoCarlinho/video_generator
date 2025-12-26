@@ -1001,7 +1001,13 @@ def create_product(
     product_gender: Optional[str] = None,
     product_attributes: Optional[Dict] = None,
     icp_segment: Optional[str] = None,
-    image_urls: Optional[List[str]] = None
+    image_urls: Optional[List[str]] = None,
+    # Mobile App specific fields
+    app_input_mode: Optional[str] = None,
+    app_description: Optional[str] = None,
+    key_features: Optional[List[str]] = None,
+    app_visual_style: Optional[str] = None,
+    screen_recording_url: Optional[str] = None
 ) -> Optional[Product]:
     """
     Create a new product associated with a brand.
@@ -1010,12 +1016,17 @@ def create_product(
         db: Database session
         user_id: ID of the authenticated user (for brand ownership validation)
         brand_id: ID of the brand to associate product with
-        product_type: Type of product (fragrance, car, watch, energy, etc.)
+        product_type: Type of product (fragrance, car, watch, energy, mobile_app)
         name: Product name
         product_gender: Product gender (masculine, feminine, unisex, or None)
         product_attributes: Type-specific attributes as dict (optional)
         icp_segment: ICP/target audience segment (optional)
         image_urls: List of S3 image URLs (optional, max 10)
+        app_input_mode: Mobile app input mode - 'screenshots' or 'generated'
+        app_description: App description for UI generation
+        key_features: List of key features to showcase
+        app_visual_style: Visual style for generated UI
+        screen_recording_url: S3 URL of screen recording video
 
     Returns:
         Product: Created product object if brand is owned by user, None otherwise
@@ -1031,7 +1042,10 @@ def create_product(
         ).first()
 
         if not brand:
-            logger.warning(f"⚠️ Cannot create product: Brand {brand_id} not found or not owned by user {user_id}")
+            logger.warning(
+                f"⚠️ Cannot create product: Brand {brand_id} not found "
+                f"or not owned by user {user_id}"
+            )
             return None
 
         # Create product
@@ -1042,7 +1056,13 @@ def create_product(
             product_gender=product_gender,
             product_attributes=product_attributes,
             icp_segment=icp_segment,
-            image_urls=image_urls
+            image_urls=image_urls,
+            # Mobile App fields
+            app_input_mode=app_input_mode,
+            app_description=app_description,
+            key_features=key_features,
+            app_visual_style=app_visual_style,
+            screen_recording_url=screen_recording_url
         )
         db.add(product)
         db.commit()
@@ -1177,7 +1197,11 @@ def update_product(
         db: Database session
         user_id: ID of the authenticated user (for brand ownership validation)
         product_id: ID of the product to update
-        **updates: Fields to update (product_type, name, product_gender, product_attributes, icp_segment, image_urls)
+        **updates: Fields to update:
+            - product_type, name, product_gender, product_attributes
+            - icp_segment, image_urls
+            - app_input_mode, app_description, key_features
+            - app_visual_style, screen_recording_url (mobile_app only)
 
     Returns:
         Product: Updated product object if successful, None if not found or unauthorized

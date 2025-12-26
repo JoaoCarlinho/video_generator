@@ -175,12 +175,19 @@ async def create_product_json_endpoint(
     - brand_id: UUID of the brand to associate product with
 
     **Request Body (JSON):**
-    - product_type: Type of product (fragrance, car, watch, energy)
+    - product_type: Type of product (fragrance, car, watch, energy, mobile_app)
     - name: Product name (required)
     - product_gender: Gender (masculine/feminine/unisex, optional)
     - product_attributes: Type-specific attributes (optional)
     - icp_segment: Target audience description (optional)
-    - image_urls: Array of S3 image URLs (required, max 10)
+    - image_urls: Array of S3 image URLs (required for most types, max 10)
+
+    **Mobile App specific fields (when product_type='mobile_app'):**
+    - app_input_mode: 'screenshots' or 'generated'
+    - app_description: Description for UI generation (required if generated)
+    - key_features: Array of features to showcase (max 10)
+    - app_visual_style: UI style (modern_minimal, dark_mode, etc.)
+    - screen_recording_url: S3 URL of screen recording video
 
     **Response:** ProductResponse with created product data
     """
@@ -188,12 +195,17 @@ async def create_product_json_endpoint(
         # Get authenticated user
         user_id = get_current_user_id(authorization)
 
-        # Validate we have at least one image
-        if not request.image_urls or len(request.image_urls) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one product image URL is required"
-            )
+        # Validate image requirements based on product type and mode
+        is_mobile_app = request.product_type == 'mobile_app'
+        is_generated_mode = request.app_input_mode == 'generated'
+
+        # Mobile apps in generated mode don't require images upfront
+        if not is_mobile_app or not is_generated_mode:
+            if not request.image_urls or len(request.image_urls) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one product image URL is required"
+                )
 
         # Create product (validates brand ownership)
         product = create_product(
@@ -204,7 +216,13 @@ async def create_product_json_endpoint(
             name=request.name,
             product_gender=request.product_gender,
             icp_segment=request.icp_segment,
-            image_urls=request.image_urls
+            image_urls=request.image_urls,
+            # Mobile App fields
+            app_input_mode=request.app_input_mode,
+            app_description=request.app_description,
+            key_features=request.key_features,
+            app_visual_style=request.app_visual_style,
+            screen_recording_url=request.screen_recording_url
         )
 
         if not product:

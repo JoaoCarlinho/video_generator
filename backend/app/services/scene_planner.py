@@ -113,6 +113,12 @@ class ScenePlanner:
         product_name: Optional[str] = None,
         product_gender: Optional[str] = None,
         product_type: str = "fragrance",
+        # Mobile App specific parameters
+        app_input_mode: Optional[str] = None,
+        app_description: Optional[str] = None,
+        key_features: Optional[List[str]] = None,
+        app_visual_style: Optional[str] = None,
+        product_images: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Generate TikTok vertical video scene plan with product-type-specific grammar constraints.
@@ -131,7 +137,12 @@ class ScenePlanner:
             extracted_style: Optional extracted style from reference image
             product_name: Product name (e.g., "Noir Élégance" for fragrance, "Model S" for car)
             product_gender: Product gender ('masculine', 'feminine', or 'unisex') - only for product types that support gender
-            product_type: Product type ('fragrance', 'car', 'watch', 'energy')
+            product_type: Product type ('fragrance', 'car', 'watch', 'energy', 'mobile_app')
+            app_input_mode: Mobile app input mode ('screenshots' or 'generated')
+            app_description: App description for UI generation (mobile_app only)
+            key_features: Key features to showcase (mobile_app only, max 10)
+            app_visual_style: Visual style for generated UI (mobile_app only)
+            product_images: Pre-provided product images (used for mobile_app screenshots mode)
 
         Returns:
             Dictionary with scenes, style_spec, chosenStyle, styleSource
@@ -139,6 +150,35 @@ class ScenePlanner:
         # Get product type configuration
         product_config = get_product_type_config(product_type)
         logger.info(f"Product type: {product_type} ({product_config.display_name})")
+
+        # MOBILE APP: Generate UI screens if in generated mode
+        generated_screens: Optional[List[str]] = None
+        if product_type == "mobile_app" and app_input_mode == "generated":
+            logger.info(
+                f"Mobile app in 'generated' mode - generating UI screens "
+                f"(style: {app_visual_style or 'modern_minimal'})"
+            )
+            from app.services.ui_generator import UIGenerator
+            ui_gen = UIGenerator()
+            generated_screens = await ui_gen.generate_ui_screens(
+                app_description=app_description or creative_prompt,
+                key_features=key_features,
+                visual_style=app_visual_style or "modern_minimal",
+                app_name=product_name or brand_name,
+                user_id="system"
+            )
+            if generated_screens:
+                logger.info(f"Generated {len(generated_screens)} UI screens")
+                # Use generated screens as product images
+                product_images = generated_screens
+                has_product = True
+            else:
+                logger.warning("UI generation failed - proceeding without product images")
+        elif product_type == "mobile_app" and app_input_mode == "screenshots":
+            logger.info("Mobile app in 'screenshots' mode - using provided screenshots")
+            # Screenshots mode: use product_images directly (provided by caller)
+            if product_images:
+                has_product = True
 
         # Initialize grammar loader with product-specific grammar file
         from pathlib import Path
@@ -326,6 +366,9 @@ class ScenePlanner:
             "brand_name": brand_name,
             "target_audience": target_audience or "general consumers",
             "total_duration": total_duration,
+            # Mobile app specific fields
+            "generated_screens": generated_screens,  # URLs of generated UI screens
+            "product_images": product_images,  # Final product images (generated or uploaded)
         }
 
     async def _generate_scenes_via_llm(
@@ -1153,6 +1196,33 @@ Follow user's vision FIRST, grammar rules SECOND."""
                 "shot_variation": "future_focused",
                 "prompt": "Future-focused brand moment, {style} aesthetic, premium final moment"
             }
+        },
+        "mobile_app": {
+            "hook": {
+                "shot_type": "ui_hero",
+                "shot_variation": "main_dashboard_view",
+                "prompt": "Full-screen mobile app dashboard, clean modern UI, {style} aesthetic, professional app marketing"
+            },
+            "showcase": {
+                "shot_type": "feature_demo",
+                "shot_variation": "tap_interaction",
+                "prompt": "App feature demonstration with interaction indicators, {style} lighting and mood"
+            },
+            "build": {
+                "shot_type": "ui_transition",
+                "shot_variation": "screen_push",
+                "prompt": "Smooth app screen transition showing navigation, {style} mood"
+            },
+            "atmosphere": {
+                "shot_type": "feature_highlight",
+                "shot_variation": "button_callout",
+                "prompt": "Zoomed focus on key UI element with callout, {style} aesthetic"
+            },
+            "cta": {
+                "shot_type": "download_cta",
+                "shot_variation": "app_icon_centered",
+                "prompt": "App icon with download call-to-action, {style} aesthetic, clean final moment"
+            }
         }
     }
 
@@ -1186,6 +1256,9 @@ Follow user's vision FIRST, grammar rules SECOND."""
             "vehicle": "car",
             "electricity": "energy",
             "utilities": "energy",
+            "app": "mobile_app",
+            "application": "mobile_app",
+            "software": "mobile_app",
         }
         if normalized_type in product_type_aliases:
             normalized_type = product_type_aliases[normalized_type]

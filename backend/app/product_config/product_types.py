@@ -152,6 +152,33 @@ PRODUCT_TYPES: Dict[str, ProductTypeConfig] = {
         default_last_scene="brand_promise",
         gender_prompts=None
     ),
+
+    "mobile_app": ProductTypeConfig(
+        id="mobile_app",
+        display_name="Mobile Application",
+        description="iOS and Android mobile applications",
+        supports_gender=False,
+        shot_grammar_file="mobile_app_shot_grammar.json",
+        director_persona=(
+            "world-class MOBILE APP MARKETING DIRECTOR who creates "
+            "compelling app demo videos that drive downloads"
+        ),
+        visual_language_title="APP DEMO VISUAL LANGUAGE LIBRARY",
+        common_elements_title="MOBILE APP VIDEO TECHNIQUES",
+        default_mood="modern, intuitive, and trustworthy",
+        default_lighting="clean ambient with subtle screen glow",
+        key_visual_elements=[
+            "Full-screen UI compositions (no device frame by default)",
+            "Smooth UI navigation transitions",
+            "Tap and gesture interaction indicators",
+            "Feature highlights with subtle callouts",
+            "Before/after or problem/solution sequences",
+            "App store download call-to-action"
+        ],
+        default_first_scenes=["ui_hero", "problem_hook"],
+        default_last_scene="download_cta",
+        gender_prompts=None
+    ),
 }
 
 
@@ -163,6 +190,9 @@ PRODUCT_TYPE_ALIASES: Dict[str, str] = {
     "vehicle": "car",
     "electricity": "energy",
     "utilities": "energy",
+    "app": "mobile_app",
+    "application": "mobile_app",
+    "software": "mobile_app",
 }
 
 

@@ -257,12 +257,42 @@ BrandCreate = CreateBrandRequest
 
 class CreateProductRequest(BaseModel):
     """Request schema for creating a new product."""
-    product_type: str = Field(..., min_length=1, max_length=100, description="Product type (fragrance, car, watch, energy, etc.)")
+    product_type: str = Field(
+        ..., min_length=1, max_length=100,
+        description="Product type (fragrance, car, watch, energy, mobile_app, etc.)"
+    )
     name: str = Field(..., min_length=1, max_length=200, description="Product name (required)")
-    product_gender: Optional[str] = Field(None, description="Product gender: masculine, feminine, unisex, or NULL for non-gendered")
-    product_attributes: Optional[Dict[str, Any]] = Field(None, description="Type-specific attributes (e.g., car_category, watch_movement)")
+    product_gender: Optional[str] = Field(
+        None, description="Product gender: masculine, feminine, unisex, or NULL for non-gendered"
+    )
+    product_attributes: Optional[Dict[str, Any]] = Field(
+        None, description="Type-specific attributes (e.g., car_category, watch_movement)"
+    )
     icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
-    image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
+    image_urls: Optional[List[str]] = Field(
+        None, max_items=10, description="Product image URLs (max 10)"
+    )
+
+    # Mobile App specific fields
+    app_input_mode: Optional[str] = Field(
+        None, description="Mobile app input mode: 'screenshots' or 'generated'"
+    )
+    app_description: Optional[str] = Field(
+        None, max_length=2000,
+        description="App description for UI generation (required if app_input_mode='generated')"
+    )
+    key_features: Optional[List[str]] = Field(
+        None, max_length=10,
+        description="Key app features to showcase (max 10 items)"
+    )
+    app_visual_style: Optional[str] = Field(
+        None,
+        description="App visual style: modern_minimal, dark_mode, vibrant_colorful, "
+        "professional_corporate, playful_friendly"
+    )
+    screen_recording_url: Optional[str] = Field(
+        None, description="S3 URL of uploaded screen recording video"
+    )
 
     @field_validator('image_urls')
     @classmethod
@@ -278,17 +308,76 @@ class CreateProductRequest(BaseModel):
         """Validate product_gender is one of allowed values."""
         if v is not None and v not in ['masculine', 'feminine', 'unisex']:
             raise ValueError('product_gender must be one of: masculine, feminine, unisex')
+        return v
+
+    @field_validator('app_input_mode')
+    @classmethod
+    def validate_app_input_mode(cls, v):
+        """Validate app_input_mode is one of allowed values."""
+        if v is not None and v not in ['screenshots', 'generated']:
+            raise ValueError("app_input_mode must be 'screenshots' or 'generated'")
+        return v
+
+    @field_validator('key_features')
+    @classmethod
+    def validate_key_features(cls, v):
+        """Validate key_features array has max 10 items."""
+        if v is not None and len(v) > 10:
+            raise ValueError('Maximum 10 key features allowed')
+        return v
+
+    @field_validator('app_visual_style')
+    @classmethod
+    def validate_app_visual_style(cls, v):
+        """Validate app_visual_style is one of allowed values."""
+        valid_styles = [
+            'modern_minimal', 'dark_mode', 'vibrant_colorful',
+            'professional_corporate', 'playful_friendly'
+        ]
+        if v is not None and v not in valid_styles:
+            raise ValueError(f"app_visual_style must be one of: {', '.join(valid_styles)}")
         return v
 
 
 class UpdateProductRequest(BaseModel):
     """Request schema for updating an existing product."""
-    product_type: Optional[str] = Field(None, min_length=1, max_length=100, description="Product type")
-    name: Optional[str] = Field(None, min_length=1, max_length=200, description="Product name")
-    product_gender: Optional[str] = Field(None, description="Product gender: masculine, feminine, unisex, or NULL")
-    product_attributes: Optional[Dict[str, Any]] = Field(None, description="Type-specific attributes")
+    product_type: Optional[str] = Field(
+        None, min_length=1, max_length=100, description="Product type"
+    )
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=200, description="Product name"
+    )
+    product_gender: Optional[str] = Field(
+        None, description="Product gender: masculine, feminine, unisex, or NULL"
+    )
+    product_attributes: Optional[Dict[str, Any]] = Field(
+        None, description="Type-specific attributes"
+    )
     icp_segment: Optional[str] = Field(None, description="ICP/target audience segment")
-    image_urls: Optional[List[str]] = Field(None, max_items=10, description="Product image URLs (max 10)")
+    image_urls: Optional[List[str]] = Field(
+        None, max_items=10, description="Product image URLs (max 10)"
+    )
+
+    # Mobile App specific fields
+    app_input_mode: Optional[str] = Field(
+        None, description="Mobile app input mode: 'screenshots' or 'generated'"
+    )
+    app_description: Optional[str] = Field(
+        None, max_length=2000,
+        description="App description for UI generation"
+    )
+    key_features: Optional[List[str]] = Field(
+        None, max_length=10,
+        description="Key app features to showcase (max 10 items)"
+    )
+    app_visual_style: Optional[str] = Field(
+        None,
+        description="App visual style: modern_minimal, dark_mode, vibrant_colorful, "
+        "professional_corporate, playful_friendly"
+    )
+    screen_recording_url: Optional[str] = Field(
+        None, description="S3 URL of uploaded screen recording video"
+    )
 
     @field_validator('image_urls')
     @classmethod
@@ -304,6 +393,34 @@ class UpdateProductRequest(BaseModel):
         """Validate product_gender is one of allowed values."""
         if v is not None and v not in ['masculine', 'feminine', 'unisex']:
             raise ValueError('product_gender must be one of: masculine, feminine, unisex')
+        return v
+
+    @field_validator('app_input_mode')
+    @classmethod
+    def validate_app_input_mode(cls, v):
+        """Validate app_input_mode is one of allowed values."""
+        if v is not None and v not in ['screenshots', 'generated']:
+            raise ValueError("app_input_mode must be 'screenshots' or 'generated'")
+        return v
+
+    @field_validator('key_features')
+    @classmethod
+    def validate_key_features(cls, v):
+        """Validate key_features array has max 10 items."""
+        if v is not None and len(v) > 10:
+            raise ValueError('Maximum 10 key features allowed')
+        return v
+
+    @field_validator('app_visual_style')
+    @classmethod
+    def validate_app_visual_style(cls, v):
+        """Validate app_visual_style is one of allowed values."""
+        valid_styles = [
+            'modern_minimal', 'dark_mode', 'vibrant_colorful',
+            'professional_corporate', 'playful_friendly'
+        ]
+        if v is not None and v not in valid_styles:
+            raise ValueError(f"app_visual_style must be one of: {', '.join(valid_styles)}")
         return v
 
 
@@ -317,6 +434,14 @@ class ProductResponse(BaseModel):
     product_attributes: Optional[Dict[str, Any]]
     icp_segment: Optional[str]
     image_urls: Optional[List[str]]
+
+    # Mobile App specific fields
+    app_input_mode: Optional[str] = None
+    app_description: Optional[str] = None
+    key_features: Optional[List[str]] = None
+    app_visual_style: Optional[str] = None
+    screen_recording_url: Optional[str] = None
+
     created_at: datetime
     updated_at: datetime
 
