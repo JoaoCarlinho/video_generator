@@ -3,7 +3,8 @@
  * Allows adding/removing feature tags with Enter key support
  */
 
-import { useState, useCallback, KeyboardEvent } from 'react'
+import { useState, useCallback } from 'react'
+import type { KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../../utils/cn'
 

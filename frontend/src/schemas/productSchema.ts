@@ -48,7 +48,7 @@ const baseProductSchema = z.object({
   image_files: z
     .array(z.instanceof(File))
     .max(10, 'Maximum 10 product images allowed')
-    .default([]),
+    .optional(),
 
   // Mobile App specific fields
   app_input_mode: z
@@ -64,7 +64,7 @@ const baseProductSchema = z.object({
   key_features: z
     .array(z.string().max(100, 'Each feature must be 100 characters or less'))
     .max(10, 'Maximum 10 features allowed')
-    .default([]),
+    .optional(),
 
   app_visual_style: z
     .enum(appVisualStyleValues)
