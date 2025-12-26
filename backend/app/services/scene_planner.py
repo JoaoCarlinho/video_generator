@@ -1052,6 +1052,28 @@ Follow user's vision FIRST, grammar rules SECOND."""
             }
         },
         "watch": {
+            # Lifestyle scenes - wealthy, revered man with watch visible
+            "family_farewell": {
+                "shot_type": "family_farewell",
+                "shot_variation": "morning_departure",
+                "prompt": "A wealthy, fit, well-manicured man hugging his family (wife and 2 kids) before heading to work, {style} aesthetic, his luxury watch clearly visible on his wrist, warm morning light, premium cinematic commercial"
+            },
+            "office_departure": {
+                "shot_type": "office_departure",
+                "shot_variation": "colleagues_following",
+                "prompt": "A revered wealthy man leaving work at end of day, colleagues walking behind him laughing at his jokes, {style} aesthetic, confident leadership presence, premium cinematic commercial"
+            },
+            "tennis_winning_shot": {
+                "shot_type": "tennis_winning_shot",
+                "shot_variation": "victory_moment",
+                "prompt": "A fit well-manicured man hitting a winning shot on the tennis court, luxury watch visible on the hand holding the racket, {style} aesthetic, athletic excellence, premium cinematic commercial"
+            },
+            "evening_dresser_moment": {
+                "shot_type": "evening_dresser_moment",
+                "shot_variation": "intimate_evening",
+                "prompt": "A wealthy man setting his luxury watch on his dresser in elegant bedroom, wife waiting for him, {style} aesthetic, intimate evening moment, premium cinematic commercial"
+            },
+            # Product-focused scenes
             "hook": {
                 "shot_type": "macro_face_detail",
                 "shot_variation": "dial_detail_with_hands_moving",
@@ -1176,14 +1198,89 @@ Follow user's vision FIRST, grammar rules SECOND."""
             )
         templates = self.FALLBACK_TEMPLATES.get(normalized_type, self.FALLBACK_TEMPLATES["fragrance"])
 
-        # Calculate average scene duration based on target
-        avg_duration = max(5, min(8, target_duration // scene_count))
-
         # Empty overlay template for non-text scenes
         empty_overlay = {
             "text": "", "position": "bottom", "duration": 0,
             "font_size": 48, "color": color, "animation": "fade_in"
         }
+
+        # Special handling for watch: 8 scenes with lifestyle + product structure
+        # 4 lifestyle scenes (7s each) + 4 product scenes (4s each) = 44 seconds
+        if normalized_type == "watch" and scene_count >= 8:
+            logger.info("🎬 Using watch-specific 8-scene fallback template (4 lifestyle + 4 product)")
+            scenes = []
+
+            # Lifestyle scenes (7 seconds each) - wealthy, revered man with watch
+            lifestyle_scenes = [
+                ("family_farewell", "hook", True),      # Watch visible
+                ("office_departure", "showcase", False),  # Lifestyle context
+                ("tennis_winning_shot", "showcase", True),  # Watch visible
+                ("evening_dresser_moment", "showcase", True),  # Watch visible
+            ]
+
+            for i, (scene_key, role, use_product) in enumerate(lifestyle_scenes):
+                template = templates[scene_key]
+                scenes.append({
+                    "scene_id": i,
+                    "shot_type": template["shot_type"],
+                    "shot_variation": template["shot_variation"],
+                    "role": role,
+                    "duration": 7,  # 7 seconds for lifestyle scenes
+                    "background_prompt": template["prompt"].format(style=style),
+                    "use_product": use_product,
+                    "product_position": "center" if use_product else None,
+                    "product_scale": 0.4 if use_product else None,
+                    "camera_movement": ["slow_zoom_in", "slow_pan_right", "static", "slow_zoom_out"][i % 4],
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": product_name if i == 0 else "",
+                        "position": "bottom",
+                        "duration": 2.0 if i == 0 else 0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                })
+
+            # Product-focused scenes (4 seconds each)
+            product_scenes = [
+                ("hook", "showcase", True),       # Watch face detail
+                ("showcase", "build", True),      # Wrist lifestyle
+                ("build", "build", True),         # Case craftsmanship
+                ("cta", "cta", True),             # Finale branding
+            ]
+
+            for i, (scene_key, role, use_product) in enumerate(product_scenes):
+                template = templates[scene_key]
+                scene_id = 4 + i  # Start after lifestyle scenes
+                is_final = (i == len(product_scenes) - 1)
+                scenes.append({
+                    "scene_id": scene_id,
+                    "shot_type": template["shot_type"],
+                    "shot_variation": template["shot_variation"],
+                    "role": role,
+                    "duration": 4,  # 4 seconds for product scenes
+                    "background_prompt": template["prompt"].format(style=style),
+                    "use_product": use_product,
+                    "product_position": "center",
+                    "product_scale": 0.6 if is_final else 0.5,
+                    "camera_movement": "slow_zoom_out" if is_final else "slow_zoom_in",
+                    "transition_to_next": "fade",
+                    "overlay": {
+                        "text": f"{product_name}\n{brand_name}" if is_final else "",
+                        "position": "bottom",
+                        "duration": 3.0 if is_final else 0,
+                        "font_size": 48,
+                        "color": color,
+                        "animation": "fade_in"
+                    }
+                })
+
+            return scenes
+
+        # Default handling for other product types
+        # Calculate average scene duration based on target
+        avg_duration = max(5, min(8, target_duration // scene_count))
 
         # Build scenes dynamically based on scene_count
         scenes = []

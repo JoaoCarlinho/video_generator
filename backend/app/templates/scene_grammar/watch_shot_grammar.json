@@ -337,15 +337,17 @@
       ]
     },
     "31_45_seconds": {
-      "scene_count": 6,
-      "avg_scene_duration": [6, 8],
+      "scene_count": 8,
+      "avg_scene_duration": [4, 7],
       "breakdown": [
-        "Hook - watch detail (6-8s)",
-        "Case craftsmanship (6-8s)",
-        "Lifestyle context (6-8s)",
-        "Heritage or movement (6-8s)",
-        "Additional lifestyle (6-8s)",
-        "Final brand moment (5-7s)"
+        "Family farewell - watch visible (7s)",
+        "Office departure - colleagues follow (7s)",
+        "Tennis winning shot - watch on racket hand (7s)",
+        "Evening dresser moment - intimate (7s)",
+        "Watch face macro detail (4s)",
+        "Wrist lifestyle shot (4s)",
+        "Case craftsmanship detail (4s)",
+        "Final brand moment (4s)"
       ]
     },
     "46_60_seconds": {
@@ -386,5 +388,5 @@
     "text_duration": [2, 4]
   },
 
-  "llm_prompt_template": "You are a luxury timepiece video director. Create a TikTok vertical video scene plan (9:16) constrained by watch shot grammar.\n\nREQUIREMENTS:\n1. Use ONLY these shot types: macro_face_detail, family_farewell, case_craftsmanship, bracelet_movement, office_departure, wrist_lifestyle, tennis_winning_shot, heritage_story, evening_dresser_moment, finale_branding\n2. First scene MUST be: macro_face_detail OR wrist_lifestyle OR family_farewell\n3. Last scene MUST be: finale_branding\n4. Total scenes: {scene_count}\n5. Each scene: 3-8 seconds duration\n6. Watch visible in 2-5 scenes total\n7. No generic content - ALWAYS luxury watch-specific\n8. Lifestyle scenes (family_farewell, office_departure, tennis_winning_shot, evening_dresser_moment) show wealthy, revered, well-manicured man\n\nGenerate concise, vivid scene descriptions that follow this grammar. Output valid JSON."
+  "llm_prompt_template": "You are a luxury timepiece video director. Create a TikTok vertical video scene plan (9:16) constrained by watch shot grammar.\n\nREQUIREMENTS:\n1. Use ONLY these shot types: macro_face_detail, family_farewell, case_craftsmanship, bracelet_movement, office_departure, wrist_lifestyle, tennis_winning_shot, heritage_story, evening_dresser_moment, finale_branding\n2. Total scenes: {scene_count}\n3. For 8-scene ~45s videos, use this structure:\n   - Scenes 1-4 (7s each): family_farewell, office_departure, tennis_winning_shot, evening_dresser_moment\n   - Scenes 5-8 (4s each): macro_face_detail, wrist_lifestyle, case_craftsmanship, finale_branding\n4. Last scene MUST be: finale_branding\n5. Watch visible in at least 4 scenes (family_farewell, tennis_winning_shot, evening_dresser_moment, and all product scenes)\n6. No generic content - ALWAYS luxury watch-specific\n7. Lifestyle scenes show wealthy, revered, fit, well-manicured man\n8. The man is loved and respected by his family and colleagues\n\nGenerate concise, vivid scene descriptions that follow this grammar. Output valid JSON."
 }
