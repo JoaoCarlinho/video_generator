@@ -422,6 +422,7 @@ backend/test_extraction.py
 # Project documentation (local)
 docs/
 bmad/
+feature_updates/
 .bmad/
 .claude/
 frontend/.env.production
