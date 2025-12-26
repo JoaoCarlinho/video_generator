@@ -59,15 +59,17 @@ async def check_ecs_health() -> ProviderHealthStatus:
 def check_replicate_health() -> ProviderHealthStatus:
     """Check Replicate provider health status.
 
-    Replicate API is always available (cloud service with 99.9% SLA).
+    REPLICATE IS DISABLED - Always returns disabled status.
+    All video generation uses ECS provider.
 
     Returns:
-        ProviderHealthStatus: Replicate provider health information
+        ProviderHealthStatus: Replicate provider marked as disabled
     """
+    # REPLICATE DISABLED - Return disabled status
     return ProviderHealthStatus(
         provider="replicate",
-        healthy=True,
-        message="Always available"
+        healthy=False,
+        message="DISABLED - Use ECS provider"
     )
 
 

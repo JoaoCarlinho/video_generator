@@ -88,7 +88,7 @@ export const CreateCreative = () => {
         creative_prompt: creativePrompt,
         selected_style: selectedStyle,
         num_variations: numVariations,
-        video_provider: 'replicate',
+        video_provider: 'ecs', // REPLICATE DISABLED - Use ECS only
       })
 
       // Navigate to the creative's progress page to start generation

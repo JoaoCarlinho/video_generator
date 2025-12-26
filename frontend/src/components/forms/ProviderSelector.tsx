@@ -1,6 +1,8 @@
 /**
  * ProviderSelector Component
- * Allows users to choose between Replicate (cloud) and ECS (self-hosted) video generation providers
+ *
+ * NOTE: REPLICATE IS DISABLED - Only ECS provider is available.
+ * This component now only shows the ECS (self-hosted GPU) option.
  *
  * Story 5.1: Create Provider Selector Component
  */
@@ -10,7 +12,9 @@ import { Card } from '../ui/Card';
 import { RadioGroup, RadioGroupItem } from '../ui/RadioGroup';
 import { Label } from '../ui/Label';
 import { Badge } from '../ui/Badge';
-import { Cloud, Server, Check, AlertCircle } from 'lucide-react';
+import { Server, Check, AlertCircle } from 'lucide-react';
+// REPLICATE DISABLED: Cloud icon no longer needed
+// import { Cloud } from 'lucide-react';
 
 export interface ProviderSelectorProps {
   /** Currently selected provider */
@@ -35,14 +39,16 @@ interface ProviderOption {
   description: string;
 }
 
+// REPLICATE DISABLED - Only ECS provider is available
 const PROVIDERS: ProviderOption[] = [
-  {
-    id: 'replicate',
-    name: 'Replicate Cloud',
-    icon: Cloud,
-    cost: '~$0.80/video',
-    description: 'Managed cloud service with automatic scaling',
-  },
+  // REPLICATE DISABLED:
+  // {
+  //   id: 'replicate',
+  //   name: 'Replicate Cloud',
+  //   icon: Cloud,
+  //   cost: '~$0.80/video',
+  //   description: 'Managed cloud service with automatic scaling',
+  // },
   {
     id: 'ecs',
     name: 'Self-Hosted GPU',
@@ -167,12 +173,12 @@ export function ProviderSelector({
         })}
       </RadioGroup>
 
-      {/* Helper text */}
+      {/* Helper text - REPLICATE DISABLED */}
       <p className="mt-3 text-sm text-gray-500">
         {ecsAvailable ? (
-          <span>Both providers are currently available. Choose based on your budget and requirements.</span>
+          <span>Self-hosted GPU cluster is active and ready for video generation.</span>
         ) : (
-          <span>Self-hosted GPU cluster is currently offline. Replicate Cloud will be used automatically.</span>
+          <span>Self-hosted GPU cluster is currently starting up. Please wait.</span>
         )}
       </p>
     </div>

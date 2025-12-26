@@ -1,19 +1,14 @@
 """Video Generator Service - Scene background video generation.
 
-This service orchestrates video generation through pluggable provider backends
-(Replicate API, ECS-hosted Wan2.5, etc.) with automatic failover support.
+This service orchestrates video generation through pluggable provider backends.
 
-CURRENT: ByteDance SeedAnce-1-Pro (text-to-video)
-FUTURE: Google Veo S3 (image-to-video with product/text integration)
+CURRENT: ECS-hosted Wan2.5 model (VPC-hosted GPU inference)
+NOTE: Replicate provider is DISABLED - use ECS provider only
 
 Provider Architecture:
 - BaseVideoProvider interface for consistent provider API
-- ReplicateVideoProvider for Replicate's hosted inference
-- ECSVideoProvider for VPC-hosted Wan2.5 (future - Epic 3)
-- Automatic failover from primary to fallback provider
-
-Model: bytedance/seedance-1-pro-fast (fast, high-quality production model)
-Optimized for: Professional ad video generation with excellent quality/speed balance
+- ECSVideoProvider for VPC-hosted Wan2.5 inference (ACTIVE)
+- ReplicateVideoProvider is COMMENTED OUT / DISABLED
 
 VEO S3 READINESS:
 - Enhanced prompts from ScenePlanner (user-first + cinematography)
@@ -31,80 +26,70 @@ from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 from app.services.style_manager import StyleManager
 
-from app.services.providers import ReplicateVideoProvider
+# REPLICATE DISABLED - Using ECS provider only
+# from app.services.providers import ReplicateVideoProvider
+from app.services.providers import ECSVideoProvider
 
 logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Provider configuration
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro/predictions"
+# ECS Provider configuration
+ECS_ENDPOINT_URL = os.environ.get("ECS_ENDPOINT_URL", "http://internal-adgen-ecs-alb-1719239824.us-east-1.elb.amazonaws.com")
+
+# REPLICATE DISABLED
+# REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
+# REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro/predictions"
 
 
 class VideoGenerator:
-    """Orchestrates video generation through pluggable provider backends.
+    """Orchestrates video generation through ECS-hosted Wan2.5 provider.
 
-    This service implements the provider abstraction pattern, enabling:
-    - Multiple video generation backends (Replicate API, ECS, etc.)
-    - Configuration-driven provider selection
-    - Automatic failover between providers (Story 1.4)
-    - Consistent interface regardless of backend
+    This service implements the provider abstraction pattern using the
+    VPC-hosted Wan2.5 model for GPU-accelerated video generation.
 
-    The service delegates all video generation to provider instances,
-    making it easy to swap backends without changing calling code.
-    Generates background videos using ByteDance SeedAnce-1-Pro text-to-video model.
-    
-    Uses HTTP API directly (no SDK) for:
-    - Better Python 3.14+ compatibility
-    - No Pydantic v1 conflicts
-    - Simpler, more direct control
-    
-    This is a professional-grade model optimized for high-quality ad video generation.
+    NOTE: Replicate provider is DISABLED. All video generation uses ECS.
     """
 
     def __init__(
         self,
-        provider: str = "replicate",
+        provider: str = "ecs",
         api_token: Optional[str] = None
     ):
-        """Initialize VideoGenerator with selected provider.
+        """Initialize VideoGenerator with ECS provider.
 
         Args:
-            provider: Provider identifier ("replicate" or "ecs").
-                Defaults to "replicate" for backward compatibility.
-            api_token: Replicate API token. If None, uses REPLICATE_API_TOKEN env var.
-                Only used when provider="replicate".
+            provider: Provider identifier. Only "ecs" is supported.
+                Replicate is DISABLED.
+            api_token: Ignored. ECS provider uses IAM authentication.
 
         Raises:
-            ValueError: If provider is invalid or required credentials missing.
+            ValueError: If provider is not "ecs".
         """
+        # REPLICATE IS DISABLED - Force ECS provider
+        if provider == "replicate":
+            logger.warning(
+                "⚠️ Replicate provider is DISABLED. Switching to ECS provider."
+            )
+            provider = "ecs"
+
         self.provider_name = provider
 
-        # Instantiate provider based on selection
-        if provider == "replicate":
-            token = api_token or REPLICATE_API_TOKEN
-            if not token:
+        if provider == "ecs":
+            endpoint_url = ECS_ENDPOINT_URL
+            if not endpoint_url:
                 raise ValueError(
-                    "Replicate API token not provided. "
-                    "Set REPLICATE_API_TOKEN environment variable or pass api_token parameter."
+                    "ECS_ENDPOINT_URL not configured. "
+                    "Set ECS_ENDPOINT_URL environment variable."
                 )
-            self.api_token = token  # Store api_token for direct API calls
-            self.provider = ReplicateVideoProvider(replicate_api_token=token)
-            logger.info("✅ VideoGenerator initialized with Replicate provider")
-
-        elif provider == "ecs":
-            # ECS provider will be implemented in Epic 3
-            raise NotImplementedError(
-                "ECS provider not yet implemented. "
-                "Use provider='replicate' or wait for Epic 3 completion."
-            )
+            self.provider = ECSVideoProvider(endpoint_url=endpoint_url)
+            logger.info(f"✅ VideoGenerator initialized with ECS provider: {endpoint_url}")
 
         else:
             raise ValueError(
                 f"Invalid provider: '{provider}'. "
-                "Valid options: 'replicate', 'ecs'"
+                "Only 'ecs' is supported. Replicate is DISABLED."
             )
 
     async def generate_scene_background(
