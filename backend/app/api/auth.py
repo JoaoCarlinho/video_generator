@@ -15,13 +15,17 @@ from app.database import crud
 
 logger = logging.getLogger(__name__)
 
+# JWT configuration (same as auth_routes.py)
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+
 # Test user ID for development mode
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def get_current_user_id(authorization: str = Header(None)) -> UUID:
     """
-    Extract user ID from Supabase JWT token.
+    Extract user ID from JWT token.
 
     **Arguments:**
     - authorization: Bearer token from Authorization header
@@ -34,17 +38,16 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
 
     **Implementation Notes:**
     - In development: Falls back to test user ID if no token
-    - In production: Validates JWT with Supabase
+    - In production: Validates JWT signature and expiration
     - Token format: "Bearer {token}"
-    - Automatically creates test user in auth.users if it doesn't exist (dev only)
     """
-    # For Phase 4 development: Allow test user ID via header or environment
     env = os.getenv("ENVIRONMENT", "development")
+
     if not authorization:
         if env == "development":
             # Development: use test user ID and ensure it exists in database
             _ensure_test_user_exists(TEST_USER_ID)
-            logger.debug("⚠️  No auth header - using test user ID")
+            logger.debug("No auth header - using test user ID")
             return TEST_USER_ID
         else:
             # Production: require token
@@ -65,100 +68,85 @@ def get_current_user_id(authorization: str = Header(None)) -> UUID:
         token = parts[1]
 
         if env == "development":
-            # Development: accept any token
-            logger.debug(f"✓ Accepted dev token")
-            return TEST_USER_ID
+            # Development: try to decode, fall back to test user
+            try:
+                decoded = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                user_id = UUID(decoded.get("sub"))
+                logger.debug(f"Authenticated user: {user_id}")
+                return user_id
+            except Exception:
+                logger.debug("Dev mode: token decode failed, using test user")
+                return TEST_USER_ID
 
-        # Production: validate JWT with Supabase
+        # Production: validate JWT
         try:
-            # Decode JWT without verification first to check structure
-            # Supabase uses HS256 algorithm with JWT secret
-            supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-
-            if not supabase_jwt_secret:
-                # Fallback: decode without verification (less secure but functional)
-                logger.warning("⚠️ SUPABASE_JWT_SECRET not set - decoding token without verification")
-                decoded = jwt.decode(token, options={"verify_signature": False})
-            else:
-                # Verify and decode the token
-                decoded = jwt.decode(
-                    token,
-                    supabase_jwt_secret,
-                    algorithms=["HS256"],
-                    options={"verify_exp": True, "verify_aud": False}
-                )
+            decoded = jwt.decode(
+                token,
+                JWT_SECRET,
+                algorithms=[JWT_ALGORITHM],
+                options={"verify_exp": True}
+            )
 
             # Extract user ID from the 'sub' claim
             user_id_str = decoded.get("sub")
             if not user_id_str:
-                logger.error("❌ Token missing 'sub' claim")
+                logger.error("Token missing 'sub' claim")
                 raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
 
-            # Convert to UUID
             user_id = UUID(user_id_str)
-            logger.debug(f"✓ Authenticated user: {user_id}")
+            logger.debug(f"Authenticated user: {user_id}")
             return user_id
 
         except jwt.ExpiredSignatureError:
-            logger.error("❌ Token expired")
+            logger.error("Token expired")
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError as e:
-            logger.error(f"❌ Invalid token: {e}")
+            logger.error(f"Invalid token: {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
         except ValueError as e:
-            logger.error(f"❌ Invalid user ID format: {e}")
+            logger.error(f"Invalid user ID format: {e}")
             raise HTTPException(status_code=401, detail="Invalid user ID in token")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Auth error: {e}")
+        logger.error(f"Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid authorization")
 
 
-def _ensure_user_exists(user_id: UUID, email: Optional[str] = None):
-    """Ensure user exists in auth.users table (syncs from Supabase)."""
+def _ensure_test_user_exists(user_id: UUID):
+    """Ensure test user exists in users table (dev only)."""
     try:
         from app.database.connection import SessionLocal
-        from sqlalchemy import text
-        
+        from app.database.models import User
+
         if SessionLocal is None:
-            return  # Can't create user if DB not available
-        
-        # Create a new session
+            return
+
         db = SessionLocal()
         try:
-            # Check if user exists, create if not
-            result = db.execute(
-                text("SELECT id FROM auth.users WHERE id = :user_id"),
-                {"user_id": str(user_id)}
-            ).fetchone()
-            
-            if not result:
-                # Create user (synced from Supabase)
-                db.execute(
-                    text("INSERT INTO auth.users (id, email, created_at) VALUES (:user_id, :email, NOW()) ON CONFLICT (id) DO NOTHING"),
-                    {"user_id": str(user_id), "email": email or "user@example.com"}
+            # Check if user exists
+            user = db.query(User).filter(User.id == user_id).first()
+
+            if not user:
+                # Create test user
+                from passlib.context import CryptContext
+                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+                test_user = User(
+                    id=user_id,
+                    email="test@example.com",
+                    password_hash=pwd_context.hash("testpassword"),
+                    is_active=True,
+                    is_verified=True,
                 )
+                db.add(test_user)
                 db.commit()
-                logger.info(f"✅ Synced user {user_id} to local auth.users table")
-            elif email:
-                # Update email if provided and different
-                db.execute(
-                    text("UPDATE auth.users SET email = :email WHERE id = :user_id AND (email IS NULL OR email != :email)"),
-                    {"user_id": str(user_id), "email": email}
-                )
-                db.commit()
+                logger.info(f"Created test user: {user_id}")
         finally:
             db.close()
     except Exception as e:
-        # Non-critical - log but don't fail
-        logger.warning(f"⚠️  Could not sync user to local DB: {e}")
-
-
-def _ensure_test_user_exists(user_id: UUID):
-    """Ensure test user exists in auth.users table (dev only)."""
-    _ensure_user_exists(user_id, "test@example.com")
+        logger.warning(f"Could not ensure test user exists: {e}")
 
 
 async def get_authenticated_user(
@@ -177,14 +165,14 @@ def verify_user_ownership(
 ) -> bool:
     """
     Verify that current user owns the resource.
-    
+
     **Arguments:**
     - owner_user_id: User ID who owns the resource
     - current_user_id: Current authenticated user ID
-    
+
     **Returns:**
     - bool: True if owner matches
-    
+
     **Raises:**
     - HTTPException 403: If user doesn't own resource
     """
@@ -214,16 +202,16 @@ def get_current_brand_id(
 ) -> UUID:
     """
     Get brand_id for current user.
-    
+
     **Returns:**
     - UUID: Brand ID
-    
+
     **Raises:**
     - HTTPException 404: If brand not found (onboarding not completed)
     """
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    
+
     brand = crud.get_brand_by_user_id(db, user_id)
     if not brand:
         raise HTTPException(
@@ -239,16 +227,16 @@ def verify_onboarding(
 ) -> bool:
     """
     Verify that user has completed onboarding.
-    
+
     **Returns:**
     - bool: True if onboarding completed
-    
+
     **Raises:**
     - HTTPException 403: If onboarding not completed
     """
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    
+
     brand = crud.get_brand_by_user_id(db, user_id)
     if not brand or not brand.onboarding_completed:
         raise HTTPException(
@@ -288,7 +276,7 @@ def verify_perfume_ownership(
     if product.brand_id != brand_id:
         raise HTTPException(
             status_code=404,
-            detail="Product not found"  # Return 404 to avoid info leak
+            detail="Product not found"
         )
 
     return True
@@ -301,19 +289,19 @@ def verify_campaign_ownership(
 ) -> bool:
     """
     Verify that campaign belongs to current user's brand.
-    
+
     **Arguments:**
     - campaign_id: Campaign ID to verify
-    
+
     **Returns:**
     - bool: True if campaign belongs to brand
-    
+
     **Raises:**
     - HTTPException 404: If campaign not found or doesn't belong to brand
     """
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    
+
     campaign = crud.get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
@@ -324,8 +312,7 @@ def verify_campaign_ownership(
     if campaign.product.brand_id != brand_id:
         raise HTTPException(
             status_code=404,
-            detail="Campaign not found"  # Return 404 to avoid info leak
+            detail="Campaign not found"
         )
-    
-    return True
 
+    return True

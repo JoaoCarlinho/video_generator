@@ -1,46 +1,52 @@
 /**
- * Supabase Authentication Service
+ * Authentication Service
  * Handles user signup, login, logout, and session management
+ * Uses backend API with JWT tokens
  */
 
-import { createClient } from '@supabase/supabase-js'
 import type { User } from '../types'
 
-// Get Supabase credentials from environment
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+// Get API URL from environment
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-// Initialize Supabase client with error handling
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-})
+interface AuthResponse {
+  access_token: string
+  token_type: string
+  user: {
+    id: string
+    email: string
+    created_at: string
+    is_verified: boolean
+  }
+}
 
 /**
  * Sign up a new user
  */
 export const signup = async (email: string, password: string): Promise<User> => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
+  const response = await fetch(`${API_URL}/api/auth/signup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
   })
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Signup failed')
   }
 
-  if (!data.user) {
-    throw new Error('User creation failed')
-  }
+  const data: AuthResponse = await response.json()
 
+  // Store token and user
+  localStorage.setItem('authToken', data.access_token)
   const user: User = {
     id: data.user.id,
-    email: data.user.email || '',
+    email: data.user.email,
     created_at: data.user.created_at,
   }
+  localStorage.setItem('user', JSON.stringify(user))
 
   return user
 }
@@ -49,30 +55,29 @@ export const signup = async (email: string, password: string): Promise<User> => 
  * Sign in an existing user
  */
 export const login = async (email: string, password: string): Promise<User> => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+  const response = await fetch(`${API_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
   })
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Login failed')
   }
 
-  if (!data.user || !data.session) {
-    throw new Error('Login failed')
-  }
+  const data: AuthResponse = await response.json()
 
+  // Store token and user
+  localStorage.setItem('authToken', data.access_token)
   const user: User = {
     id: data.user.id,
-    email: data.user.email || '',
+    email: data.user.email,
     created_at: data.user.created_at,
   }
-
-  // Store JWT token for API requests
-  if (data.session.access_token) {
-    localStorage.setItem('authToken', data.session.access_token)
-    localStorage.setItem('user', JSON.stringify(user))
-  }
+  localStorage.setItem('user', JSON.stringify(user))
 
   return user
 }
@@ -81,10 +86,20 @@ export const login = async (email: string, password: string): Promise<User> => {
  * Sign out current user
  */
 export const logout = async (): Promise<void> => {
-  const { error } = await supabase.auth.signOut()
+  const token = localStorage.getItem('authToken')
 
-  if (error) {
-    throw new Error(error.message)
+  // Call logout endpoint (optional, mainly for logging)
+  if (token) {
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+    } catch {
+      // Ignore errors - we're logging out anyway
+    }
   }
 
   // Clear local storage
@@ -93,16 +108,33 @@ export const logout = async (): Promise<void> => {
 }
 
 /**
- * Get current session
+ * Get current session token
  */
 export const getCurrentSession = async () => {
-  const { data, error } = await supabase.auth.getSession()
-
-  if (error) {
-    throw new Error(error.message)
+  const token = localStorage.getItem('authToken')
+  if (!token) {
+    return null
   }
 
-  return data.session
+  // Validate token by calling /me endpoint
+  try {
+    const response = await fetch(`${API_URL}/api/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      // Token is invalid, clear storage
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('user')
+      return null
+    }
+
+    return { access_token: token }
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -111,56 +143,120 @@ export const getCurrentSession = async () => {
 export const getCurrentUser = async (): Promise<User | null> => {
   // Try to get from localStorage first
   const stored = localStorage.getItem('user')
-  if (stored) {
-    return JSON.parse(stored)
-  }
+  const token = localStorage.getItem('authToken')
 
-  // Otherwise get from Supabase
-  const { data, error } = await supabase.auth.getUser()
-
-  if (error || !data.user) {
+  if (!token) {
+    localStorage.removeItem('user')
     return null
   }
 
-  const user: User = {
-    id: data.user.id,
-    email: data.user.email || '',
-    created_at: data.user.created_at,
+  if (stored) {
+    // Validate token is still valid
+    try {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        return JSON.parse(stored)
+      }
+    } catch {
+      // Token validation failed
+    }
+
+    // Clear invalid session
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('user')
+    return null
   }
 
-  localStorage.setItem('user', JSON.stringify(user))
-  return user
+  // No stored user, try to get from API
+  try {
+    const response = await fetch(`${API_URL}/api/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      localStorage.removeItem('authToken')
+      return null
+    }
+
+    const data = await response.json()
+    const user: User = {
+      id: data.id,
+      email: data.email,
+      created_at: data.created_at,
+    }
+
+    localStorage.setItem('user', JSON.stringify(user))
+    return user
+  } catch {
+    localStorage.removeItem('authToken')
+    return null
+  }
 }
 
 /**
- * Listen to auth state changes with error handling
+ * Listen to auth state changes
+ * Note: With JWT auth, we check on app load rather than realtime updates
  */
 export const onAuthStateChange = (
   callback: (user: User | null) => void
 ) => {
-  try {
-    return supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const user: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          created_at: session.user.created_at,
+  // Check current auth state immediately
+  getCurrentUser().then(callback).catch(() => callback(null))
+
+  // Return a mock subscription object for compatibility
+  return {
+    data: {
+      subscription: {
+        unsubscribe: () => {
+          // No-op for JWT auth
         }
-        localStorage.setItem('authToken', session.access_token)
-        localStorage.setItem('user', JSON.stringify(user))
-        callback(user)
-      } else {
-        localStorage.removeItem('authToken')
-        localStorage.removeItem('user')
-        callback(null)
       }
-    })
-  } catch (error) {
-    // If auth state change fails, treat as no user
-    console.warn('Auth state change error:', error)
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('user')
-    callback(null)
+    }
   }
 }
 
+/**
+ * Refresh the access token
+ */
+export const refreshToken = async (): Promise<string | null> => {
+  const token = localStorage.getItem('authToken')
+  if (!token) {
+    return null
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('user')
+      return null
+    }
+
+    const data: AuthResponse = await response.json()
+    localStorage.setItem('authToken', data.access_token)
+
+    const user: User = {
+      id: data.user.id,
+      email: data.user.email,
+      created_at: data.user.created_at,
+    }
+    localStorage.setItem('user', JSON.stringify(user))
+
+    return data.access_token
+  } catch {
+    return null
+  }
+}

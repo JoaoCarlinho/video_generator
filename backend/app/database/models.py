@@ -109,6 +109,7 @@ class Creative(Base):
     ad_creative_json = Column(JSONB, nullable=False)  # Creative configuration and content
     status = Column(String(50), default="pending", index=True)  # pending, generating, completed, failed
     progress = Column(Integer, default=0)
+    current_step = Column(String(100), nullable=True)  # Detailed step description for UI progress
     cost = Column(Numeric(10, 2), default=0)
     error_message = Column(Text, nullable=True)
 
@@ -155,20 +156,28 @@ class Creative(Base):
 
 
 # ============================================================================
-# Auth Users Model (for foreign key reference)
-# This is a minimal model to satisfy SQLAlchemy foreign key constraints
-# The actual auth.users table is managed by Supabase Auth
+# Users Model (Direct PostgreSQL Authentication)
 # ============================================================================
-class AuthUser(Base):
-    """Minimal model for auth.users table (managed by Supabase).
-    
-    This model exists only to satisfy SQLAlchemy foreign key constraints.
-    We don't create/modify this table - it's managed by Supabase Auth.
+class User(Base):
+    """User model for authentication.
+
+    Handles user registration, login, and session management
+    directly with PostgreSQL (replaces Supabase Auth).
     """
     __tablename__ = "users"
-    __table_args__ = {"schema": "auth"}
-    
-    id = Column(UUID(as_uuid=True), primary_key=True)
-    
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+
+    # Relationships
+    brands = relationship("Brand", backref="user", foreign_keys="Brand.user_id")
+
     def __repr__(self):
-        return f"<AuthUser {self.id}>"
+        return f"<User {self.id} - {self.email}>"

@@ -16,7 +16,7 @@ export const AuthInitializer = ({ children }: AuthInitializerProps) => {
   const dispatch = useAppDispatch()
 
   useEffect(() => {
-    // Initialize auth state from localStorage or Supabase
+    // Initialize auth state from localStorage
     dispatch(initializeAuth())
 
     // Listen to auth state changes

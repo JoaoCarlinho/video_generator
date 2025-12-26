@@ -1,11 +1,18 @@
 /**
- * Supabase Storage Service
+ * Storage Service
  * Handles file uploads for product images and scene backgrounds
+ * Uses backend API with S3 storage
  */
 
-import { supabase } from './auth'
+// Get API URL from environment
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const STORAGE_BUCKET = 'campaign-assets' // You may need to create this bucket in Supabase
+/**
+ * Get auth token from localStorage
+ */
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('authToken')
+}
 
 /**
  * Upload multiple product images for a campaign
@@ -18,30 +25,30 @@ export const uploadProductImages = async (
   files: File[]
 ): Promise<string[]> => {
   const urls: string[] = []
+  const token = getAuthToken()
 
   for (const file of files) {
-    const timestamp = Date.now()
-    const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-    const filePath = `campaigns/${campaignId}/products/${fileName}`
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('asset_type', 'product')
+    formData.append('campaign_id', campaignId)
 
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      })
+    const response = await fetch(`${API_URL}/api/upload-asset`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    })
 
-    if (error) {
+    if (!response.ok) {
+      const error = await response.json()
       console.error(`Failed to upload ${file.name}:`, error)
-      throw new Error(`Failed to upload ${file.name}: ${error.message}`)
+      throw new Error(`Failed to upload ${file.name}: ${error.detail || 'Unknown error'}`)
     }
 
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(data.path)
-
-    urls.push(publicUrl)
+    const data = await response.json()
+    urls.push(data.file_url)
   }
 
   return urls
@@ -59,39 +66,48 @@ export const uploadSceneBackground = async (
   sceneId: string,
   file: File
 ): Promise<string> => {
-  const timestamp = Date.now()
-  const fileName = `${sceneId}_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-  const filePath = `campaigns/${campaignId}/scenes/${fileName}`
+  const token = getAuthToken()
 
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: false,
-    })
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('asset_type', 'product') // Use 'product' type for scene backgrounds
+  formData.append('campaign_id', campaignId)
 
-  if (error) {
+  const response = await fetch(`${API_URL}/api/upload-asset`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
     console.error(`Failed to upload scene background for ${sceneId}:`, error)
-    throw new Error(`Failed to upload scene background: ${error.message}`)
+    throw new Error(`Failed to upload scene background: ${error.detail || 'Unknown error'}`)
   }
 
-  // Get public URL
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(data.path)
-
-  return publicUrl
+  const data = await response.json()
+  return data.file_url
 }
 
 /**
  * Delete files from storage (cleanup utility)
- * @param paths - Array of file paths to delete
+ * @param campaignId - Campaign ID to cleanup
  */
-export const deleteFiles = async (paths: string[]): Promise<void> => {
-  const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths)
+export const deleteFiles = async (campaignId: string): Promise<void> => {
+  const token = getAuthToken()
 
-  if (error) {
+  const response = await fetch(`${API_URL}/api/cleanup-campaign/${campaignId}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
     console.error('Failed to delete files:', error)
-    throw new Error(`Failed to delete files: ${error.message}`)
+    throw new Error(`Failed to delete files: ${error.detail || 'Unknown error'}`)
   }
 }

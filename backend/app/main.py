@@ -129,6 +129,11 @@ async def root():
 
 # Import and include routers
 from app.api import campaigns, generation, storage, uploads, brands, products, editing, providers, creatives, admin
+from app.api.auth_routes import router as auth_router
+
+# Auth routes (no /api prefix for compatibility)
+app.include_router(auth_router, prefix="/api")
+
 app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])
 app.include_router(creatives.router, prefix="/api/campaigns", tags=["creatives"])
 app.include_router(generation.router, prefix="/api/generation", tags=["generation"])
