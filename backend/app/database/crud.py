@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
-from app.database.models import Campaign, Brand, Product, Creative, AuthUser  # AuthUser needed for FK resolution
+from app.database.models import Campaign, Brand, Product, Creative, User  # User model for FK resolution
 from app.models.schemas import (
     CreateCampaignRequest,
     CampaignResponse,
