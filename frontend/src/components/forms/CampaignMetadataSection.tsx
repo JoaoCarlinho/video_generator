@@ -99,7 +99,7 @@ export function CampaignMetadataSection({
           <select
             value={productId}
             onChange={(e) => onProductIdChange(e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+            className={`w-full px-3 py-2 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 ${
               errors.productId ? 'border-red-500' : 'border-gray-300'
             }`}
           >
@@ -128,7 +128,7 @@ export function CampaignMetadataSection({
           onChange={(e) => onCampaignNameChange(e.target.value)}
           placeholder="e.g., Spring Launch, Q4 Promo"
           maxLength={100}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+          className={`w-full px-3 py-2 border rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 ${
             errors.name ? 'border-red-500' : 'border-gray-300'
           }`}
         />
@@ -156,7 +156,7 @@ export function CampaignMetadataSection({
         <select
           value={year}
           onChange={(e) => onYearChange(parseInt(e.target.value))}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+          className={`w-full px-3 py-2 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 ${
             errors.year ? 'border-red-500' : 'border-gray-300'
           }`}
         >

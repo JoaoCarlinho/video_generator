@@ -13,8 +13,8 @@ export interface Campaign {
   seasonal_event: string
   year: number
   display_name: string
-  duration: number
-  scene_configs: Array<SceneConfig>
+  duration?: number  // Optional - video-specific, defined per-creative
+  scene_configs?: Array<SceneConfig>  // Optional - video-specific, defined per-creative
   status: string
   created_at: string
   updated_at: string
@@ -34,13 +34,23 @@ export interface Campaign {
   campaign_json?: Record<string, any>
 }
 
+/**
+ * Input for creating a campaign.
+ * Campaigns are organizational containers - video-specific settings
+ * (duration, scenes) are defined per-creative, not per-campaign.
+ */
 export interface CreateCampaignInput {
   product_id: string
   campaign_name: string
   seasonal_event: string
   year: number
-  target_duration: number
-  scene_configs: SceneConfig[]
+}
+
+export interface UpdateCampaignInput {
+  name?: string
+  seasonal_event?: string
+  year?: number
+  duration?: number
 }
 
 export interface PaginatedCampaigns {
@@ -110,9 +120,7 @@ export const useCampaigns = () => {
           {
             name: input.campaign_name,
             seasonal_event: input.seasonal_event,
-            year: input.year,
-            duration: input.target_duration,
-            scene_configs: input.scene_configs
+            year: input.year
           }
         )
 
@@ -147,6 +155,27 @@ export const useCampaigns = () => {
     }
   }, [])
 
+  // Update campaign
+  const updateCampaign = useCallback(async (campaignId: string, updates: UpdateCampaignInput) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await apiClient.patch<Campaign>(`/api/campaigns/${campaignId}`, updates)
+      // Update the campaign in the local state
+      setCampaigns((prev) =>
+        prev.map((c) => (c.id === campaignId ? response.data : c))
+      )
+      return response.data
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Failed to update campaign'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return {
     campaigns,
     loading,
@@ -155,6 +184,7 @@ export const useCampaigns = () => {
     getCampaign,
     createCampaign,
     deleteCampaign,
+    updateCampaign,
   }
 }
 

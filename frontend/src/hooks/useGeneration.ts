@@ -21,56 +21,6 @@ export const useGeneration = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Trigger generation for campaign (legacy)
-  const generateVideo = useCallback(async (campaignId: string) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await apiClient.post(
-        `/api/generation/campaigns/${campaignId}/generate/`
-      )
-      return response.data
-    } catch (err: any) {
-      // 409 Conflict means generation already started - treat as success
-      if (err?.response?.status === 409) {
-        console.log('✅ Generation already in progress (409)')
-        return { message: 'Generation already in progress' }
-      }
-      
-      const message = err instanceof Error ? err.message : 'Failed to generate video'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Trigger generation for campaign
-  const generateCampaign = useCallback(async (campaignId: string) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await apiClient.post(
-        `/api/generation/campaigns/${campaignId}/generate`
-      )
-      return response.data
-    } catch (err: any) {
-      // 409 Conflict means generation already started - treat as success
-      if (err?.response?.status === 409) {
-        console.log('✅ Generation already in progress (409)')
-        return { message: 'Generation already in progress' }
-      }
-      
-      const message = err instanceof Error ? err.message : 'Failed to generate video'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   // Get generation progress for campaign (legacy)
   const getProgress = useCallback(async (campaignId: string, signal?: AbortSignal) => {
     // Validate campaignId - guard against undefined/null/string "undefined"
@@ -241,8 +191,6 @@ export const useGeneration = () => {
   return {
     loading,
     error,
-    generateVideo,
-    generateCampaign,
     generateCreative,
     getProgress,
     getCampaignProgress,

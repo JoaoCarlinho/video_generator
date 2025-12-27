@@ -5,8 +5,8 @@ import { Button } from '@/components/ui'
 import { CampaignCard } from '@/components/CampaignCard'
 import { useAuth } from '@/hooks/useAuth'
 import { useProducts } from '@/hooks/useProducts'
-import { useCampaigns } from '@/hooks/useCampaigns'
-import { Plus, ArrowLeft, Sparkles, LogOut, Package, X } from 'lucide-react'
+import { useCampaigns, type Campaign } from '@/hooks/useCampaigns'
+import { Plus, ArrowLeft, Sparkles, LogOut, Package, X, Pencil } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export const CampaignDashboard = () => {
@@ -14,8 +14,11 @@ export const CampaignDashboard = () => {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { getProduct } = useProducts()
-  const { campaigns, loading, error, fetchCampaigns, deleteCampaign } = useCampaigns()
+  const { campaigns, loading, error, fetchCampaigns, deleteCampaign, updateCampaign } = useCampaigns()
   const [product, setProduct] = useState<any>(null)
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  const [editName, setEditName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (productId) {
@@ -51,6 +54,36 @@ export const CampaignDashboard = () => {
         console.error('Failed to delete campaign:', err)
       }
     }
+  }
+
+  const handleEditCampaign = (campaign: Campaign, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+    setEditingCampaign(campaign)
+    setEditName(campaign.name || campaign.campaign_name || '')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingCampaign || !editName.trim()) return
+
+    setIsSaving(true)
+    try {
+      await updateCampaign(editingCampaign.id, { name: editName.trim() })
+      setEditingCampaign(null)
+      setEditName('')
+      // Refresh campaigns to show updated name
+      if (productId) {
+        fetchCampaigns(productId)
+      }
+    } catch (err) {
+      console.error('Failed to update campaign:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingCampaign(null)
+    setEditName('')
   }
 
   const containerVariants = {
@@ -210,14 +243,23 @@ export const CampaignDashboard = () => {
                         campaign={campaign}
                         onClick={() => handleCampaignClick(campaign.id)}
                       />
-                      {/* Delete button on hover */}
-                      <button
-                        onClick={(e) => handleDeleteCampaign(campaign.id, e)}
-                        className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-white"
-                        title="Delete campaign"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {/* Action buttons on hover */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleEditCampaign(campaign, e)}
+                          className="p-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg text-white"
+                          title="Edit campaign name"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteCampaign(campaign.id, e)}
+                          className="p-2 bg-red-500/80 hover:bg-red-500 rounded-lg text-white"
+                          title="Delete campaign"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </motion.div>
                   ))}
                 </motion.div>
@@ -225,6 +267,51 @@ export const CampaignDashboard = () => {
             </motion.div>
           </motion.div>
       </main>
+
+      {/* Edit Campaign Modal */}
+      {editingCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-charcoal-900 border border-charcoal-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-xl"
+          >
+            <h3 className="text-xl font-bold text-off-white mb-4">Edit Campaign Name</h3>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Campaign name"
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isSaving) {
+                  handleSaveEdit()
+                } else if (e.key === 'Escape') {
+                  handleCancelEdit()
+                }
+              }}
+            />
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="hero"
+                onClick={handleSaveEdit}
+                disabled={isSaving || !editName.trim()}
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

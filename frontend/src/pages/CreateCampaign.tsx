@@ -3,12 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui'
-import { useCampaigns, type VideoStyle } from '@/hooks/useCampaigns'
+import { useCampaigns } from '@/hooks/useCampaigns'
 import { useProducts } from '@/hooks/useProducts'
 import { useAuth } from '@/hooks/useAuth'
-import { ArrowLeft, Sparkles, LogOut, CheckCircle, Sparkles as SparklesIcon, Check } from 'lucide-react'
+import { ArrowLeft, Sparkles, LogOut, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Slider } from '@/components/ui/slider'
 
 export const CreateCampaign = () => {
   const { productId } = useParams<{ productId: string }>()
@@ -20,10 +19,6 @@ export const CreateCampaign = () => {
   const [product, setProduct] = useState<any>(null)
   const [campaignName, setCampaignName] = useState('')
   const [seasonalEvent, setSeasonalEvent] = useState('')
-  const [creativePrompt, setCreativePrompt] = useState('')
-  const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('gold_luxe')
-  const [targetDuration, setTargetDuration] = useState(30)
-  const [numVariations, setNumVariations] = useState<1 | 2 | 3>(1)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -75,18 +70,13 @@ export const CreateCampaign = () => {
 
   // Validate form
   const validateForm = (): boolean => {
-    if (!campaignName.trim() || campaignName.length < 2 || campaignName.length > 200) {
-      setSubmitError('Campaign name must be between 2 and 200 characters')
+    if (!campaignName.trim() || campaignName.length < 2 || campaignName.length > 100) {
+      setSubmitError('Campaign name must be between 2 and 100 characters')
       return false
     }
 
     if (!seasonalEvent.trim()) {
       setSubmitError('Please select a season or event')
-      return false
-    }
-
-    if (!creativePrompt.trim() || creativePrompt.length < 10 || creativePrompt.length > 2000) {
-      setSubmitError('Creative prompt must be between 10 and 2000 characters')
       return false
     }
 
@@ -115,61 +105,24 @@ export const CreateCampaign = () => {
     setIsSubmitting(true)
 
     try {
-      // NOTE: This is a simplified campaign creation form
-      // For full campaign configuration with scenes, use CampaignCreation page
       const currentYear = new Date().getFullYear()
 
-      // Create a default scene configuration based on duration
-      const numScenes = Math.ceil(targetDuration / 15) // One scene per 15 seconds
-      const defaultScenes = Array.from({ length: numScenes }, (_, i) => ({
-        scene_number: i + 1,
-        creative_vision: creativePrompt,
-        reference_images: ['', '', ''],
-        cinematography: {
-          camera_aspect: 'POV',
-          lighting: 'natural',
-          mood: 'energetic',
-          transition: 'fade',
-          environment: 'bright',
-          setting: 'residential'
-        }
-      }))
-
+      // Create campaign - video-specific details defined per-creative
       const campaign = await createCampaign({
         product_id: productId,
         campaign_name: campaignName,
         seasonal_event: seasonalEvent,
-        year: currentYear,
-        target_duration: targetDuration,
-        scene_configs: defaultScenes
+        year: currentYear
       })
 
-      // Redirect to campaign progress page
-      navigate(`/campaigns/${campaign.id}/progress`)
+      // Redirect to campaign's creatives page to add creatives
+      navigate(`/campaigns/${campaign.id}/creatives`)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to create campaign. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
-
-  const styleOptions: { value: VideoStyle; label: string; description: string }[] = [
-    {
-      value: 'gold_luxe',
-      label: 'Gold Luxe',
-      description: 'Luxurious golden tones, elegant and sophisticated',
-    },
-    {
-      value: 'dark_elegance',
-      label: 'Dark Elegance',
-      description: 'Mysterious dark aesthetic with dramatic lighting',
-    },
-    {
-      value: 'romantic_floral',
-      label: 'Romantic Floral',
-      description: 'Soft, romantic tones with floral elegance',
-    },
-  ]
 
   return (
     <div className="min-h-screen bg-gradient-hero">
@@ -228,6 +181,9 @@ export const CreateCampaign = () => {
               <h1 className="text-3xl sm:text-4xl font-bold text-off-white mb-3">
                 Create New <span className="text-gradient-gold">Campaign</span>
               </h1>
+              <p className="text-muted-gray">
+                Campaigns organize your video creatives under a marketing initiative
+              </p>
             </div>
 
             {/* Create Campaign Form */}
@@ -273,120 +229,6 @@ export const CreateCampaign = () => {
                 </select>
                 <p className="text-xs text-muted-gray mt-1">
                   Choose the marketing season or event this campaign targets
-                </p>
-              </div>
-
-              {/* Creative Prompt */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Creative Prompt <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={creativePrompt}
-                  onChange={(e) => setCreativePrompt(e.target.value)}
-                  placeholder="Describe the vision for your ad campaign. What mood, atmosphere, or story should the video convey? (10-2000 characters)"
-                  required
-                  rows={6}
-                  className="w-full px-4 py-3 bg-olive-800/30 border border-olive-600 rounded-lg text-off-white placeholder-muted-gray focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
-                />
-                <p className="text-xs text-muted-gray mt-1">
-                  {creativePrompt.length} / 2000 characters
-                </p>
-              </div>
-
-              {/* Video Style */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-3">
-                  Video Style <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {styleOptions.map((style) => {
-                    const isSelected = selectedStyle === style.value
-                    return (
-                      <button
-                        key={style.value}
-                        type="button"
-                        onClick={() => {
-                          console.log('🎨 Style button clicked:', style.value)
-                          setSelectedStyle(style.value)
-                        }}
-                        className={`p-4 rounded-lg border-2 transition-all duration-200 text-left ${
-                          isSelected
-                            ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
-                            : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          {isSelected && <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                          <div className="flex-1">
-                            <h3 className="font-semibold mb-1 capitalize">{style.label}</h3>
-                            <p className="text-xs opacity-80">{style.description}</p>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Target Duration */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-3">
-                  Target Duration: <span className="text-gold font-semibold">{targetDuration}s</span>
-                </label>
-                <div className="px-2">
-                  <Slider
-                    value={[targetDuration]}
-                    onValueChange={(value) => setTargetDuration(value[0])}
-                    min={15}
-                    max={60}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-gray mt-2">
-                  <span>15s</span>
-                  <span>30s</span>
-                  <span>45s</span>
-                  <span>60s</span>
-                </div>
-              </div>
-
-              {/* Number of Variations */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-3">
-                  Number of Variations
-                </label>
-                <div className="flex gap-3">
-                  {([1, 2, 3] as const).map((num) => {
-                    const isSelected = numVariations === num
-                    return (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => {
-                          console.log('🔘 Variation button clicked:', num)
-                          setNumVariations(num)
-                        }}
-                        className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all duration-200 ${
-                          isSelected
-                            ? 'border-gold bg-gold/25 text-gold font-semibold shadow-gold ring-2 ring-gold/40 scale-105'
-                            : 'border-olive-600 bg-slate-800/50 text-muted-gray hover:border-olive-500 hover:text-off-white hover:bg-slate-800/70'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2">
-                          {isSelected ? <Check className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
-                          <span className="font-medium">{num}</span>
-                        </div>
-                        <p className="text-xs mt-1 opacity-80">
-                          {num === 1 ? 'Single video' : `${num} variations`}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-xs text-muted-gray mt-2">
-                  Generate multiple variations to choose your favorite.
                 </p>
               </div>
 

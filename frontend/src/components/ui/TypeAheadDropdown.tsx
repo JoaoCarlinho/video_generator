@@ -113,7 +113,7 @@ export function TypeAheadDropdown({
         onFocus={handleInputFocus}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+        className={`w-full px-3 py-2 border rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 ${
           error ? 'border-red-500' : 'border-gray-300'
         }`}
       />
@@ -127,7 +127,7 @@ export function TypeAheadDropdown({
               key={index}
               type="button"
               onClick={() => handleOptionClick(option)}
-              className="w-full px-3 py-2 text-left hover:bg-purple-50 focus:bg-purple-50 focus:outline-none transition-colors"
+              className="w-full px-3 py-2 text-left text-gray-900 hover:bg-purple-50 focus:bg-purple-50 focus:outline-none transition-colors"
             >
               {option}
             </button>

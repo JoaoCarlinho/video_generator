@@ -135,8 +135,8 @@ export const CreateCreative = () => {
                 onClick={() => navigate(`/campaigns/${campaignId}/creatives`)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-charcoal-800/60 transition-all duration-200"
               >
-                <ArrowLeft className="w-5 h-5 text-muted-gray" />
-                <span className="text-muted-gray">Back to Creatives</span>
+                <ArrowLeft className="w-5 h-5 text-off-white" />
+                <span className="text-off-white">Back to Creatives</span>
               </button>
             </div>
 
@@ -184,7 +184,7 @@ export const CreateCreative = () => {
                   value={creativeTitle}
                   onChange={(e) => setCreativeTitle(e.target.value)}
                   placeholder="e.g., Summer Launch Video"
-                  className="w-full px-4 py-3 bg-olive-800/30 border border-olive-600 rounded-lg text-off-white"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400"
                   required
                 />
               </div>
@@ -199,7 +199,7 @@ export const CreateCreative = () => {
                   onChange={(e) => setCreativePrompt(e.target.value)}
                   placeholder="Describe your creative vision..."
                   rows={4}
-                  className="w-full px-4 py-3 bg-olive-800/30 border border-olive-600 rounded-lg text-off-white placeholder-muted-gray focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
                   required
                 />
               </div>

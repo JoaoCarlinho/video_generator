@@ -33,6 +33,12 @@ export interface Product {
   product_attributes?: Record<string, any>
   icp_segment: string
   image_urls?: string[]
+  // Mobile App specific fields
+  app_input_mode?: 'screenshots' | 'generated'
+  app_description?: string
+  key_features?: string[]
+  app_visual_style?: 'modern_minimal' | 'dark_mode' | 'vibrant_colorful' | 'professional_corporate' | 'playful_friendly'
+  screen_recording_url?: string
   created_at: string
   updated_at: string
 }

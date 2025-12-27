@@ -23,34 +23,33 @@ const stepLabels: Record<string, string> = {
 export const GenerationProgress = () => {
   const { campaignId, creativeId } = useParams<{ campaignId?: string; creativeId?: string }>()
   const navigate = useNavigate()
-  const { generateVideo, generateCampaign, generateCreative } = useGeneration()
+  const { generateCreative } = useGeneration()
   const [isStartingGeneration, setIsStartingGeneration] = useState(false)
   const [generationTriggered, setGenerationTriggered] = useState(false)
   const hasStartedGenerationRef = useRef(false)
 
   // Use campaignId if available, otherwise fall back to empty string
   const id = campaignId || ''
-  // Use creative-level generation when creativeId is present (preferred)
-  const useCreativeGeneration = !!creativeId
-  // Use creativeId in storage key to allow multiple creatives per campaign
+  // Storage key for tracking if generation was started
   const storageKey = creativeId
     ? `generation_started_creative_${creativeId}`
     : `generation_started_${id}`
 
   // Start generation job when component mounts
+  // IMPORTANT: This page now requires a creativeId - campaign-level generation is not supported
   useEffect(() => {
-    const alreadyStarted = hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true'
-
-    // Need either creativeId (for creative generation) or campaignId (for legacy campaign generation)
-    const generationId = useCreativeGeneration ? creativeId : id
-
-    // If generation was already started (e.g., page refresh), enable polling immediately
-    if (alreadyStarted && generationId) {
-      setGenerationTriggered(true)
+    // Require creativeId for generation
+    if (!creativeId) {
+      console.error('❌ GenerationProgress requires a creativeId. Campaign-level generation is deprecated.')
+      navigate('/dashboard')
       return
     }
 
-    if (!generationId) {
+    const alreadyStarted = hasStartedGenerationRef.current || sessionStorage.getItem(storageKey) === 'true'
+
+    // If generation was already started (e.g., page refresh), enable polling immediately
+    if (alreadyStarted) {
+      setGenerationTriggered(true)
       return
     }
 
@@ -66,24 +65,12 @@ export const GenerationProgress = () => {
         sessionStorage.setItem(storageKey, 'true')
         setIsStartingGeneration(true)
 
-        // Use creative-level generation when creativeId is present (preferred approach)
-        // Creative status is independent - no need to reset anything
-        if (useCreativeGeneration && creativeId) {
-          console.log(`🚀 Starting generation for creative:`, creativeId)
-          const result = await generateCreative(creativeId)
-          if (isMounted) {
-            console.log('✅ Creative generation queued:', result)
-            // Mark generation as triggered so polling can start with fresh data
-            setGenerationTriggered(true)
-          }
-        } else {
-          // Legacy: campaign-level generation (deprecated)
-          console.log(`🚀 Starting generation for campaign:`, id)
-          const result = await generateCampaign(id)
-          if (isMounted) {
-            console.log('✅ Campaign generation queued:', result)
-            setGenerationTriggered(true)
-          }
+        console.log(`🚀 Starting generation for creative:`, creativeId)
+        const result = await generateCreative(creativeId)
+        if (isMounted) {
+          console.log('✅ Creative generation queued:', result)
+          // Mark generation as triggered so polling can start with fresh data
+          setGenerationTriggered(true)
         }
       } catch (err) {
         if (isMounted) {
@@ -103,7 +90,7 @@ export const GenerationProgress = () => {
     return () => {
       isMounted = false
     }
-  }, [id, creativeId, useCreativeGeneration, generateVideo, generateCampaign, generateCreative, storageKey])
+  }, [creativeId, generateCreative, storageKey, navigate])
 
   // Use creative-level progress polling - only start AFTER generation has been triggered
   // This prevents showing stale data (e.g., 100% from a previous completed run)

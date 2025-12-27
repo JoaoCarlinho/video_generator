@@ -72,20 +72,38 @@ export const ProductManagement = () => {
     setError(null)
 
     try {
-      // Upload product images to S3
-      console.log(`Uploading ${data.image_files.length} product images to S3...`)
-      const uploadPromises = data.image_files.map((file) => uploadFileToS3(file))
+      // Upload product images to S3 (if any)
+      const imageFiles = data.image_files || []
+      console.log(`Uploading ${imageFiles.length} product images to S3...`)
+      const uploadPromises = imageFiles.map((file) => uploadFileToS3(file))
       const imageUrls = await Promise.all(uploadPromises)
       console.log('Image uploads complete:', imageUrls)
 
+      // Upload screen recording if provided (for mobile apps)
+      let screenRecordingUrl: string | undefined
+      if (data.screen_recording) {
+        console.log('Uploading screen recording...')
+        screenRecordingUrl = await uploadFileToS3(data.screen_recording)
+        console.log('Screen recording uploaded:', screenRecordingUrl)
+      }
+
       // Prepare product data for API
+      const isMobileApp = data.product_type === 'mobile_app'
       const productData = {
         product_type: data.product_type || undefined,
         name: data.name,
         product_gender: data.product_gender || undefined,
         product_attributes: data.product_attributes || undefined,
         icp_segment: data.icp_segment,
-        image_urls: imageUrls,
+        image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+        // Mobile app specific fields (only included if mobile_app type)
+        ...(isMobileApp && {
+          app_input_mode: data.app_input_mode,
+          app_description: data.app_description || undefined,
+          key_features: data.key_features?.length ? data.key_features : undefined,
+          app_visual_style: data.app_visual_style || undefined,
+          screen_recording_url: screenRecordingUrl,
+        }),
       }
 
       // Create product via RTK Query mutation

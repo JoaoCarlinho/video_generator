@@ -109,7 +109,7 @@ export const CampaignCard = ({ campaign, onClick }: CampaignCardProps) => {
       <div className="p-3 space-y-2">
         {/* Campaign Name */}
         <h3 className="text-base font-bold text-off-white truncate group-hover:text-gold transition-colors">
-          {campaign.campaign_name}
+          {campaign.name || campaign.campaign_name}
         </h3>
 
         {/* Status Badge */}
