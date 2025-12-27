@@ -472,32 +472,14 @@ class SceneConfigSchema(BaseModel):
 
 
 class CreateCampaignRequest(BaseModel):
-    """Request schema for creating a new campaign."""
+    """Request schema for creating a new campaign.
+
+    Campaigns are organizational containers for creatives.
+    Video-specific settings (duration, scenes) are defined per-creative.
+    """
     name: str = Field(..., min_length=1, max_length=100, description="Campaign name")
     seasonal_event: str = Field(..., min_length=1, max_length=100, description="Seasonal event or marketing initiative")
     year: int = Field(..., ge=2020, le=2030, description="Campaign year")
-    duration: int = Field(..., description="Video duration in seconds (15, 30, 45, or 60)")
-    scene_configs: List[SceneConfigSchema] = Field(..., min_items=1, max_items=10, description="Array of scene configurations")
-
-    @field_validator('duration')
-    @classmethod
-    def validate_duration(cls, v):
-        """Validate duration is one of the allowed values."""
-        if v not in [15, 30, 45, 60]:
-            raise ValueError('Duration must be 15, 30, 45, or 60 seconds')
-        return v
-
-    @field_validator('scene_configs')
-    @classmethod
-    def validate_scene_numbers(cls, v):
-        """Validate scene numbers are sequential starting from 1."""
-        if not v:
-            raise ValueError('At least one scene is required')
-        scene_numbers = [scene.scene_number for scene in v]
-        expected = list(range(1, len(v) + 1))
-        if scene_numbers != expected:
-            raise ValueError(f'Scene numbers must be sequential from 1 to {len(v)}')
-        return v
 
 
 class UpdateCampaignRequest(BaseModel):
@@ -518,15 +500,19 @@ class UpdateCampaignRequest(BaseModel):
 
 
 class CampaignResponse(BaseModel):
-    """Response schema for campaign data."""
+    """Response schema for campaign data.
+
+    Campaigns are organizational containers. Video-specific fields
+    (duration, scene_configs) are optional and primarily used per-creative.
+    """
     id: UUID
     product_id: UUID
     name: str
     seasonal_event: str
     year: int
     display_name: str
-    duration: int
-    scene_configs: List[Dict[str, Any]]
+    duration: Optional[int] = 30
+    scene_configs: Optional[List[Dict[str, Any]]] = []
     status: str
     progress: int = 0
     campaign_json: Optional[Dict[str, Any]] = None

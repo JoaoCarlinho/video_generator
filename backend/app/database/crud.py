@@ -1306,11 +1306,15 @@ def create_campaign(
     name: str,
     seasonal_event: str,
     year: int,
-    duration: int,
-    scene_configs: List[Dict[str, Any]]
+    duration: Optional[int] = 30,
+    scene_configs: Optional[List[Dict[str, Any]]] = None
 ) -> Optional[Campaign]:
     """
     Create a new campaign associated with a product.
+
+    Campaigns are organizational containers for creatives. Video-specific
+    settings (duration, scene_configs) are optional and primarily defined
+    per-creative.
 
     Args:
         db: Database session
@@ -1320,8 +1324,8 @@ def create_campaign(
         name: Campaign name
         seasonal_event: Seasonal event or marketing initiative
         year: Campaign year
-        duration: Video duration in seconds (15, 30, 45, or 60)
-        scene_configs: List of scene configuration dicts
+        duration: Optional video duration in seconds (default: 30)
+        scene_configs: Optional list of scene configuration dicts (default: [])
 
     Returns:
         Campaign: Created campaign object if product is owned by user, None otherwise
@@ -1345,14 +1349,14 @@ def create_campaign(
             logger.warning(f"⚠️ Cannot create campaign: Product {product_id} not found or not owned by user {user_id}")
             return None
 
-        # Create campaign with "pending" status to allow immediate generation
+        # Create campaign with "pending" status
         campaign = Campaign(
             product_id=product_id,
             name=name,
             seasonal_event=seasonal_event,
             year=year,
-            duration=duration,
-            scene_configs=scene_configs,
+            duration=duration or 30,
+            scene_configs=scene_configs or [],
             status="pending"
         )
         db.add(campaign)
@@ -1618,7 +1622,7 @@ def create_creative(
     ad_creative_json: Dict[str, Any],
     status: str = "pending",
     aspect_ratio: str = "9:16",
-    video_provider: str = "replicate",
+    video_provider: str = "ecs",
     output_formats: Optional[List[str]] = None
 ) -> Optional[Creative]:
     """

@@ -104,7 +104,10 @@ class SceneEditPipeline:
             logger.info(f"Prompt modified. Changes: {changes_summary}")
             
             # STEP 3: Regenerate scene video
-            video_generator = VideoGenerator(api_token=settings.replicate_api_token)
+            video_generator = VideoGenerator(
+                provider="replicate",
+                api_token=settings.replicate_api_token
+            )
             
             new_video_url = await video_generator.generate_scene_background(
                 prompt=modified_prompt,

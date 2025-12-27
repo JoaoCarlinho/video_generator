@@ -45,7 +45,7 @@ class CreateCreativeRequest(BaseModel):
     target_audience: Optional[str] = None
     target_duration: Optional[int] = 30
     selected_style: Optional[str] = None
-    video_provider: Optional[str] = "replicate"
+    video_provider: Optional[str] = "ecs"
     product_gender: Optional[str] = None
     num_variations: Optional[int] = 1
 

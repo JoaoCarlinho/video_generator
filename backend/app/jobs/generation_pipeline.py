@@ -151,7 +151,7 @@ def build_provider_metadata(
 class GenerationPipeline:
     """Main pipeline orchestrator for video generation."""
 
-    def __init__(self, campaign_id: UUID, video_provider: str = "replicate", creative_id: UUID = None):
+    def __init__(self, campaign_id: UUID, video_provider: str = "ecs", creative_id: UUID = None):
         """Initialize pipeline for a specific campaign.
 
         Args:
@@ -531,14 +531,6 @@ class GenerationPipeline:
             
             logger.info(f"Uploaded {len(s3_urls)} scenes to S3 for variation {variation_index}")
             return s3_urls
-            
-            product_url = await extractor.extract_product(
-                image_url=ad_campaign.product_asset.original_url,
-                campaign_id=str(self.campaign_id),
-            )
-
-            logger.info(f"✅ Product extracted: {product_url}")
-            return product_url
 
         except Exception as e:
             logger.error(f"Failed to upload scenes to S3: {e}")
@@ -571,11 +563,9 @@ class GenerationPipeline:
                 logger.info("Extracting brand guidelines from document...")
                 try:
                     from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
-                    from openai import AsyncOpenAI
-                    
-                    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+                    # BrandGuidelineExtractor uses get_llm_client() internally (Bedrock or OpenAI based on config)
                     extractor = BrandGuidelineExtractor(
-                        openai_client=openai_client,
                         aws_access_key_id=settings.aws_access_key_id,
                         aws_secret_access_key=settings.aws_secret_access_key,
                         s3_bucket_name=settings.s3_bucket_name,
@@ -856,16 +846,15 @@ BRAND GUIDELINES (extracted from guidelines document):
 
             from app.config import settings
 
-            # STORY 4.4: Get provider from campaign (defaults to "replicate")
+            # STORY 4.4: Get provider from campaign (defaults to "ecs")
             # Validate provider parameter
             if self.video_provider not in ["replicate", "ecs"]:
-                logger.warning(f"Invalid provider '{self.video_provider}', defaulting to 'replicate'")
-                self.video_provider = "replicate"
+                logger.warning(f"Invalid provider '{self.video_provider}', defaulting to 'ecs'")
+                self.video_provider = "ecs"
 
-            # Check if ECS selected but not configured
+            # Check if ECS selected but not configured - fail rather than fallback
             if self.video_provider == "ecs" and not settings.ecs_provider_enabled:
-                logger.warning("ECS provider requested but not configured, falling back to Replicate")
-                self.video_provider = "replicate"
+                raise ValueError("ECS provider requested but not configured. Set ECS_ENDPOINT_URL environment variable.")
 
             logger.info(f"🎬 Campaign {self.campaign_id}: Using video provider: {self.video_provider}")
             video_provider = self.video_provider
@@ -1244,11 +1233,9 @@ BRAND GUIDELINES (extracted from guidelines document):
             if guidelines_url:
                 try:
                     from app.services.brand_guidelines_extractor import BrandGuidelineExtractor
-                    from openai import AsyncOpenAI
-                    
-                    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+                    # BrandGuidelineExtractor uses get_llm_client() internally (Bedrock or OpenAI based on config)
                     extractor = BrandGuidelineExtractor(
-                        openai_client=openai_client,
                         aws_access_key_id=settings.aws_access_key_id,
                         aws_secret_access_key=settings.aws_secret_access_key,
                         s3_bucket_name=settings.s3_bucket_name,
@@ -1557,17 +1544,17 @@ BRAND GUIDELINES (extracted from guidelines document):
         product: Any,
         brand: Any,
         campaign_json: Dict[str, Any],
-        video_provider: str = "replicate"
+        video_provider: str = "ecs"
     ) -> AdCampaign:
         """
         Build AdCampaign schema from campaign, product, and brand data.
-        
+
         Args:
             campaign: Campaign database object
             product: Product database object
             brand: Brand database object
             campaign_json: Campaign JSON data
-            
+
         Returns:
             AdCampaign: Built AdCampaign schema object
         """
@@ -1589,22 +1576,22 @@ BRAND GUIDELINES (extracted from guidelines document):
         
         # Build product asset from product images (use first image as primary)
         # image_urls is stored as a list of URL strings
-        primary_image_url = None
+        # NOTE: product_asset is Optional in AdCampaign schema, so set to None if no images
+        product_asset = None
         if product.image_urls and isinstance(product.image_urls, list) and len(product.image_urls) > 0:
             primary_image_url = product.image_urls[0]
 
-        # Build angles dict from available images
-        angles = {}
-        if product.image_urls and isinstance(product.image_urls, list):
+            # Build angles dict from available images
+            angles = {}
             angle_names = ["front", "back", "top", "left", "right"]
             for i, url in enumerate(product.image_urls[:5]):  # Max 5 angles
                 angles[angle_names[i]] = url
 
-        product_asset = {
-            "original_url": primary_image_url,
-            "extracted_url": None,  # Will be set after extraction
-            "angles": angles
-        }
+            product_asset = {
+                "original_url": primary_image_url,
+                "extracted_url": None,  # Will be set after extraction
+                "angles": angles
+            }
         
         # Build AdCampaign from campaign data
         # Note: style_spec will be populated during scene planning, but we need to provide defaults here
@@ -1786,7 +1773,7 @@ BRAND GUIDELINES (extracted from guidelines document):
             raise
 
 
-def generate_video(campaign_id: str, video_provider: str = "replicate") -> Dict[str, Any]:
+def generate_video(campaign_id: str, video_provider: str = "ecs") -> Dict[str, Any]:
     """
     DEPRECATED: Use generate_video_for_creative() instead.
 
@@ -1819,12 +1806,12 @@ class CreativeGenerationPipeline:
     creative-level generation jobs from the SQS queue.
     """
 
-    def __init__(self, creative_id: UUID, video_provider: str = "replicate"):
+    def __init__(self, creative_id: UUID, video_provider: str = "ecs"):
         """Initialize pipeline for a specific creative.
 
         Args:
             creative_id: UUID of the creative to generate
-            video_provider: Video generation provider ("replicate" or "ecs")
+            video_provider: Video generation provider ("ecs" or "replicate")
         """
         self.creative_id = creative_id
         self.video_provider = video_provider
@@ -1998,7 +1985,7 @@ class CreativeGenerationPipeline:
         return result
 
 
-def generate_video_for_creative(creative_id: str, video_provider: str = "replicate") -> Dict[str, Any]:
+def generate_video_for_creative(creative_id: str, video_provider: str = "ecs") -> Dict[str, Any]:
     """
     SQS job function for creative-level video generation.
 
@@ -2008,7 +1995,7 @@ def generate_video_for_creative(creative_id: str, video_provider: str = "replica
 
     Args:
         creative_id: String UUID of creative to generate
-        video_provider: Video generation provider ("replicate" or "ecs")
+        video_provider: Video generation provider ("ecs" or "replicate")
 
     Returns:
         Dict with generation results

@@ -12,7 +12,7 @@ from typing import Optional
 from app.database.connection import get_db
 from app.database import crud
 from app.api.auth import get_current_brand_id, get_current_user_id, verify_perfume_ownership, verify_campaign_ownership
-from app.models.schemas import CampaignDetail, PaginatedCampaigns, CampaignStatus
+from app.models.schemas import CampaignDetail, PaginatedCampaigns, CampaignStatus, UpdateCampaignRequest
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ async def delete_campaign(
         
         logger.info(f"✅ Deleted campaign {campaign_id}")
         return None
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -190,5 +190,92 @@ async def delete_campaign(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete campaign"
+        )
+
+
+@router.patch(
+    "/{campaign_id}",
+    response_model=CampaignDetail,
+    summary="Update campaign",
+    description="Update campaign details (name, seasonal_event, year, duration)."
+)
+async def update_campaign(
+    campaign_id: UUID,
+    request: UpdateCampaignRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    _: bool = Depends(verify_campaign_ownership),
+    db: Session = Depends(get_db)
+) -> CampaignDetail:
+    """
+    Update campaign details.
+
+    **Path Parameters:**
+    - `campaign_id`: Campaign UUID
+
+    **Request Body:**
+    - `name`: New campaign name (optional)
+    - `seasonal_event`: New seasonal event (optional)
+    - `year`: New year (optional)
+    - `duration`: New duration in seconds (optional)
+
+    **Returns:**
+    - CampaignDetail: Updated campaign details
+
+    **Raises:**
+    - HTTPException 400: Cannot update campaign while processing
+    - HTTPException 404: Campaign not found
+    """
+    try:
+        campaign = crud.get_campaign_by_id(db, campaign_id)
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
+            )
+
+        # Check if campaign is processing
+        if campaign.status == CampaignStatus.PROCESSING.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot update campaign while it is processing."
+            )
+
+        # Build updates dict from non-None fields
+        updates = {}
+        if request.name is not None:
+            updates['name'] = request.name
+        if request.seasonal_event is not None:
+            updates['seasonal_event'] = request.seasonal_event
+        if request.year is not None:
+            updates['year'] = request.year
+        if request.duration is not None:
+            updates['duration'] = request.duration
+        if request.scene_configs is not None:
+            updates['scene_configs'] = [s.model_dump() for s in request.scene_configs]
+
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+
+        # Update campaign (validates user owns the campaign via product/brand)
+        updated_campaign = crud.update_campaign(db, user_id, campaign_id, **updates)
+        if not updated_campaign:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update campaign"
+            )
+
+        logger.info(f"✅ Updated campaign {campaign_id}: {list(updates.keys())}")
+        return CampaignDetail.model_validate(updated_campaign)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to update campaign: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update campaign"
         )
 

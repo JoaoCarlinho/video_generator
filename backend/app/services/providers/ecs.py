@@ -5,6 +5,7 @@ with the internal ALB endpoint fronting VPC-hosted Wan2.5 inference containers
 on GPU instances (g5.xlarge).
 """
 
+import asyncio
 import logging
 from typing import Optional
 import aiohttp
@@ -12,6 +13,10 @@ import aiohttp
 from app.services.providers.base import BaseVideoProvider
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 2
+RETRY_DELAY_SECONDS = 5
 
 
 class ECSVideoProvider(BaseVideoProvider):
@@ -83,53 +88,73 @@ class ECSVideoProvider(BaseVideoProvider):
         self.logger.info(f"ECS endpoint: Generating video via {self.endpoint_url}/generate")
         self.logger.debug(f"ECS payload: {payload}")
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                # Set 300-second timeout for inference (5 minutes max)
-                timeout = aiohttp.ClientTimeout(total=300)
+        last_exception = None
 
-                async with session.post(
-                    f"{self.endpoint_url}/generate",
-                    json=payload,
-                    timeout=timeout,
-                ) as response:
-                    # Raise error for HTTP error responses
-                    response.raise_for_status()
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    # Set 300-second timeout for inference (5 minutes max)
+                    timeout = aiohttp.ClientTimeout(total=300)
 
-                    # Parse JSON response
-                    try:
-                        data = await response.json()
-                    except Exception as e:
-                        self.logger.error(f"ECS endpoint returned invalid JSON: {e}")
-                        raise ValueError(f"Invalid response from ECS endpoint: {e}")
+                    async with session.post(
+                        f"{self.endpoint_url}/generate",
+                        json=payload,
+                        timeout=timeout,
+                    ) as response:
+                        # Raise error for HTTP error responses
+                        response.raise_for_status()
 
-                    # Extract video URL
-                    if "video_url" not in data:
-                        self.logger.error(f"ECS endpoint response missing 'video_url': {data}")
-                        raise ValueError("ECS endpoint response missing 'video_url' field")
+                        # Parse JSON response
+                        try:
+                            data = await response.json()
+                        except Exception as e:
+                            self.logger.error(f"ECS endpoint returned invalid JSON: {e}")
+                            raise ValueError(f"Invalid response from ECS endpoint: {e}")
 
-                    video_url = data["video_url"]
-                    self.logger.info(f"ECS endpoint: Video generated successfully: {video_url}")
+                        # Extract video URL
+                        if "video_url" not in data:
+                            self.logger.error(f"ECS endpoint response missing 'video_url': {data}")
+                            raise ValueError("ECS endpoint response missing 'video_url' field")
 
-                    return video_url
+                        video_url = data["video_url"]
+                        self.logger.info(f"ECS endpoint: Video generated successfully: {video_url}")
 
-        except aiohttp.ClientTimeout as e:
-            self.logger.error(f"ECS endpoint timeout after 300s: {e}")
-            raise
+                        return video_url
 
-        except aiohttp.ClientConnectorError as e:
-            self.logger.error(f"ECS endpoint connection failed: {self.endpoint_url} - {e}")
-            raise
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                if attempt < MAX_RETRIES:
+                    self.logger.warning(
+                        f"⚠️ Scene generation attempt {attempt} timed out - retrying in {RETRY_DELAY_SECONDS}s"
+                    )
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+                else:
+                    self.logger.error(f"ECS endpoint timeout after {attempt} attempts: {e}")
 
-        except aiohttp.ClientResponseError as e:
-            self.logger.error(
-                f"ECS endpoint HTTP error: {e.status} - {e.message} - URL: {self.endpoint_url}"
-            )
-            raise
+            except aiohttp.ClientConnectorError as e:
+                last_exception = e
+                if attempt < MAX_RETRIES:
+                    self.logger.warning(
+                        f"⚠️ Scene generation attempt {attempt} connection failed - retrying in {RETRY_DELAY_SECONDS}s"
+                    )
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+                else:
+                    self.logger.error(f"ECS endpoint connection failed after {attempt} attempts: {self.endpoint_url} - {e}")
 
-        except Exception as e:
-            self.logger.error(f"ECS endpoint unexpected error: {e}", exc_info=True)
-            raise
+            except aiohttp.ClientResponseError as e:
+                # Don't retry on HTTP errors (4xx, 5xx) - they're unlikely to succeed
+                self.logger.error(
+                    f"ECS endpoint HTTP error: {e.status} - {e.message} - URL: {self.endpoint_url}"
+                )
+                raise
+
+            except Exception as e:
+                self.logger.error(f"ECS endpoint unexpected error: {e}", exc_info=True)
+                raise
+
+        # All retries exhausted
+        if last_exception:
+            raise last_exception
 
     async def health_check(self) -> bool:
         """Check if ECS endpoint is healthy.

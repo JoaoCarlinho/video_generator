@@ -81,8 +81,9 @@ class Campaign(Base):
     name = Column(String(100), nullable=False)
     seasonal_event = Column(String(100), nullable=False)
     year = Column(Integer, nullable=False)
-    duration = Column(Integer, nullable=False)  # Duration in seconds: 15, 30, 45, 60
-    scene_configs = Column(JSONB, nullable=False)  # Array of scene configuration objects
+    # Video-specific fields (optional - defined per-creative, kept for backward compatibility)
+    duration = Column(Integer, nullable=True, default=30)  # Duration in seconds: 15, 30, 45, 60
+    scene_configs = Column(JSONB, nullable=True, default=[])  # Array of scene configuration objects
     num_variations = Column(Integer, default=1, nullable=False)  # Number of video variations to generate (1-3)
     status = Column(String(50), default="draft", index=True)  # draft, generating, completed, failed
     progress = Column(Integer, default=0)  # Progress percentage 0-100

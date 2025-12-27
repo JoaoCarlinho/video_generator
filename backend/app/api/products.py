@@ -462,6 +462,9 @@ async def create_product_campaign(
     """
     Create a new campaign for a product.
 
+    Campaigns are organizational containers for creatives. Video-specific
+    settings (duration, scenes) are defined per-creative, not per-campaign.
+
     **Path Parameters:**
     - `product_id`: Product UUID
 
@@ -469,8 +472,6 @@ async def create_product_campaign(
     - `name`: Campaign name (1-100 chars, unique within product)
     - `seasonal_event`: Seasonal event or marketing initiative (1-100 chars)
     - `year`: Campaign year (2020-2030)
-    - `duration`: Video duration in seconds (15, 30, 45, or 60)
-    - `scene_configs`: Array of scene configurations (1-10 scenes)
 
     **Returns:**
     - CampaignDetail: Created campaign with all details
@@ -493,10 +494,7 @@ async def create_product_campaign(
                     detail=f"Campaign name '{data.name}' already exists for this product"
                 )
 
-        # Convert scene_configs to dict format for database
-        scene_configs_dict = [scene.model_dump() for scene in data.scene_configs]
-
-        # Create campaign
+        # Create campaign (video-specific fields use defaults)
         logger.info(f"💾 Creating campaign '{data.name}' for product {product_id} (brand {brand_id})")
         campaign = create_campaign(
             db=db,
@@ -505,9 +503,7 @@ async def create_product_campaign(
             brand_id=brand_id,
             name=data.name,
             seasonal_event=data.seasonal_event,
-            year=data.year,
-            duration=data.duration,
-            scene_configs=scene_configs_dict
+            year=data.year
         )
 
         if not campaign:

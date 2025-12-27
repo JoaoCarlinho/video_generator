@@ -1,8 +1,8 @@
 """UI Generator Service - Generates mobile app UI mockups from descriptions.
 
 This service creates realistic UI mockup images for mobile app products when
-screenshots are not provided. Uses OpenAI's DALL-E 3 for image generation
-and uploads results to S3.
+screenshots are not provided. Uses AWS Bedrock's Amazon Titan Image Generator
+for image generation and uploads results to S3.
 
 Key Features:
 - 5 visual styles (modern_minimal, dark_mode, vibrant_colorful, etc.)
@@ -13,10 +13,11 @@ Key Features:
 
 import logging
 import asyncio
-import aiohttp
+import base64
+import json
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from openai import AsyncOpenAI
+import boto3
 
 from app.services.storage import storage_service
 from app.config import settings
@@ -129,21 +130,35 @@ class UIGenerator:
         }
     ]
 
-    def __init__(self, openai_api_key: Optional[str] = None):
-        """Initialize UI Generator with OpenAI client.
+    def __init__(self, aws_region: Optional[str] = None):
+        """Initialize UI Generator with AWS Bedrock client.
 
         Args:
-            openai_api_key: OpenAI API key. If not provided, uses settings.
+            aws_region: AWS region for Bedrock. If not provided, uses settings.
         """
-        api_key = openai_api_key or settings.openai_api_key
-        if not api_key:
-            logger.warning("OpenAI API key not configured for UI generation")
+        from botocore.config import Config
+
+        region = aws_region or settings.aws_region or "us-east-1"
+        try:
+            # Configure timeouts to prevent hanging
+            bedrock_config = Config(
+                connect_timeout=10,
+                read_timeout=120,
+                retries={'max_attempts': 2, 'mode': 'standard'}
+            )
+            self._bedrock = boto3.client(
+                service_name='bedrock-runtime',
+                region_name=region,
+                config=bedrock_config
+            )
+            self.client = self._bedrock  # For compatibility checks
+            logger.info(f"UIGenerator initialized with Bedrock (region: {region})")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Bedrock client: {e}")
+            self._bedrock = None
             self.client = None
-        else:
-            self.client = AsyncOpenAI(api_key=api_key)
 
         self.storage = storage_service
-        logger.info("UIGenerator initialized")
 
     @classmethod
     def get_available_styles(cls) -> List[Dict[str, str]]:
@@ -184,8 +199,8 @@ class UIGenerator:
         Returns:
             List of 4 S3 URLs for the generated UI images
         """
-        if not self.client:
-            logger.error("OpenAI client not initialized - cannot generate UI")
+        if not self._bedrock:
+            logger.error("Bedrock client not initialized - cannot generate UI")
             return []
 
         # Validate style
@@ -280,7 +295,7 @@ class UIGenerator:
         screen: Dict[str, str],
         app_name: Optional[str]
     ) -> str:
-        """Build a single DALL-E prompt for one screen.
+        """Build a single Titan Image Generator prompt for one screen.
 
         Args:
             app_description: App description
@@ -292,31 +307,19 @@ class UIGenerator:
         Returns:
             Formatted prompt string
         """
-        app_name_text = f"App name: {app_name}. " if app_name else ""
+        app_name_text = f"for {app_name}" if app_name else ""
 
-        prompt = f"""Create a professional mobile app UI screenshot in vertical 9:16 aspect ratio.
+        # Titan Image Generator works best with concise, descriptive prompts
+        prompt = f"""Professional mobile app UI screenshot {app_name_text}, {screen['name']}, {style_spec['name']} design style.
 
-App: {app_description}
-{app_name_text}Features: {features_str}
+{app_description}. Features: {features_str}.
 
-Screen Type: {screen['name']} - {screen['prompt_suffix']}
+{screen['prompt_suffix']}.
 
-Visual Style: {style_spec['name']}
-- Colors: {style_spec['colors']}
-- Typography: {style_spec['typography']}
-- UI Elements: {style_spec['elements']}
-- Mood: {style_spec['mood']}
+Style: {style_spec['colors']}, {style_spec['typography']}, {style_spec['elements']}.
+Mood: {style_spec['mood']}.
 
-Requirements:
-- Ultra-realistic mobile app screenshot
-- Modern iOS/Android design patterns
-- Clean, polished UI with proper spacing
-- Readable text and clear iconography
-- No device frame (screen content only)
-- Professional quality suitable for marketing
-- {screen['description']}
-
-Style: {style_spec['description']}"""
+Ultra-realistic mobile UI, modern iOS/Android design, clean polished interface, readable text, clear iconography, no device frame, professional marketing quality."""
 
         return prompt
 
@@ -329,7 +332,7 @@ Style: {style_spec['description']}"""
         """Generate a single UI screen and upload to S3.
 
         Args:
-            prompt: DALL-E prompt for the screen
+            prompt: Titan Image Generator prompt for the screen
             screen_type: Screen type configuration
             user_id: User ID for S3 organization
 
@@ -339,25 +342,44 @@ Style: {style_spec['description']}"""
         try:
             logger.debug(f"Generating screen: {screen_type['id']}")
 
-            # Generate image using DALL-E 3
-            response = await self.client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1792",  # Vertical for mobile (closest to 9:16)
-                quality="hd",
-                n=1
+            # Generate image using Amazon Titan Image Generator via Bedrock
+            # Titan supports 1024x1024 (square), 768x1280 (portrait), 1280x768 (landscape)
+            # Using 768x1280 for mobile vertical orientation (closest to 9:16)
+            request_body = {
+                "taskType": "TEXT_IMAGE",
+                "textToImageParams": {
+                    "text": prompt,
+                },
+                "imageGenerationConfig": {
+                    "numberOfImages": 1,
+                    "height": 1280,  # Vertical for mobile
+                    "width": 768,
+                    "cfgScale": 8.0,  # Guidance scale (1-10)
+                    "seed": 0,  # Random seed
+                }
+            }
+
+            # Run synchronous boto3 call in executor
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self._bedrock.invoke_model(
+                    modelId="amazon.titan-image-generator-v1",
+                    body=json.dumps(request_body),
+                    contentType="application/json",
+                    accept="application/json"
+                )
             )
 
-            image_url = response.data[0].url
+            # Parse response - Titan returns base64 encoded image
+            response_body = json.loads(response['body'].read())
 
-            # Download the image
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as resp:
-                    if resp.status != 200:
-                        raise Exception(
-                            f"Failed to download image: HTTP {resp.status}"
-                        )
-                    image_data = await resp.read()
+            if 'images' not in response_body or not response_body['images']:
+                raise Exception("No images returned from Titan Image Generator")
+
+            # Decode base64 image
+            image_base64 = response_body['images'][0]
+            image_data = base64.b64decode(image_base64)
 
             # Upload to S3
             filename = f"ui_screen_{screen_type['id']}.png"

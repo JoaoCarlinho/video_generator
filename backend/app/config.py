@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     replicate_api_token: Optional[str] = None
     openai_api_key: Optional[str] = None
 
+    # LLM Provider Configuration
+    # Options: "bedrock" (default, uses AWS Bedrock Claude) or "openai"
+    llm_provider: str = "bedrock"
+
     # ECS Provider Configuration
     ecs_endpoint_url: Optional[HttpUrl] = None
 

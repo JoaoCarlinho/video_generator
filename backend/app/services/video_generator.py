@@ -2,13 +2,10 @@
 
 This service orchestrates video generation through pluggable provider backends.
 
-CURRENT: ECS-hosted Wan2.5 model (VPC-hosted GPU inference)
-NOTE: Replicate provider is DISABLED - use ECS provider only
-
 Provider Architecture:
 - BaseVideoProvider interface for consistent provider API
-- ECSVideoProvider for VPC-hosted Wan2.5 inference (ACTIVE)
-- ReplicateVideoProvider is COMMENTED OUT / DISABLED
+- ECSVideoProvider for VPC-hosted Wan2.5 inference
+- ReplicateVideoProvider for Replicate API (SeedAnce model)
 
 VEO S3 READINESS:
 - Enhanced prompts from ScenePlanner (user-first + cinematography)
@@ -17,18 +14,14 @@ VEO S3 READINESS:
 - Text integration instructions ready
 """
 
+import asyncio
 import logging
 import os
-import time
-import requests
-import asyncio
 from typing import Optional, Dict, Any, List
-from dotenv import load_dotenv
-from app.services.style_manager import StyleManager
 
-# REPLICATE DISABLED - Using ECS provider only
-# from app.services.providers import ReplicateVideoProvider
-from app.services.providers import ECSVideoProvider
+from dotenv import load_dotenv
+
+from app.services.providers import ECSVideoProvider, ReplicateVideoProvider
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +31,13 @@ load_dotenv()
 # ECS Provider configuration
 ECS_ENDPOINT_URL = os.environ.get("ECS_ENDPOINT_URL", "http://internal-adgen-ecs-alb-1719239824.us-east-1.elb.amazonaws.com")
 
-# REPLICATE DISABLED
-# REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-# REPLICATE_API_URL = "https://api.replicate.com/v1/models/bytedance/seedance-1-pro/predictions"
-
 
 class VideoGenerator:
-    """Orchestrates video generation through ECS-hosted Wan2.5 provider.
+    """Orchestrates video generation through pluggable provider backends.
 
-    This service implements the provider abstraction pattern using the
-    VPC-hosted Wan2.5 model for GPU-accelerated video generation.
-
-    NOTE: Replicate provider is DISABLED. All video generation uses ECS.
+    This service implements the provider abstraction pattern supporting:
+    - ECS: VPC-hosted Wan2.5 model for GPU-accelerated video generation
+    - Replicate: Cloud-hosted SeedAnce model via Replicate API
     """
 
     def __init__(
@@ -57,23 +45,15 @@ class VideoGenerator:
         provider: str = "ecs",
         api_token: Optional[str] = None
     ):
-        """Initialize VideoGenerator with ECS provider.
+        """Initialize VideoGenerator with selected provider.
 
         Args:
-            provider: Provider identifier. Only "ecs" is supported.
-                Replicate is DISABLED.
-            api_token: Ignored. ECS provider uses IAM authentication.
+            provider: Provider identifier - "ecs" or "replicate"
+            api_token: API token for Replicate provider (ignored for ECS)
 
         Raises:
-            ValueError: If provider is not "ecs".
+            ValueError: If provider is invalid or required config is missing
         """
-        # REPLICATE IS DISABLED - Force ECS provider
-        if provider == "replicate":
-            logger.warning(
-                "⚠️ Replicate provider is DISABLED. Switching to ECS provider."
-            )
-            provider = "ecs"
-
         self.provider_name = provider
 
         if provider == "ecs":
@@ -86,10 +66,19 @@ class VideoGenerator:
             self.provider = ECSVideoProvider(endpoint_url=endpoint_url)
             logger.info(f"✅ VideoGenerator initialized with ECS provider: {endpoint_url}")
 
+        elif provider == "replicate":
+            if not api_token:
+                raise ValueError(
+                    "Replicate API token is required. "
+                    "Provide api_token parameter or set REPLICATE_API_TOKEN."
+                )
+            self.provider = ReplicateVideoProvider(replicate_api_token=api_token)
+            logger.info("✅ VideoGenerator initialized with Replicate provider")
+
         else:
             raise ValueError(
                 f"Invalid provider: '{provider}'. "
-                "Only 'ecs' is supported. Replicate is DISABLED."
+                "Supported providers: 'ecs', 'replicate'"
             )
 
     async def generate_scene_background(
@@ -97,7 +86,6 @@ class VideoGenerator:
         prompt: str,
         style_spec_dict: dict,
         duration: float = 5.0,
-        # seed: Optional[int] = None,
         extracted_style: Optional[dict] = None,
         style_override: Optional[str] = None,
     ) -> str:
@@ -105,216 +93,38 @@ class VideoGenerator:
 
         This method delegates to the configured provider instance, enabling
         transparent backend switching without changing calling code.
-        
-        This method receives enhanced prompts from ScenePlanner with:
-        - User-first creative concepts
-        - Advanced cinematography vocabulary
-        - Product visual language applied to user's vision
 
         Args:
-            prompt: Enhanced scene description prompt (from ScenePlanner with Veo S3 optimizations)
+            prompt: Enhanced scene description prompt (from ScenePlanner)
             style_spec_dict: Style specification dict with visual guidelines
             duration: Video duration in seconds (typical: 2-5 seconds)
-            aspect_ratio: Video aspect ratio (e.g., "16:9", "9:16", "1:1")
-            seed: Random seed for reproducibility (optional, may not be used by all providers)
             extracted_style: Optional extracted style from reference image
-            style_override: (PHASE 7) Override style selection (one of the 5 predefined styles)
+            style_override: Override style selection (one of the 5 predefined styles)
 
         Returns:
             URL of generated video from the selected provider
-        logger.info(f"Generating TikTok vertical background video: {prompt[:60]}...")
-s
+
         Raises:
             Exception: Provider-specific exceptions for generation failures
         """
         try:
             logger.info(f"🎬 Generating video via {self.provider_name} provider: {prompt[:60]}...")
 
-            # Apply chosen style to prompt if style_override provided
-            # Delegate to provider
+            # Delegate to the configured provider
+            video_url = await self.provider.generate_scene_background(
+                prompt=prompt,
+                style_spec_dict=style_spec_dict,
+                duration=duration,
+                extracted_style=extracted_style,
+                style_override=style_override,
+            )
 
-            if style_override:
-                logger.info(f"Applying style override: {style_override}")
-                enhanced_prompt = self._enhance_prompt_with_style(
-                    # aspect_ratio=aspect_ratio,
-                    prompt,
-                    style_spec_dict,
-                    extracted_style,
-                    style_override
-                    )
-            else:
-                enhanced_prompt = self._enhance_prompt_with_style(prompt, style_spec_dict, extracted_style)
-
-            # Create prediction via HTTP API (hardcoded 9:16 for TikTok vertical)
-            prediction_data = await self._create_prediction(enhanced_prompt, int(duration), "9:16")
-            
-            # With "Prefer: wait", the prediction should already be complete
-            status = prediction_data.get("status")
-            logger.debug(f"Prediction status: {status}")
-            
-            # Check if prediction is already complete (from "Prefer: wait")
-            if status in ["succeeded", "completed"]:
-                result = prediction_data
-            else:
-                # Fallback: poll if not complete yet (shouldn't happen with "Prefer: wait")
-                prediction_id = prediction_data.get("id")
-                logger.warning(f"Prediction not complete, polling: {prediction_id}")
-                result = await self._poll_prediction(prediction_id)
-                
-                if not result:
-                    raise RuntimeError("Prediction failed or timed out")
-            
-            # Extract video URL
-            output = result.get("output")
-            if isinstance(output, list) and len(output) > 0:
-                video_url = output[0]
-            else:
-                video_url = str(output)
-
-
-            logger.info(f"Generated video: {video_url}")
+            logger.info(f"✅ Generated video: {video_url}")
             return video_url
 
         except Exception as e:
             logger.error(f"Error generating video: {e}")
             raise
-
-    def _enhance_prompt_with_style(self, prompt: str, style_spec_dict: dict, extracted_style: Optional[dict] = None, style_override: Optional[str] = None) -> str:
-        """Enhance prompt with global style specifications, optional reference style, and style override."""
-        style_parts = []
-
-        # If style_override provided, use style keywords
-        if style_override:
-            logger.info(f"Adding style override '{style_override}' to prompt")
-            try:
-                style_config = StyleManager.get_style_config(style_override)
-                if style_config and "keywords" in style_config:
-                    keywords = style_config["keywords"]
-                    style_parts.append(f"Visual Style Keywords: {', '.join(keywords)}")
-                    logger.debug(f"Added style keywords: {keywords}")
-            except Exception as e:
-                logger.warning(f"Failed to apply style override: {e}")
-
-        # Add base style specifications
-        if "lighting_direction" in style_spec_dict:
-            style_parts.append(f"Lighting: {style_spec_dict['lighting_direction']}")
-
-        if "camera_style" in style_spec_dict:
-            style_parts.append(f"Camera: {style_spec_dict['camera_style']}")
-
-        if "mood_atmosphere" in style_spec_dict:
-            style_parts.append(f"Mood: {style_spec_dict['mood_atmosphere']}")
-
-        if "grade_postprocessing" in style_spec_dict:
-            style_parts.append(f"Grade: {style_spec_dict['grade_postprocessing']}")
-
-        # Add reference style if available (overrides/enhances base style)
-        if extracted_style:
-            logger.debug("Applying extracted reference style to video prompt")
-            
-            colors = extracted_style.get("colors", [])
-            if colors:
-                colors_str = ", ".join(colors)
-                style_parts.append(f"Colors: {colors_str}")
-            
-            if extracted_style.get("lighting"):
-                style_parts.append(f"Reference Lighting: {extracted_style['lighting']}")
-            
-            if extracted_style.get("camera"):
-                style_parts.append(f"Reference Camera: {extracted_style['camera']}")
-            
-            if extracted_style.get("mood"):
-                style_parts.append(f"Reference Mood: {extracted_style['mood']}")
-            
-            if extracted_style.get("atmosphere"):
-                style_parts.append(f"Reference Atmosphere: {extracted_style['atmosphere']}")
-            
-            if extracted_style.get("texture"):
-                style_parts.append(f"Reference Texture: {extracted_style['texture']}")
-
-        # Combine original prompt with style
-        style_string = ". ".join(style_parts)
-        enhanced = f"{prompt}. {style_string}. Modern cinematic product commercial."
-
-        logger.info(f"📝 Enhanced script sent to video generator: {enhanced}")
-        return enhanced
-
-
-    async def _create_prediction(self, prompt: str, duration: int, aspect_ratio: str = "9:16") -> dict:
-        """Create a prediction via HTTP API using seedance-1-pro model (TikTok vertical)."""
-        headers = {
-            "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json",
-            "Prefer": "wait"  # Wait for the result instead of polling
-        }
-        
-        payload = {
-            "input": {
-                "fps": 24,
-                "prompt": prompt,
-                "duration": min(duration, 10),  # Cap at 10s
-                "resolution": "480p",  # 480p for faster generation, good quality
-                "aspect_ratio": "9:16",  # Hardcoded TikTok vertical
-                "camera_fixed": False
-            }
-        }
-        
-        try:
-            response = requests.post(
-                REPLICATE_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=600  # Extended timeout for slow API responses
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to create prediction: {e}")
-            raise
-
-    async def _poll_prediction(self, prediction_id: str, max_wait: int = 600) -> Optional[dict]:
-        """Poll prediction until it completes."""
-        headers = {"Authorization": f"Bearer {self.api_token}"}
-        
-        start_time = time.time()
-        check_count = 0
-        
-        while True:
-            elapsed = time.time() - start_time
-            if elapsed > max_wait:
-                logger.error(f"Prediction timeout after {max_wait}s")
-                return None
-            
-            try:
-                # Polling uses base predictions URL, not model-specific URL
-                poll_url = f"https://api.replicate.com/v1/predictions/{prediction_id}"
-                response = requests.get(
-                    poll_url,
-                    headers=headers,
-                    timeout=30
-                )
-                response.raise_for_status()
-                prediction = response.json()
-                
-                status = prediction.get("status")
-                check_count += 1
-                
-                if status == "processing":
-                    logger.debug(f"  [{check_count}] Processing ({elapsed:.0f}s)")
-                    await asyncio.sleep(5)
-                elif status == "succeeded":
-                    logger.debug(f"  Succeeded ({elapsed:.0f}s)")
-                    return prediction
-                elif status == "failed":
-                    logger.error(f"Prediction failed: {prediction.get('error')}")
-                    return None
-                else:
-                    logger.debug(f"  Status: {status}")
-                    await asyncio.sleep(5)
-            
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error polling prediction: {e}")
-                raise
 
     async def generate_scene_batch(
         self,
@@ -343,15 +153,13 @@ s
 
         try:
             # Generate all scenes concurrently using the same provider
-            import asyncio
-
             tasks = [
                 self.generate_scene_background(
-                prompt=prompts[i],
-                style_spec_dict=style_spec_dict,
-                duration=durations[i],
-                extracted_style=extracted_style,
-                style_override=style_override,
+                    prompt=prompts[i],
+                    style_spec_dict=style_spec_dict,
+                    duration=durations[i],
+                    extracted_style=extracted_style,
+                    style_override=style_override,
                 )
                 for i in range(len(prompts))
             ]

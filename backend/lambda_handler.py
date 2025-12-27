@@ -101,8 +101,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             creative_id = body.get('creative_id')
             function = body.get('function', 'unknown')
 
-            # Extract provider with backward-compatible default
-            video_provider = body.get('video_provider', 'replicate')
+            # Extract provider - default to ECS (AWS-only deployment)
+            video_provider = body.get('video_provider', 'ecs')
 
             logger.info(f"Job ID: {job_id}")
             logger.info(f"Creative ID: {creative_id}")
