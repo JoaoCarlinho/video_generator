@@ -5,19 +5,24 @@ import uuid
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from openai import AsyncOpenAI
+from app.services.llm_client import get_llm_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class EditService:
     """Service for editing campaign scenes via prompt modifications."""
-    
-    def __init__(self, openai_api_key: str):
-        """Initialize with OpenAI API key."""
-        self.client = AsyncOpenAI(api_key=openai_api_key)
-        self.model = "gpt-4o-mini"
-        logger.info("✅ EditService initialized")
+
+    def __init__(self, openai_api_key: Optional[str] = None):
+        """Initialize with LLM client (Bedrock or OpenAI based on config)."""
+        self.client = get_llm_client(
+            provider=settings.llm_provider,
+            api_key=openai_api_key or settings.openai_api_key,
+            region=settings.aws_region
+        )
+        self.model = "gpt-4o-mini"  # Maps to appropriate model for each provider
+        logger.info(f"✅ EditService initialized (provider: {settings.llm_provider})")
     
     async def modify_scene_prompt(
         self,

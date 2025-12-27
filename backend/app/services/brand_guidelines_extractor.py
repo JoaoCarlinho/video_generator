@@ -10,9 +10,11 @@ import logging
 import tempfile
 import json
 import boto3
+from botocore.exceptions import ClientError
 from pathlib import Path
 from typing import Dict, Optional, List
-from openai import AsyncOpenAI
+from app.services.llm_client import get_llm_client, BaseLLMClient
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,25 +49,38 @@ class ExtractedGuidelines:
 
 class BrandGuidelineExtractor:
     """Extract brand guidelines from documents (PDF, DOCX, TXT)."""
-    
+
     def __init__(
         self,
-        openai_client: AsyncOpenAI,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
-        s3_bucket_name: str,
+        llm_client: Optional[BaseLLMClient] = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        s3_bucket_name: Optional[str] = None,
         aws_region: str = "us-east-1",
     ):
-        """Initialize with OpenAI client and S3 credentials."""
-        self.openai_client = openai_client
+        """Initialize with LLM client and S3 credentials.
+
+        Args:
+            llm_client: LLM client instance. If not provided, creates one based on settings.
+            aws_access_key_id: AWS access key. Uses settings if not provided.
+            aws_secret_access_key: AWS secret key. Uses settings if not provided.
+            s3_bucket_name: S3 bucket name. Uses settings if not provided.
+            aws_region: AWS region. Defaults to us-east-1.
+        """
+        self.llm_client = llm_client or get_llm_client(
+            provider=settings.llm_provider,
+            api_key=settings.openai_api_key,
+            region=settings.aws_region
+        )
         self.s3_client = boto3.client(
             "s3",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
+            aws_access_key_id=aws_access_key_id or settings.aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key or settings.aws_secret_access_key,
             region_name=aws_region,
         )
-        self.s3_bucket_name = s3_bucket_name
+        self.s3_bucket_name = s3_bucket_name or settings.s3_bucket_name
         self.aws_region = aws_region
+        logger.info(f"BrandGuidelineExtractor initialized (LLM: {settings.llm_provider})")
     
     async def extract_guidelines(
         self,
@@ -139,14 +154,14 @@ class BrandGuidelineExtractor:
     
     async def _download_file(self, url: str, output_path: Path):
         """Download file from S3."""
+        from app.utils.s3_utils import parse_s3_url
+
+        # Parse S3 URL to get bucket and key
+        bucket_name, s3_key = parse_s3_url(url)
+
+        logger.info(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
+
         try:
-            from app.utils.s3_utils import parse_s3_url
-            
-            # Parse S3 URL to get bucket and key
-            bucket_name, s3_key = parse_s3_url(url)
-            
-            logger.debug(f"Downloading S3 object: s3://{bucket_name}/{s3_key}")
-            
             # Download from S3
             self.s3_client.download_file(
                 bucket_name,
@@ -154,7 +169,23 @@ class BrandGuidelineExtractor:
                 str(output_path)
             )
             logger.info(f"✅ Downloaded guidelines from S3: {s3_key} → {output_path}")
-            
+
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_message = e.response.get('Error', {}).get('Message', str(e))
+
+            if error_code in ('403', 'AccessDenied'):
+                logger.warning(
+                    f"⚠️ Brand guidelines PDF access denied (403) - skipped. "
+                    f"Bucket: {bucket_name}, Key: {s3_key}, Error: {error_message}"
+                )
+            else:
+                logger.error(
+                    f"S3 ClientError downloading guidelines: {error_code} - {error_message}. "
+                    f"Bucket: {bucket_name}, Key: {s3_key}"
+                )
+            raise
+
         except Exception as e:
             logger.error(f"Error downloading file from S3: {e}")
             raise
@@ -251,13 +282,13 @@ Return ONLY valid JSON (no markdown, no explanation):
 If information is not found, use empty arrays or null."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
+            response = await self.llm_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,  # Lower temperature for more consistent extraction
                 max_tokens=800,
             )
-            
+
             # Parse JSON response
             response_text = response.choices[0].message.content.strip()
             

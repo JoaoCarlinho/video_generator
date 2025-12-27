@@ -1,15 +1,19 @@
 """Reference Image Style Extractor Service.
 
-Analyzes uploaded reference images using vision LLM to extract visual style elements.
+Analyzes uploaded reference images using AWS Bedrock Claude Vision to extract visual style elements.
 Extracts: colors, mood, lighting, camera style, atmosphere, texture.
 """
 
 import logging
 import json
+import base64
+import asyncio
 from typing import Optional, Dict, Any
 from pathlib import Path
 import aiohttp
-from urllib.parse import urlparse
+import boto3
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,22 +50,41 @@ class ExtractedStyle:
 
 
 class ReferenceImageStyleExtractor:
-    """Extract visual style from reference images using OpenAI Vision."""
+    """Extract visual style from reference images using AWS Bedrock Claude Vision."""
 
-    def __init__(self, openai_client):
-        """Initialize with OpenAI client.
+    def __init__(self, aws_region: Optional[str] = None):
+        """Initialize with AWS Bedrock client.
 
         Args:
-            openai_client: Initialized OpenAI client with vision capabilities
+            aws_region: AWS region for Bedrock. If not provided, uses settings.
         """
-        self.openai_client = openai_client
+        from botocore.config import Config
+
+        region = aws_region or settings.aws_region or "us-east-1"
+
+        # Configure timeouts to prevent hanging
+        bedrock_config = Config(
+            connect_timeout=10,
+            read_timeout=60,  # Vision tasks are faster than LLM
+            retries={'max_attempts': 2, 'mode': 'standard'}
+        )
+
+        self._bedrock = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=region,
+            config=bedrock_config
+        )
+        self._region = region
+        # Claude 3.5 Sonnet for vision tasks (high quality)
+        self._model_id = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        logger.info(f"ReferenceImageStyleExtractor initialized (Bedrock, region: {region})")
 
     async def extract_style(
         self,
         image_path: str,
         brand_name: str,
     ) -> ExtractedStyle:
-        """Extract visual style from reference image using OpenAI Vision.
+        """Extract visual style from reference image using Bedrock Claude Vision.
 
         Args:
             image_path: Local file path or HTTP(S) URL of image
@@ -80,8 +103,8 @@ class ReferenceImageStyleExtractor:
 
             logger.info(f"✅ Read {len(image_data)} bytes from image")
 
-            # 2. Extract style using OpenAI Vision
-            style = await self._extract_with_openai(image_data, brand_name)
+            # 2. Extract style using Bedrock Claude Vision
+            style = await self._extract_with_bedrock(image_data, brand_name)
 
             logger.info(f"✅ Extracted style: {json.dumps(style.to_dict(), indent=2)}")
             return style
@@ -121,14 +144,22 @@ class ReferenceImageStyleExtractor:
             logger.error(f"❌ Error reading image: {e}")
             return None
 
-    async def _extract_with_openai(
+    async def _extract_with_bedrock(
         self, image_data: bytes, brand_name: str
     ) -> ExtractedStyle:
-        """Extract style using OpenAI GPT-4 Vision API."""
-        import base64
+        """Extract style using AWS Bedrock Claude Vision API."""
 
         # Encode image to base64
         image_base64 = base64.standard_b64encode(image_data).decode("utf-8")
+
+        # Detect media type from image data
+        media_type = "image/jpeg"
+        if image_data[:8] == b'\x89PNG\r\n\x1a\n':
+            media_type = "image/png"
+        elif image_data[:4] == b'GIF8':
+            media_type = "image/gif"
+        elif image_data[:4] == b'RIFF' and image_data[8:12] == b'WEBP':
+            media_type = "image/webp"
 
         prompt = f"""Analyze this reference image and extract visual style elements suitable for a {brand_name} promotional video.
 
@@ -145,18 +176,20 @@ Extract the following in JSON format:
 Only return the JSON, no additional text."""
 
         try:
-            # Call OpenAI GPT-4 Vision API (gpt-4o for vision capability)
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o",
-                max_tokens=1024,
-                messages=[
+            # Build Claude Messages API request with vision
+            request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "messages": [
                     {
                         "role": "user",
                         "content": [
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": image_base64,
                                 },
                             },
                             {
@@ -166,11 +199,29 @@ Only return the JSON, no additional text."""
                         ],
                     }
                 ],
+            }
+
+            # Run synchronous boto3 call in executor
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self._bedrock.invoke_model(
+                    modelId=self._model_id,
+                    body=json.dumps(request_body),
+                    contentType="application/json",
+                    accept="application/json"
+                )
             )
 
-            # Extract response
-            response_text = response.choices[0].message.content
-            logger.info(f"📝 OpenAI response: {response_text}")
+            # Parse response
+            response_body = json.loads(response['body'].read())
+
+            # Extract content from Claude response
+            response_text = ""
+            if "content" in response_body and response_body["content"]:
+                response_text = response_body["content"][0].get("text", "")
+
+            logger.info(f"📝 Claude response: {response_text}")
 
             # Parse JSON (handle markdown code blocks)
             json_text = response_text.strip()
@@ -181,7 +232,7 @@ Only return the JSON, no additional text."""
             if json_text.endswith("```"):
                 json_text = json_text[:-3]  # Remove trailing ```
             json_text = json_text.strip()
-            
+
             style_data = json.loads(json_text)
 
             return ExtractedStyle(
@@ -194,9 +245,8 @@ Only return the JSON, no additional text."""
             )
 
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Failed to parse OpenAI response as JSON: {e}")
+            logger.error(f"❌ Failed to parse Claude response as JSON: {e}")
             raise
         except Exception as e:
-            logger.error(f"❌ OpenAI API error: {e}")
+            logger.error(f"❌ Bedrock API error: {e}")
             raise
-

@@ -12,14 +12,16 @@ Key Features:
 - Adaptive pacing based on narrative
 """
 
+import asyncio
 import json
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
-from openai import AsyncOpenAI
+from app.services.llm_client import get_llm_client, BaseLLMClient
 from app.services.style_manager import StyleManager
 from app.services.product_grammar_loader import ProductGrammarLoader
 from app.product_config.product_types import get_product_type_config
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +89,26 @@ class ScenePlanner:
     Each product type has its own shot grammar and visual language.
     """
 
-    def __init__(self, api_key: str):
-        """Initialize with OpenAI API key.
+    def __init__(self, api_key: Optional[str] = None):
+        """Initialize with LLM client.
 
+        Uses AWS Bedrock by default, or OpenAI if configured.
         Grammar loader is initialized per product type when planning scenes.
+
+        Args:
+            api_key: OpenAI API key (only used if llm_provider is "openai")
         """
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.model = "gpt-5.1"
+        # Use configurable LLM provider (defaults to Bedrock)
+        llm_provider = settings.llm_provider
+        self.client = get_llm_client(
+            provider=llm_provider,
+            api_key=api_key or settings.openai_api_key,
+            region=settings.aws_region
+        )
+        # Model name - the client will map this to the appropriate provider model
+        self.model = "gpt-5.1"  # Maps to Claude Sonnet 4 for Bedrock
         self.grammar_loader = None  # Will be initialized per product type
-        logger.info("✅ ScenePlanner initialized")
+        logger.info(f"✅ ScenePlanner initialized (provider: {llm_provider})")
 
     async def plan_scenes(
         self,
@@ -640,20 +653,23 @@ Plan the scene now!"""
 
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                max_completion_tokens=3000,
-                temperature=0.8,  # Higher creativity
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert video director and creative strategist. You create compelling advertising videos with strong narratives and strategic visual choices. You output only valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    max_completion_tokens=3000,
+                    temperature=0.8,  # Higher creativity
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert video director and creative strategist. You create compelling advertising videos with strong narratives and strategic visual choices. You output only valid JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                ),
+                timeout=90.0  # 90 second timeout for scene planning (Bedrock can be slow)
             )
 
             # Extract JSON from response
@@ -688,6 +704,10 @@ Plan the scene now!"""
 
             logger.info(f"Generated {len(scenes)} scenes via LLM")
             return scenes
+
+        except asyncio.TimeoutError:
+            logger.error("⚠️ Scene planning timed out after 60s")
+            raise RuntimeError("Scene planning timed out - Bedrock API unresponsive")
 
         except Exception as e:
             logger.error(f"Error generating scenes: {e}")
@@ -739,7 +759,12 @@ Plan the scene now!"""
         shot_types = self.grammar_loader.get_allowed_shot_types()
         scene_count = self.grammar_loader.get_scene_count_for_duration(target_duration)
         flow_rules = self.grammar_loader.get_flow_rules()
-        
+
+        # Get visibility rules - mobile apps use screen_visibility_rules, others use product_visibility_rules
+        visibility_rules = flow_rules.get('product_visibility_rules') or flow_rules.get('screen_visibility_rules') or {}
+        min_visibility_scenes = visibility_rules.get('minimum_product_scenes') or visibility_rules.get('minimum_ui_scenes', 2)
+        max_visibility_scenes = visibility_rules.get('maximum_product_scenes') or visibility_rules.get('maximum_non_ui_scenes', 4)
+
         # Get allowed shot type IDs (for validation)
         allowed_shot_ids = self.grammar_loader.get_shot_type_ids()
         
@@ -860,7 +885,7 @@ Scene Count: {scene_count} scenes
 MANDATORY STRUCTURE:
 1. FIRST scene: {flow_rules.get('first_scene_must_be', product_config.default_first_scenes)} shot type
 2. LAST scene: {flow_rules.get('last_scene_must_be', [product_config.default_last_scene])} shot type
-3. Product appears in {flow_rules['product_visibility_rules']['minimum_product_scenes']}-{flow_rules['product_visibility_rules']['maximum_product_scenes']} scenes
+3. Product appears in {min_visibility_scenes}-{max_visibility_scenes} scenes
 4. Final scene includes product name "{product_name}" + brand "{brand_name}"
 5. Total duration: ±{int(target_duration * 0.15)}s from {target_duration}s
 
@@ -921,14 +946,15 @@ Return ONLY valid JSON array with {scene_count} scene objects:
 ✅ GENERATE NOW - BRING USER'S VISION TO LIFE!"""
         
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                max_completion_tokens=4000,
-                temperature=0.5,  # Lower temperature for stricter grammar compliance
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"""You are a {director_persona} working with Veo S3.
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    max_completion_tokens=4000,
+                    temperature=0.5,  # Lower temperature for stricter grammar compliance
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"""You are a {director_persona} working with Veo S3.
 
 VEO S3 USER-FIRST PHILOSOPHY:
 1. User's creative prompt = PRIMARY (honor their vision and concept)
@@ -950,12 +976,14 @@ Example WRONG approach:
 - User: "Underwater scene" → Force grammar templates (ignoring user's concept)
 
 Follow user's vision FIRST, grammar rules SECOND."""
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                ),
+                timeout=90.0  # 90 second timeout for grammar-based scene planning
             )
             
             # Extract JSON from response
@@ -1038,6 +1066,32 @@ Follow user's vision FIRST, grammar rules SECOND."""
             
             logger.info(f"✅ Generated {len(scenes)} {product_type} scenes (grammar validated)")
             return scenes
+
+        except asyncio.TimeoutError:
+            logger.warning(f"⚠️ Grammar scene planning timed out after 90s (attempt {retry_count + 1})")
+            if retry_count < 2:
+                logger.info("Retrying due to timeout...")
+                return await self._generate_product_scenes_with_grammar(
+                    creative_prompt=creative_prompt,
+                    brand_name=brand_name,
+                    product_name=product_name,
+                    brand_description=brand_description,
+                    brand_colors=brand_colors,
+                    brand_guidelines=brand_guidelines,
+                    target_audience=target_audience,
+                    target_duration=target_duration,
+                    chosen_style=chosen_style,
+                    product_gender=product_gender,
+                    product_type=product_type,
+                    product_config=product_config,
+                    retry_count=retry_count + 1,
+                )
+            else:
+                logger.error("Fallback to template due to timeout")
+                return self._get_fallback_template(
+                    scene_count, target_duration, chosen_style, product_name,
+                    brand_name, brand_description, brand_colors, product_type
+                )
 
         except Exception as e:
             logger.error(f"Error generating {product_type} scenes: {e}")
@@ -1471,24 +1525,31 @@ Remember:
 
 Choose wisely. Return ONLY the style ID."""
 
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_completion_tokens=10,
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_completion_tokens=10,
+                ),
+                timeout=90.0  # 90 second timeout for style selection (Bedrock cold starts can be slow)
             )
-            
+
             chosen_style = response.choices[0].message.content.strip().lower()
-            
+
             # Validate the chosen style
             valid_styles = ["cinematic", "dark_premium", "minimal_studio", "lifestyle", "2d_animated"]
             if chosen_style not in valid_styles:
                 logger.warning(f"LLM returned invalid style '{chosen_style}', using 'cinematic' as default")
                 chosen_style = "cinematic"
-            
+
             logger.info(f"✅ LLM chose style: {chosen_style}")
             return chosen_style, "llm_inferred"
-            
+
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Style selection timed out - using 'cinematic' as default")
+            return "cinematic", "llm_inferred"
+
         except Exception as e:
             logger.error(f"Error in LLM style selection: {e}, using 'cinematic' as fallback")
             return "cinematic", "llm_inferred"
@@ -1533,17 +1594,24 @@ Examples:
 Respond with ONLY the tone descriptor, nothing else."""
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_completion_tokens=20,
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_completion_tokens=20,
+                ),
+                timeout=90.0  # 90 second timeout for tone derivation (Bedrock can be slow)
             )
-            
+
             tone = response.choices[0].message.content.strip().lower()
             logger.info(f"✅ Derived tone from audience '{target_audience}': {tone}")
             return tone
-            
+
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Tone derivation timed out - using default 'professional and engaging'")
+            return "professional and engaging"
+
         except Exception as e:
             logger.warning(f"Failed to derive tone: {e}, using default")
             return "professional and engaging"
@@ -1605,20 +1673,23 @@ Return ONLY valid JSON with this exact structure:
 Be specific and visual in all descriptions. Think like a professional cinematographer."""
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                max_completion_tokens=1000,
-                temperature=0.7,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert cinematographer. You create detailed visual style specifications. You output only valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model,
+                    max_completion_tokens=1000,
+                    temperature=0.7,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert cinematographer. You create detailed visual style specifications. You output only valid JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                ),
+                timeout=90.0  # 90 second timeout for style spec generation (Bedrock can be slow)
             )
 
             response_text = response.choices[0].message.content
@@ -1662,6 +1733,10 @@ Be specific and visual in all descriptions. Think like a professional cinematogr
                 normalized_dict['mood_atmosphere'] = self._get_default_style_spec([])['mood_atmosphere']
 
             return StyleSpec(**normalized_dict)
+
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Style spec generation timed out - using defaults")
+            return StyleSpec(**self._get_default_style_spec(brand_colors))
 
         except Exception as e:
             logger.error(f"Error generating style spec: {e}")
