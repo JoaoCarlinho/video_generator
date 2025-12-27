@@ -1,20 +1,27 @@
 """
 Story 2.3: Wan2.5 Inference FastAPI Server
-GPU-accelerated video generation service using Wan2.5 model
+GPU-accelerated video generation service using Wan2.5 model via diffusers
+
+Uses the WanPipeline from HuggingFace diffusers for text-to-video generation.
+Optimized for NVIDIA A10G GPUs (24GB VRAM) on AWS g5.xlarge instances.
 """
 
 import os
 import logging
-import asyncio
+import time
+import uuid
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 import torch
 import boto3
+import numpy as np
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import uvicorn
+import imageio
 
 # Configure logging
 logging.basicConfig(
@@ -26,12 +33,27 @@ logger = logging.getLogger(__name__)
 # Configuration
 S3_BUCKET = os.getenv("S3_BUCKET", "adgen-model-artifacts")
 S3_MODEL_PREFIX = os.getenv("S3_MODEL_PREFIX", "models/wan25/")
+S3_OUTPUT_BUCKET = os.getenv("S3_OUTPUT_BUCKET", "adgen-video-outputs")
+S3_OUTPUT_PREFIX = os.getenv("S3_OUTPUT_PREFIX", "generated/")
 MODEL_CACHE_DIR = Path("/tmp/model")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
+# Model configuration - use Wan2.1-T2V-1.3B for 24GB GPU compatibility
+MODEL_ID = os.getenv("MODEL_ID", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers")
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "true").lower() == "true"
+
+# Video generation defaults
+DEFAULT_HEIGHT = 480
+DEFAULT_WIDTH = 848  # 16:9 aspect ratio at 480p
+DEFAULT_NUM_FRAMES = 81  # ~3.4 seconds at 24fps
+DEFAULT_FPS = 24
+DEFAULT_GUIDANCE_SCALE = 5.0
+DEFAULT_NUM_INFERENCE_STEPS = 50
+
 # Global model instance
-model = None
+pipeline = None
 model_loaded = False
+s3_client = None
 
 
 class GenerateRequest(BaseModel):
@@ -105,41 +127,110 @@ def download_model_from_s3():
         raise
 
 
-def load_model():
-    """Load Wan2.5 model into GPU memory"""
-    global model, model_loaded
+def get_aspect_ratio_dimensions(aspect_ratio: str) -> tuple[int, int]:
+    """Get width and height for the given aspect ratio at 480p."""
+    ratios = {
+        "16:9": (848, 480),
+        "9:16": (480, 848),  # Portrait/TikTok
+        "1:1": (480, 480),
+        "4:3": (640, 480),
+        "3:4": (480, 640),
+    }
+    return ratios.get(aspect_ratio, (848, 480))
 
-    logger.info("Loading Wan2.5 model...")
+
+def calculate_num_frames(duration: float, fps: int = DEFAULT_FPS) -> int:
+    """Calculate number of frames for given duration.
+
+    Wan models work best with frame counts that are multiples of 4 + 1.
+    E.g., 17, 33, 49, 65, 81, 97, 113 frames.
+    """
+    target_frames = int(duration * fps)
+    # Round to nearest valid frame count (4n + 1)
+    n = round((target_frames - 1) / 4)
+    return max(17, min(4 * n + 1, 121))  # Min 17 frames, max 121 frames
+
+
+def load_model():
+    """Load Wan model into GPU memory using diffusers WanPipeline."""
+    global pipeline, model_loaded, s3_client
+
+    # Initialize S3 client
+    s3_client = boto3.client('s3', region_name=AWS_REGION)
+
+    logger.info("Loading Wan video generation model...")
+    logger.info(f"Model ID: {MODEL_ID}")
+    logger.info(f"Use local model: {USE_LOCAL_MODEL}")
 
     # Check GPU availability
-    if not torch.cuda.is_available():
-        logger.warning("⚠️  CUDA not available! Model will run on CPU (slow)")
-    else:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cuda":
         gpu_name = torch.cuda.get_device_name(0)
-        logger.info(f"✅ GPU available: {gpu_name}")
+        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
+        logger.info(f"✅ GPU available: {gpu_name} ({gpu_memory:.1f}GB)")
+    else:
+        logger.warning("⚠️  CUDA not available! Model will run on CPU (slow)")
 
     try:
-        # TODO: Replace with actual Wan2.5 model loading
-        # This is a placeholder - actual implementation depends on Wan2.5 API
+        # Import diffusers components
+        from diffusers import AutoencoderKLWan, WanPipeline
+        from diffusers.schedulers import UniPCMultistepScheduler
 
-        # For now, just verify model files exist
-        config_file = MODEL_CACHE_DIR / "config.json"
-        if not config_file.exists():
-            raise FileNotFoundError(f"Model config not found at {config_file}")
+        # Determine model path
+        if USE_LOCAL_MODEL and MODEL_CACHE_DIR.exists():
+            model_path = str(MODEL_CACHE_DIR)
+            logger.info(f"Loading model from local cache: {model_path}")
+        else:
+            model_path = MODEL_ID
+            logger.info(f"Loading model from HuggingFace: {model_path}")
 
-        logger.info("✅ Model files verified")
+        # Load VAE in float32 for better quality (as recommended)
+        logger.info("Loading VAE...")
+        vae = AutoencoderKLWan.from_pretrained(
+            model_path,
+            subfolder="vae",
+            torch_dtype=torch.float32
+        )
 
-        # Placeholder: Load actual model here
-        # from diffusers import WanPipeline
-        # model = WanPipeline.from_pretrained(str(MODEL_CACHE_DIR))
-        # if torch.cuda.is_available():
-        #     model = model.to("cuda")
+        # Load pipeline in bfloat16 for memory efficiency
+        logger.info("Loading WanPipeline...")
+        pipeline = WanPipeline.from_pretrained(
+            model_path,
+            vae=vae,
+            torch_dtype=torch.bfloat16
+        )
+
+        # Configure scheduler with flow_shift for better quality
+        # flow_shift=5.0 for 720p, 3.0 for 480p
+        flow_shift = 3.0  # Using 480p
+        pipeline.scheduler = UniPCMultistepScheduler.from_config(
+            pipeline.scheduler.config,
+            flow_shift=flow_shift
+        )
+
+        # Move to GPU
+        pipeline = pipeline.to(device)
+
+        # Enable memory optimizations for 24GB GPU
+        if device == "cuda":
+            logger.info("Enabling VAE slicing for memory optimization...")
+            pipeline.enable_vae_slicing()
+
+            # For models larger than 24GB, enable CPU offload
+            # pipeline.enable_model_cpu_offload()
 
         model_loaded = True
-        logger.info("✅ Model loaded successfully")
+        logger.info("✅ Wan model loaded successfully!")
+
+        # Log memory usage
+        if device == "cuda":
+            allocated = torch.cuda.memory_allocated() / 1e9
+            reserved = torch.cuda.memory_reserved() / 1e9
+            logger.info(f"GPU memory: {allocated:.2f}GB allocated, "
+                       f"{reserved:.2f}GB reserved")
 
     except Exception as e:
-        logger.error(f"❌ Failed to load model: {e}")
+        logger.error(f"❌ Failed to load model: {e}", exc_info=True)
         raise
 
 
@@ -205,60 +296,205 @@ async def health_check():
     )
 
 
-@app.post("/generate", response_model=GenerateResponse)
-async def generate_video(request: GenerateRequest, background_tasks: BackgroundTasks):
-    """
-    Generate video using Wan2.5 model
+def save_video_to_s3(frames: np.ndarray, fps: int, video_id: str) -> str:
+    """Save generated video frames to S3 and return the URL.
 
     Args:
-        request: Video generation parameters
-        background_tasks: FastAPI background tasks for async processing
+        frames: Video frames as numpy array (T, H, W, C) in uint8
+        fps: Frames per second
+        video_id: Unique identifier for the video
 
     Returns:
-        GenerateResponse with video URL and metadata
+        S3 URL of the uploaded video
     """
-    if not model_loaded:
-        raise HTTPException(
-            status_code=503,
-            detail="Model not loaded. Service is starting up or encountered an error."
-        )
+    global s3_client
 
-    if not torch.cuda.is_available():
-        logger.warning("⚠️  Generating video on CPU (will be slow)")
+    # Create temporary file for video
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+        tmp_path = tmp_file.name
 
     try:
-        logger.info(f"🎬 Generating video: prompt='{request.prompt}', duration={request.duration}s")
+        # Write frames to MP4 using imageio
+        logger.info(f"Encoding video: {frames.shape[0]} frames at {fps}fps")
+        imageio.mimwrite(
+            tmp_path,
+            frames,
+            fps=fps,
+            codec='libx264',
+            quality=8,  # High quality
+            output_params=['-pix_fmt', 'yuv420p']  # Compatibility
+        )
 
-        # TODO: Replace with actual Wan2.5 inference
-        # This is a placeholder implementation
+        # Generate S3 key
+        s3_key = f"{S3_OUTPUT_PREFIX}{video_id}.mp4"
 
-        # Simulate video generation
-        # result = model(
-        #     prompt=request.prompt,
-        #     num_frames=int(request.duration * request.fps),
-        #     guidance_scale=7.5,
-        #     seed=request.seed
-        # )
+        # Upload to S3
+        logger.info(f"Uploading video to s3://{S3_OUTPUT_BUCKET}/{s3_key}")
+        s3_client.upload_file(
+            tmp_path,
+            S3_OUTPUT_BUCKET,
+            s3_key,
+            ExtraArgs={
+                'ContentType': 'video/mp4',
+                'CacheControl': 'max-age=31536000'
+            }
+        )
 
-        # Placeholder response
+        # Generate presigned URL (valid for 1 hour)
+        video_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_OUTPUT_BUCKET, 'Key': s3_key},
+            ExpiresIn=3600
+        )
+
+        logger.info(f"✅ Video uploaded successfully: {s3_key}")
+        return video_url
+
+    finally:
+        # Clean up temp file
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@app.post("/generate", response_model=GenerateResponse)
+async def generate_video(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks
+):
+    """Generate video using Wan model via diffusers pipeline.
+
+    Performs text-to-video generation using the loaded WanPipeline,
+    saves the result to S3, and returns the video URL.
+    """
+    global pipeline
+
+    if not model_loaded or pipeline is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded. Service is starting up."
+        )
+
+    start_time = time.time()
+    video_id = str(uuid.uuid4())
+
+    try:
+        # Get dimensions for aspect ratio
+        width, height = get_aspect_ratio_dimensions(request.aspect_ratio)
+
+        # Calculate number of frames
+        num_frames = calculate_num_frames(request.duration, request.fps)
+        actual_duration = num_frames / request.fps
+
+        logger.info(
+            f"🎬 Generating video: prompt='{request.prompt[:50]}...', "
+            f"duration={actual_duration:.1f}s, "
+            f"frames={num_frames}, size={width}x{height}"
+        )
+
+        # Set random seed for reproducibility
+        generator = None
+        if request.seed is not None:
+            generator = torch.Generator(device="cuda").manual_seed(request.seed)
+            logger.info(f"Using seed: {request.seed}")
+
+        # Build enhanced prompt with style specifications
+        enhanced_prompt = request.prompt
+        if request.style_spec:
+            style_parts = []
+            if request.style_spec.get("camera_style"):
+                style_parts.append(request.style_spec["camera_style"])
+            if request.style_spec.get("lighting_direction"):
+                style_parts.append(request.style_spec["lighting_direction"])
+            if request.style_spec.get("mood_atmosphere"):
+                style_parts.append(request.style_spec["mood_atmosphere"])
+            if style_parts:
+                enhanced_prompt = f"{request.prompt}. {', '.join(style_parts)}"
+
+        logger.info(f"Enhanced prompt: {enhanced_prompt[:100]}...")
+
+        # Run inference
+        with torch.inference_mode():
+            output = pipeline(
+                prompt=enhanced_prompt,
+                height=height,
+                width=width,
+                num_frames=num_frames,
+                num_inference_steps=DEFAULT_NUM_INFERENCE_STEPS,
+                guidance_scale=DEFAULT_GUIDANCE_SCALE,
+                generator=generator,
+            )
+
+        # Extract frames from output
+        # WanPipeline returns frames in shape (1, T, C, H, W) or (T, H, W, C)
+        frames = output.frames[0]  # Get first batch
+
+        # Convert to numpy uint8 if needed
+        if isinstance(frames, torch.Tensor):
+            frames = frames.cpu().numpy()
+
+        # Ensure correct shape (T, H, W, C) and dtype
+        if frames.ndim == 4 and frames.shape[1] == 3:
+            # Shape is (T, C, H, W), transpose to (T, H, W, C)
+            frames = np.transpose(frames, (0, 2, 3, 1))
+
+        if frames.dtype != np.uint8:
+            if frames.max() <= 1.0:
+                frames = (frames * 255).astype(np.uint8)
+            else:
+                frames = frames.astype(np.uint8)
+
+        logger.info(f"Generated {frames.shape[0]} frames, shape: {frames.shape}")
+
+        # Save to S3
+        video_url = save_video_to_s3(frames, request.fps, video_id)
+
+        # Calculate timing
+        generation_time = time.time() - start_time
+
+        # Clear GPU cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        logger.info(
+            f"✅ Video generated in {generation_time:.1f}s: {video_id}"
+        )
+
         return GenerateResponse(
             status="success",
-            message="Video generation completed (placeholder)",
-            video_url="https://placeholder-url.com/video.mp4",
-            generation_time=15.0,
+            message="Video generation completed",
+            video_url=video_url,
+            generation_time=generation_time,
             metadata={
+                "video_id": video_id,
                 "prompt": request.prompt,
-                "duration": request.duration,
+                "enhanced_prompt": enhanced_prompt[:200],
+                "duration": actual_duration,
+                "num_frames": num_frames,
+                "width": width,
+                "height": height,
                 "aspect_ratio": request.aspect_ratio,
                 "fps": request.fps,
                 "seed": request.seed,
+                "inference_steps": DEFAULT_NUM_INFERENCE_STEPS,
+                "guidance_scale": DEFAULT_GUIDANCE_SCALE,
                 "gpu_used": torch.cuda.is_available()
             }
         )
 
+    except torch.cuda.OutOfMemoryError as e:
+        logger.error(f"❌ GPU OOM error: {e}")
+        torch.cuda.empty_cache()
+        raise HTTPException(
+            status_code=507,
+            detail="GPU out of memory. Try reducing duration or resolution."
+        )
+
     except Exception as e:
-        logger.error(f"❌ Video generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+        logger.error(f"❌ Video generation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Video generation failed: {str(e)}"
+        )
 
 
 @app.get("/")
